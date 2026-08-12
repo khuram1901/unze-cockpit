@@ -95,7 +95,14 @@ export async function GET(request: NextRequest) {
   }
 
   if (result.error) return Response.json({ error: result.error.message }, { status: 500 });
-  return Response.json({ data: result.data });
+
+  // Continuity audit (whole history for this company, done in the database):
+  // previous day's closing must match the next day's opening. Breaks are
+  // surfaced as alerts on the page so corrupted/wrong figures get fixed.
+  const { data: continuity, error: contErr } = await supabase.rpc("cash_sheet_continuity", { p_company: company });
+  if (contErr) console.error("Continuity audit error:", contErr.message);
+
+  return Response.json({ data: result.data, continuity: continuity ?? [] });
 }
 
 // ── POST /api/banking/cash-sheets ─────────────────────────────────────────────

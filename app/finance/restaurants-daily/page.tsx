@@ -23,6 +23,9 @@ import { useMobile } from "../../lib/useMobile";
 
 type TxnSummary = { id: string; txn_type: "payment" | "receipt"; amount_pkr: number };
 
+// Continuity break: previous day's closing doesn't match the next day's opening
+type ChainBreak = { prev_date: string; prev_closing: number; next_date: string; next_opening: number; difference: number };
+
 type CashSheet = {
   id: string;
   company: string;
@@ -118,6 +121,7 @@ export default function RestaurantsFinancePage() {
   const [activeTab, setActiveTab] = useState<"BRNH" | "HD" | "KKJ">("BRNH");
   const [month, setMonth] = useState(currentMonthISO());
   const [sheets, setSheets] = useState<CashSheet[]>([]);
+  const [chainBreaks, setChainBreaks] = useState<ChainBreak[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Detail modal
@@ -136,9 +140,11 @@ export default function RestaurantsFinancePage() {
       if (!res.ok) throw new Error(await res.text());
       const json = await res.json();
       setSheets(json.data ?? []);
+      setChainBreaks(json.continuity ?? []);
     } catch (err) {
       toast.show("Failed to load cash sheets: " + String(err), "error");
       setSheets([]);
+      setChainBreaks([]);
     } finally {
       setLoading(false);
     }
@@ -397,6 +403,37 @@ export default function RestaurantsFinancePage() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* ── Continuity audit alert: closing must match next day's opening ── */}
+        {chainBreaks.length > 0 && (
+          <div style={{
+            border: `1px solid ${COLOURS.HAIRLINE}`,
+            borderLeft: `3px solid ${COLOURS.RED}`,
+            borderRadius: "10px", padding: "12px 16px",
+            backgroundColor: COLOURS.DANGER_SOFT,
+            display: "flex", alignItems: "flex-start", gap: "10px",
+          }}>
+            <span style={{ fontSize: "18px", flexShrink: 0 }}>⚠</span>
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED }}>
+                Cash sheet continuity check failed — {tab.label}
+              </div>
+              <div style={{ fontSize: "12px", color: COLOURS.RED, marginTop: "4px" }}>
+                {chainBreaks.slice(0, 5).map((b, i) => (
+                  <div key={i} style={{ marginTop: i === 0 ? 0 : "2px", fontFamily: MONO }}>
+                    {formatDateUK(b.next_date)} opening {pkr(b.next_opening)} doesn&apos;t match {formatDateUK(b.prev_date)} closing {pkr(b.prev_closing)} — out by {pkr(Math.abs(b.difference))}
+                  </div>
+                ))}
+                {chainBreaks.length > 5 && (
+                  <div style={{ marginTop: "2px", fontWeight: 600 }}>…and {chainBreaks.length - 5} more break{chainBreaks.length - 5 === 1 ? "" : "s"}</div>
+                )}
+                <div style={{ marginTop: "4px", color: COLOURS.NAVY }}>
+                  The sheet may be corrupted or a figure entered wrong — check the source PDF and re-upload via Banking → Cash Sheets.
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

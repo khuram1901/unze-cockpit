@@ -43,6 +43,9 @@ type DailyPosition = {
 
 type PdcWeek = { week_number: number; week_start: string; week_end: string; pdc_due: number; effective_balance: number };
 
+// A continuity break: previous day's closing doesn't match the next day's opening
+type ChainBreak = { prev_date: string; prev_closing: number; next_date: string; next_opening: number; difference: number };
+
 type DeptBudget = { id: string; department: string; budget_month: string; category: string; budgeted_amount: number; actual_amount: number; notes: string | null };
 type DeptBudgetSummary = { department: string; budgeted_total: number; actual_total: number };
 
@@ -120,6 +123,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
   const [positions, setPositions] = useState<DailyPosition[]>([]);
   const [pdcOutlook, setPdcOutlook] = useState<PdcWeek[]>([]);
+  const [chainBreaks, setChainBreaks] = useState<ChainBreak[]>([]);
 
   // Which edit modal is open: null, 'opening', or 'plan'
   const [openModal, setOpenModal] = useState<null | "opening" | "plan">(null);
@@ -253,7 +257,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         setUserIsAdmin(isAdminTier(ctx));
       }
     }
-    const [obRes, planRes, posRes, pdcRes] = await Promise.all([
+    const [obRes, planRes, posRes, pdcRes, chainRes] = await Promise.all([
       supabase
         .from("cash_opening_balance")
         .select("id, as_of_date, opening_amount, currency")
@@ -277,6 +281,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         .gte("position_date", daysAgoISO(30))
         .order("position_date", { ascending: false }),
       supabase.rpc("get_pdc_outlook", { p_company_id: companyId, p_today: todayISO() }),
+      supabase.rpc("daily_cash_continuity", { p_company_id: companyId }),
     ]);
     if (obRes.error) console.error("Opening balance error:", obRes.error);
     if (planRes.error) console.error("Monthly plan error:", planRes.error);
@@ -292,6 +297,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     // balance anywhere in this UI — see Cash in Hand / PDC Outstanding split below.
     setPositions(posRes.data || []);
     setPdcOutlook((pdcRes.data || []) as PdcWeek[]);
+    if (chainRes.error) console.error("Continuity audit error:", chainRes.error);
+    setChainBreaks((chainRes.data || []) as ChainBreak[]);
 
     const [{ data: budgetData }, { data: summaryData }] = await Promise.all([
       supabase.from("department_budgets").select("id, department, budget_month, category, budgeted_amount, actual_amount, notes").eq("company_id", companyId).eq("budget_month", budgetMonth).order("department"),
@@ -437,7 +444,14 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   else if (staleDays > 1) alerts.push(`Cash data is ${staleDays} days old`);
   if (!plan) alerts.push("No monthly plan set");
   if (!opening) alerts.push("No opening balance set");
-  const hasAlerts = alerts.length > 0;
+
+  // Continuity audit: previous day's closing must match the next day's opening.
+  // A break means the sheet may be corrupted or a figure was entered wrong.
+  const breakAlerts = chainBreaks.map((b) =>
+    `${formatDateUK(b.next_date)} opening PKR ${fmt(b.next_opening)} doesn't match ${formatDateUK(b.prev_date)} closing PKR ${fmt(b.prev_closing)} — out by PKR ${fmt(Math.abs(b.difference))}`
+  );
+  const hasBreaks = breakAlerts.length > 0;
+  const hasAlerts = alerts.length > 0 || hasBreaks;
 
   return (
     <div>
@@ -459,19 +473,34 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       {hasAlerts && (
         <div style={{
           border: `1px solid ${HAIRLINE}`,
-          borderLeft: `3px solid ${staleDays > 1 ? RED : AMBER}`,
+          borderLeft: `3px solid ${hasBreaks || staleDays > 1 ? RED : AMBER}`,
           borderRadius: "10px", padding: "12px 16px", marginBottom: "14px",
-          backgroundColor: staleDays > 1 ? DANGER_SOFT : WARNING_SOFT,
-          display: "flex", alignItems: "center", gap: "10px",
+          backgroundColor: hasBreaks || staleDays > 1 ? DANGER_SOFT : WARNING_SOFT,
+          display: "flex", alignItems: "flex-start", gap: "10px",
         }}>
           <span style={{ fontSize: "18px", flexShrink: 0 }}>⚠</span>
           <div>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: staleDays > 1 ? RED : AMBER }}>
-              Setup needed
+            <div style={{ fontSize: "13px", fontWeight: 700, color: hasBreaks || staleDays > 1 ? RED : AMBER }}>
+              {hasBreaks ? "Cash sheet continuity check failed" : "Setup needed"}
             </div>
-            <div style={{ fontSize: "12px", color: staleDays > 1 ? RED : AMBER, marginTop: "1px" }}>
-              {alerts.join(" · ")}
-            </div>
+            {alerts.length > 0 && (
+              <div style={{ fontSize: "12px", color: hasBreaks || staleDays > 1 ? RED : AMBER, marginTop: "1px" }}>
+                {alerts.join(" · ")}
+              </div>
+            )}
+            {hasBreaks && (
+              <div style={{ fontSize: "12px", color: RED, marginTop: "4px" }}>
+                {breakAlerts.slice(0, 5).map((line, i) => (
+                  <div key={i} style={{ marginTop: i === 0 ? 0 : "2px", fontFamily: MONO }}>{line}</div>
+                ))}
+                {breakAlerts.length > 5 && (
+                  <div style={{ marginTop: "2px", fontWeight: 600 }}>…and {breakAlerts.length - 5} more break{breakAlerts.length - 5 === 1 ? "" : "s"}</div>
+                )}
+                <div style={{ marginTop: "4px", color: NAVY }}>
+                  The sheet may be corrupted or a figure entered wrong — check the source file and re-upload.
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

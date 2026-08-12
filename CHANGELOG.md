@@ -4,6 +4,17 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-08-12 — Cash sheet continuity audit: closing must match next opening
+
+Khuram asked for an automatic audit on the three cash-sheet pages (/finance/unze-trading, /finance/imperial, /finance/restaurants-daily): the previous day's closing balance must match the next day's opening balance, and any break must raise an alert so a corrupted file or wrong figure gets caught immediately.
+
+- **Migration 207** (`207_cash_continuity.sql`, applied): two `security definer` RPCs, anon-revoked. `daily_cash_continuity(p_company_id)` scans the full `daily_cash_position` history (UTPL/IFPL pages); `cash_sheet_continuity(p_company)` scans `cash_sheet_uploads` (BRNH/HD/KKJ, also works for UTPL/IFPL). Both compare each entry's opening against the previous entry's closing — across weekends and gaps too, since Friday's closing must still equal Monday's opening. Tolerance 1 rupee.
+- **FinanceManager** (Unze Trading + Imperial): fetches the audit alongside the existing data, and the alert banner now shows "Cash sheet continuity check failed" in red with each break spelled out exactly (dates DD/MM/YYYY, both figures, the difference), capped at 5 lines + "and N more".
+- **Restaurants daily page**: the banking cash-sheets API now returns a `continuity` array per company, rendered as a red alert box above Cash Sheet Entries in the same format.
+- First live run found real breaks on every company — including figures that appear on the wrong company's sheets (e.g. BRNH's 04/08 opening equals UTPL's 04/08 opening) — exactly the corruption this audit exists to surface. tsc clean.
+
+---
+
 ## 2026-07-29 (night) — Deep market analysis across all three P&L pages
 
 Khuram asked for better market analysis per business, answered clarifying questions (Unze tenders are price-driven lowest-bidder; Imperial competes on all three fronts — premium ladies, mid-market volume, online; both restaurants are casual/family dining and Haute Dolci is a UK franchise; analysis depth = city/region level). Fresh research (29/07/2026, sourced) rebuilt the Market context panels with structured sections and fed the same facts into the AI commentary prompts:
