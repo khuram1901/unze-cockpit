@@ -390,7 +390,9 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   const panelOpenedRef = useRef(false); // prevents double auto-open within a single open session
 
   const { NAVY, CARD, BORDER, SLATE, INK_400, INK_700, BLUE, CANVAS, INK_300, SUCCESS_SOFT, GREEN } = COLOURS;
-  const totalUnread = conversations.reduce((s, c) => s + (c.unread_count ?? 0), 0);
+  // Include unread from archived conversations in the button badge
+  // (matches the bell which also counts archived convs)
+  const totalUnread = [...conversations, ...archivedConvs].reduce((s, c) => s + (c.unread_count ?? 0), 0);
 
   // ── Load conversations ──────────────────────────────────────────
 

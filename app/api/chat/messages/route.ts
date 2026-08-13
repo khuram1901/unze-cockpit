@@ -173,6 +173,14 @@ export async function POST(req: Request) {
     .eq("conversation_id", conversation_id)
     .eq("member_id", member.id);
 
+  // Auto-unarchive: if any participant had this conversation archived,
+  // a new message brings it back to the main list for everyone.
+  await db
+    .from("chat_participants")
+    .update({ is_archived: false })
+    .eq("conversation_id", conversation_id)
+    .eq("is_archived", true);
+
   // Fire-and-forget: push + email to other participants who haven't read recently
   notifyOtherParticipants(db, conversation_id, member.id, senderName, auth.email, content.trim()).catch(console.error);
 
