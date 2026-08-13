@@ -467,23 +467,33 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   useEffect(() => {
     if (isOpen) {
       loadConversations();
+      loadArchivedConversations(); // needed so auto-open can find unread in archived convs
       loadMembers();
     }
-  }, [isOpen, loadConversations, loadMembers]);
+  }, [isOpen, loadConversations, loadArchivedConversations, loadMembers]);
 
   // Auto-open the most recent unread conversation once per panel open session.
-  // Runs after conversations load (reacts to state, not the fetch directly).
+  // Checks both main and archived lists — if unread is in archived, auto-unarchive it first.
   useEffect(() => {
-    if (!isOpen || activeConv || conversations.length === 0) return;
+    if (!isOpen || activeConv) return;
     if (panelOpenedRef.current) return; // already ran this session
+    const allLoaded = conversations.length > 0 || archivedConvs.length > 0;
+    if (!allLoaded) return;
     panelOpenedRef.current = true;
-    const unread = [...conversations]
+    const unread = [...conversations, ...archivedConvs]
       .filter((c) => (c.unread_count ?? 0) > 0 && c.last_message !== null)
       .sort((a, b) =>
         new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
       );
-    if (unread.length > 0) setActiveConv(unread[0]);
-  }, [isOpen, conversations, activeConv]);
+    if (unread.length > 0) {
+      const conv = unread[0];
+      // If it's archived, unarchive it so it appears in the main list
+      if (conv.is_archived) {
+        conversationAction(conv.conversation_id, "unarchive");
+      }
+      setActiveConv(conv);
+    }
+  }, [isOpen, conversations, archivedConvs, activeConv, conversationAction]);
 
   // Reset auto-open flag when panel closes
   useEffect(() => {
