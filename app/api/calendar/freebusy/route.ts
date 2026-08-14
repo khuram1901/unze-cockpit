@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { google } from "googleapis";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { safeDecrypt, encrypt } from "../../../lib/crypto";
+import { htmlToText, extractMeeting, dedupe, type CalendarEvent } from "../eventUtils";
 
 export async function GET(request: NextRequest) {
   const { requireAuth } = await import("../../../lib/api-auth");
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
       return Response.json({ busy: [], accounts: 0, dateRange: { from: dateParam, to: endDate }, debug: "no_tokens" });
     }
 
-    const allBusy: { start: string; end: string; title?: string; account?: string }[] = [];
+    const allBusy: CalendarEvent[] = [];
     const accountResults: { email: string; status: string; busyCount: number; error?: string }[] = [];
 
     for (const tokenRow of tokens) {
@@ -66,16 +67,16 @@ export async function GET(request: NextRequest) {
         // Birthdays, and other auto-subscribed calendars Google adds to every
         // account, which have accessRole "reader" and aren't real meetings.
         const calendarList = await calendar.calendarList.list();
-        const calendarIds = (calendarList.data.items || [])
+        const calendars = (calendarList.data.items || [])
           .filter((c) => !c.deleted && (c.accessRole === "owner" || c.accessRole === "writer"))
           .filter((c) => !(c.id || "").includes("#holiday@") && !(c.id || "").includes("#contacts@") && !(c.id || "").includes("#weeknum@"))
-          .map((c) => c.id || "primary");
+          .map((c) => ({ id: c.id || "primary", name: c.summaryOverride || c.summary || undefined }));
 
         let eventCount = 0;
-        for (const calId of calendarIds) {
+        for (const cal of calendars) {
           try {
             const eventsRes = await calendar.events.list({
-              calendarId: calId,
+              calendarId: cal.id,
               timeMin,
               timeMax,
               singleEvents: true,
@@ -89,12 +90,51 @@ export async function GET(request: NextRequest) {
               if (ev.transparency === "transparent") continue; // marked "Free" on Google Calendar
               // All-day events come back as bare dates (no time/offset); anchor
               // them to Pakistan time so they don't shift relative to UTC.
+              const allDay = !ev.start?.dateTime && !!ev.start?.date;
               const start = ev.start?.dateTime || (ev.start?.date ? `${ev.start.date}T00:00:00+05:00` : undefined);
               const end = ev.end?.dateTime || (ev.end?.date ? `${ev.end.date}T00:00:00+05:00` : undefined);
-              if (start && end) {
-                allBusy.push({ start, end, title: ev.summary || "Busy", account: tokenRow.user_email });
-                eventCount++;
-              }
+              if (!start || !end) continue;
+
+              const description = htmlToText(ev.description);
+              const meeting = extractMeeting({
+                conferenceData: ev.conferenceData,
+                hangoutLink: ev.hangoutLink,
+                location: ev.location,
+                description,
+              });
+              const attendees = (ev.attendees || [])
+                .filter((a) => !a.resource)
+                .map((a) => ({
+                  email: a.email || undefined,
+                  name: a.displayName || undefined,
+                  response: a.responseStatus || undefined,
+                  self: a.self || undefined,
+                }));
+
+              allBusy.push({
+                start,
+                end,
+                title: ev.summary || "Busy",
+                account: tokenRow.user_email,
+                id: ev.id || undefined,
+                uid: ev.iCalUID || undefined,
+                allDay,
+                description,
+                // A location that is only the meeting URL is noise once we
+                // surface a Join button, so drop it.
+                location: ev.location && ev.location !== meeting.meetingLink ? ev.location : undefined,
+                organizer: ev.organizer?.email
+                  ? { email: ev.organizer.email, name: ev.organizer.displayName || undefined }
+                  : undefined,
+                attendees: attendees.length ? attendees : undefined,
+                ...meeting,
+                htmlLink: ev.htmlLink || undefined,
+                calendarName: cal.name,
+                recurring: !!ev.recurringEventId,
+                myResponse: (ev.attendees || []).find((a) => a.self)?.responseStatus || undefined,
+                duplicateCount: 1,
+              });
+              eventCount++;
             }
           } catch {
             // skip calendars we can't read
@@ -112,10 +152,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // The same meeting can land on several calendars (primary + a shared team
+    // calendar, an invite accepted on two calendars, etc). Collapse those into
+    // one entry, keeping the richest copy.
+    const { events: busy, removed } = dedupe(allBusy);
+    busy.sort((a, b) => a.start.localeCompare(b.start));
+
     return Response.json({
-      busy: allBusy,
+      busy,
       accounts: tokens.length,
       accountResults,
+      duplicatesRemoved: removed,
+      rawCount: allBusy.length,
       dateRange: { from: dateParam, to: endDate },
     });
   } catch (err) {

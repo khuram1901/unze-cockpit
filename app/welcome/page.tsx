@@ -50,7 +50,20 @@ type WelcomeData = {
 type Weather = { temp: number; apparent: number; humidity: number; code: number; city: string };
 type FxRates  = { USD: number; GBP: number; CNY: number; AED?: number };
 type Holding  = { ticker: string; company_name: string; quantity: number; buy_price: number; current_price?: number };
-type CalEvent  = { start: string; end: string; title?: string };
+type CalAttendee = { email?: string; name?: string; response?: string; self?: boolean };
+type CalEvent  = {
+  start: string; end: string; title?: string; account?: string;
+  id?: string; uid?: string; allDay?: boolean;
+  description?: string; location?: string;
+  organizer?: { email?: string; name?: string };
+  attendees?: CalAttendee[];
+  meetingLink?: string;
+  meetingType?: "zoom" | "meet" | "teams" | "webex" | "other";
+  meetingCode?: string;
+  htmlLink?: string; calendarName?: string;
+  recurring?: boolean; myResponse?: string;
+  duplicateCount?: number;
+};
 
 /* ─── WMO weather codes ──────────────────────────────────────── */
 const WMO: Record<number, [string, string]> = {
@@ -1218,9 +1231,162 @@ function KhuramHero({ data, tick, weather, fx }: {
 /* ─── 3-Day Calendar ──────────────────────────────────────────── */
 const CAL_COLORS = [BLUE, GREEN, AMBER];
 
+const MEETING_LABEL: Record<string, { label: string; icon: string }> = {
+  zoom:  { label: "Join Zoom",  icon: "🎥" },
+  meet:  { label: "Join Meet",  icon: "🎥" },
+  teams: { label: "Join Teams", icon: "🎥" },
+  webex: { label: "Join Webex", icon: "🎥" },
+  other: { label: "Join call",  icon: "🔗" },
+};
+
+const RESPONSE_LABEL: Record<string, string> = {
+  accepted: "Going", declined: "Declined", tentative: "Maybe", needsAction: "No reply",
+};
+
+function evtTimeRange(ev: CalEvent) {
+  if (ev.allDay) return "All day";
+  return `${fmtEvtTime(ev.start)}–${fmtEvtTime(ev.end)}`;
+}
+
+/* Detail modal — everything the calendar entry actually contains */
+function EventDetailModal({ ev, color, onClose }: { ev: CalEvent; color: string; onClose: () => void }) {
+  const isMobile = useMobile();
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const meeting = ev.meetingLink ? (MEETING_LABEL[ev.meetingType || "other"] ?? MEETING_LABEL.other) : null;
+  const dateLine = new Date(ev.start).toLocaleDateString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Karachi",
+  });
+
+  const Row = ({ label, children }: { label: string; children: ReactNode }) => (
+    <div style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: INK_400, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 82, flexShrink: 0, paddingTop: 1 }}>{label}</div>
+      <div style={{ fontSize: 13, color: INK_700, lineHeight: 1.5, minWidth: 0, wordBreak: "break-word" }}>{children}</div>
+    </div>
+  );
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(15,23,42,0.55)", backdropFilter: "blur(2px)",
+        display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center",
+        padding: isMobile ? 0 : 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={ev.title || "Event details"}
+        style={{
+          background: CARD_ALT, borderRadius: isMobile ? "16px 16px 0 0" : RADII.CARD,
+          borderTop: `4px solid ${color}`,
+          width: isMobile ? "100%" : "min(560px, 100%)",
+          maxHeight: isMobile ? "88vh" : "82vh", overflowY: "auto",
+          boxShadow: "0 24px 60px rgba(15,23,42,0.28)",
+        }}
+      >
+        <div style={{ padding: "18px 22px 14px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
+              📅 {dateLine}
+            </div>
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: NAVY, margin: 0, lineHeight: 1.3, wordBreak: "break-word" }}>
+              {ev.title || "Busy"}
+            </h3>
+            <div style={{ fontSize: 13, color: INK_700, marginTop: 4, fontWeight: 600 }}>
+              {evtTimeRange(ev)}
+              {ev.recurring && <span style={{ fontSize: 11, color: INK_400, fontWeight: 500 }}> · repeats</span>}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{ background: "none", border: "none", fontSize: 22, lineHeight: 1, color: INK_400, cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
+          >×</button>
+        </div>
+
+        {meeting && (
+          <div style={{ padding: "14px 22px 0" }}>
+            <a
+              href={ev.meetingLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                background: color, color: "white", fontSize: 14, fontWeight: 700,
+                padding: "11px 16px", borderRadius: 8, textDecoration: "none",
+              }}
+            >
+              {meeting.icon} {meeting.label}
+            </a>
+            {ev.meetingCode && (
+              <div style={{ fontSize: 11, color: INK_400, textAlign: "center", marginTop: 6 }}>
+                Meeting ID: {ev.meetingCode}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ padding: "6px 22px 18px" }}>
+          {ev.location && <Row label="Where">{ev.location}</Row>}
+          {ev.organizer && (
+            <Row label="Organiser">{ev.organizer.name || ev.organizer.email}</Row>
+          )}
+          {ev.myResponse && RESPONSE_LABEL[ev.myResponse] && (
+            <Row label="Your RSVP">{RESPONSE_LABEL[ev.myResponse]}</Row>
+          )}
+          {ev.attendees && ev.attendees.length > 0 && (
+            <Row label={`Guests (${ev.attendees.length})`}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {ev.attendees.map((a, i) => (
+                  <div key={i} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
+                    <span>{a.name || a.email}</span>
+                    {a.response && RESPONSE_LABEL[a.response] && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, color: a.response === "accepted" ? GREEN : a.response === "declined" ? RED : INK_400,
+                      }}>{RESPONSE_LABEL[a.response]}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Row>
+          )}
+          {ev.description && (
+            <Row label="Details">
+              <div style={{ whiteSpace: "pre-wrap" }}>{ev.description}</div>
+            </Row>
+          )}
+          {ev.calendarName && <Row label="Calendar">{ev.calendarName}</Row>}
+          {!ev.location && !ev.description && !ev.attendees?.length && !meeting && (
+            <div style={{ fontSize: 13, color: INK_400, fontStyle: "italic", padding: "12px 0" }}>
+              No extra details on this calendar entry.
+            </div>
+          )}
+          {ev.htmlLink && (
+            <div style={{ paddingTop: 14 }}>
+              <a href={ev.htmlLink} target="_blank" rel="noopener noreferrer"
+                 style={{ fontSize: 12, color: BLUE, fontWeight: 600, textDecoration: "none" }}>
+                Open in Google Calendar →
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ThreeDayCalendar({ calEvents }: { calEvents: CalEvent[] }) {
   const isMobile = useMobile();
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
+  const [selected, setSelected] = useState<{ ev: CalEvent; color: string } | null>(null);
   const PREVIEW = 3;
   return (
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 16, padding: isMobile ? "0 16px 4px" : "0 40px 4px" }}>
@@ -1248,11 +1414,10 @@ function ThreeDayCalendar({ calEvents }: { calEvents: CalEvent[] }) {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {(isExpanded ? events : events.slice(0, PREVIEW)).map((ev, i) => {
-                    const start = fmtEvtTime(ev.start);
-                    const end   = fmtEvtTime(ev.end);
-                    const time  = start === "All day" ? "All day" : `${start}–${end}`;
+                    const time = ev.allDay ? "All day" : `${fmtEvtTime(ev.start)}–${fmtEvtTime(ev.end)}`;
+                    const meeting = ev.meetingLink ? (MEETING_LABEL[ev.meetingType || "other"] ?? MEETING_LABEL.other) : null;
                     return (
-                      <div key={i} style={{
+                      <div key={ev.id || `${ev.start}-${i}`} style={{
                         display: "flex", gap: 8, alignItems: "flex-start",
                         padding: "5px 8px", borderRadius: 6,
                         background: i % 2 === 0 ? CANVAS : "transparent",
@@ -1263,9 +1428,38 @@ function ThreeDayCalendar({ calEvents }: { calEvents: CalEvent[] }) {
                           borderRadius: 4, flexShrink: 0, marginTop: 1,
                           minWidth: 68, textAlign: "center",
                         }}>{time}</span>
-                        <span style={{ fontSize: 12, color: NAVY, fontWeight: 500, lineHeight: 1.35 }}>
+                        <button
+                          onClick={() => setSelected({ ev, color })}
+                          title="Click for full details"
+                          style={{
+                            flex: 1, minWidth: 0, textAlign: "left", background: "none",
+                            border: "none", padding: 0, cursor: "pointer",
+                            fontSize: 12, color: NAVY, fontWeight: 500, lineHeight: 1.35,
+                            fontFamily: "inherit",
+                          }}
+                        >
                           {ev.title || "Busy"}
-                        </span>
+                          {(ev.description || ev.location || ev.attendees?.length) && (
+                            <span style={{ color: INK_400, fontWeight: 400 }}> ⓘ</span>
+                          )}
+                        </button>
+                        {meeting && (
+                          <a
+                            href={ev.meetingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            title={meeting.label}
+                            style={{
+                              flexShrink: 0, fontSize: 10, fontWeight: 700,
+                              color: "white", background: color,
+                              padding: "2px 7px", borderRadius: 4,
+                              textDecoration: "none", marginTop: 1, whiteSpace: "nowrap",
+                            }}
+                          >
+                            {meeting.icon} Join
+                          </a>
+                        )}
                       </div>
                     );
                   })}
@@ -1287,6 +1481,9 @@ function ThreeDayCalendar({ calEvents }: { calEvents: CalEvent[] }) {
           </div>
         );
       })}
+      {selected && (
+        <EventDetailModal ev={selected.ev} color={selected.color} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }

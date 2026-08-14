@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-08-14 — Welcome calendar: duplicate events removed, full details on click, one-tap Join
+
+Khuram: the 3-day calendar on the welcome page was listing the same meeting more than once, and an event was just a line of text — no way to see the details or join a Zoom call from there.
+
+**Cause of the duplicates.** `/api/calendar/freebusy` fans out over *every* calendar the account owns or can write to and pushes each event into one flat list, with no key on event identity. A meeting that sits on both the primary calendar and a shared/team calendar (or an invite accepted on two calendars) was therefore listed twice.
+
+- **New `app/api/calendar/eventUtils.ts`** — the pure calendar helpers, split out of the route so they can be unit-tested. Two-pass de-duplication: first on Google's `iCalUID`/event id (exact same event, whichever calendar it arrived on), then a fuzzy pass on normalised title + exact start/end instant, which catches the same meeting duplicated under different ids (e.g. one copy titled "Invitation: Supplier Call"). Times are compared as epoch milliseconds, so `+05:00` and `Z` forms of the same instant match. Duplicates are **merged, not dropped** — the surviving entry keeps the richest copy of every field, so a Zoom link that only existed on one copy is never lost. Same title at different times (recurring instances) and different titles at the same time are correctly left alone.
+- **Route now keeps the full event.** It previously threw away everything except start/end/title. It now also returns description (Google's HTML flattened to readable text, links preserved), location, organiser, guest list with RSVP status, your own RSVP, the source calendar name, whether it repeats, the Google Calendar deep link, and a joinable meeting link resolved from `conferenceData` → `hangoutLink` → location → description, classified as Zoom / Meet / Teams / Webex. Response gains `duplicatesRemoved` and `rawCount` for diagnostics.
+- **Welcome page (`ThreeDayCalendar`)** — each event is now clickable and opens a detail modal (date, time, Where, organiser, your RSVP, guests with Going/Declined/Maybe, full details text, source calendar, "Open in Google Calendar"). Events with a meeting link get a **Join** pill inline in the list, so a Zoom call can be joined straight from the welcome page without opening the modal. Events carrying extra detail are marked with a small ⓘ. All-day events now use the API's `allDay` flag rather than sniffing for a "T" in the timestamp, which had stopped working once all-day events were anchored to +05:00.
+- Note: de-duplication has to happen in JavaScript here — the events come from the Google Calendar API, not Postgres, so there is no RPC to push it into.
+- 21 unit tests over the dedupe and link-extraction helpers all pass; tsc and eslint clean.
+
+---
+
 ## 2026-08-12 (night) — Restatements now emailed to the CEO immediately + prior-year consistency check
 
 Khuram: "I don't just want it logged, I want it reported to me." Two additions:
