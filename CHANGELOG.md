@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-08-14 (later) — Welcome calendar: the real duplicate cause was the Exchange sync, now handled
+
+The first de-duplication pass keyed on event identity and on title + exact slot. Inspecting the live payload showed why duplicates survived: an Exchange↔Google sync copies meetings onto a second Google calendar (including "Travel Calendar") with a brand-new UID **and a rewritten title** — `Khuram & Lisa Governance Call` reappears as `Busy: Khuram & Lisa Governance Call [copied]`. Neither the id nor the raw title matched, so nothing collapsed. Three distinct shapes were found in the live data:
+
+- **Same slot, decorated title** — `X` vs `Busy: X [copied]`.
+- **Same start, different end** — the sync copy of the multi-day "US West Leadership Summit Save the Date" ended 21/08 while the original ended 22/08, so an exact-slot key could never match them.
+- **Same slot, different wording** — `Busy: Flight to Redmond/Bend (AS 2094) [copied]` vs `Busy: Flight: AS 2094 from SEA to RDM [copied]`, the same flight described two ways.
+
+`eventUtils.ts` now strips the sync decoration (`Busy:` prefix, `[copied]` / `[exchange-copied]` suffix) before comparing, and de-duplicates in four passes: exact identity → cleaned title + exact slot → cleaned title + same start (widest span wins) → sync copies in an identical slot sharing at least two distinctive words. That last pass is deliberately narrow: both rows must carry the sync marker, so two genuinely different meetings double-booked in one slot still both show. Merging prefers the untouched original over the sync copy, and any different wording is preserved in `altTitles` and shown in the detail modal under "Also listed as" — nothing is silently dropped. Titles now render clean, without the `Busy:`/`[copied]` noise.
+
+Verified against the live payload captured from the account: 11 raw rows collapse to 6 real events, with the Zoom links and the widest date span intact. 25 unit tests (including guards that different meetings in one slot must NOT merge); tsc and eslint clean.
+
+---
+
 ## 2026-08-14 — Welcome calendar: duplicate events removed, full details on click, one-tap Join
 
 Khuram: the 3-day calendar on the welcome page was listing the same meeting more than once, and an event was just a line of text — no way to see the details or join a Zoom call from there.

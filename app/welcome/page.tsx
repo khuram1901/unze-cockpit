@@ -62,7 +62,7 @@ type CalEvent  = {
   meetingCode?: string;
   htmlLink?: string; calendarName?: string;
   recurring?: boolean; myResponse?: string;
-  duplicateCount?: number;
+  duplicateCount?: number; altTitles?: string[];
 };
 
 /* ─── WMO weather codes ──────────────────────────────────────── */
@@ -1361,6 +1361,13 @@ function EventDetailModal({ ev, color, onClose }: { ev: CalEvent; color: string;
           {ev.description && (
             <Row label="Details">
               <div style={{ whiteSpace: "pre-wrap" }}>{ev.description}</div>
+            </Row>
+          )}
+          {ev.altTitles && ev.altTitles.length > 0 && (
+            <Row label="Also listed as">
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {ev.altTitles.map((t, i) => <div key={i}>{t}</div>)}
+              </div>
             </Row>
           )}
           {ev.calendarName && <Row label="Calendar">{ev.calendarName}</Row>}
