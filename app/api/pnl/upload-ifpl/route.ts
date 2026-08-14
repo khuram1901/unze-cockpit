@@ -3,6 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import type { ParsedIfplMonth } from "../../../lib/excel-parsers/pnl-ifpl-parser";
 import { requireAuth } from "../../../lib/api-auth";
 import { canViewIfplPnl, type UserCtx, type PermOverrides } from "../../../lib/permissions";
+import { sendRestatementAlert, type RestatementItem } from "../../../lib/pnl-restatement-alert";
 
 // The Imperial workbook is ~9.4 MB — over Vercel's 4.5 MB request-body cap —
 // so the FILE never reaches this route. The page parses it in the browser
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
 
   type Restated = { scope: string; line: string; old_value: number; new_value: number };
   const results: { month: string; accepted: boolean; summary: string; restated?: Restated[] }[] = [];
+  const allRestated: RestatementItem[] = [];
   for (const m of months) {
     const checks = m.checks.filter((c) => typeof c?.name === "string");
     const warnings = checks.filter((c) => !c.passed && !c.blocking).length;
@@ -102,6 +104,7 @@ export async function POST(request: NextRequest) {
           await supabase.from("pnl_restatements").insert(
             restated.map((r) => ({ company: "IFPL", month: m.month, scope: r.scope, line: r.line, old_value: r.old_value, new_value: r.new_value, changed_by: auth.email })),
           );
+          allRestated.push(...restated.map((r) => ({ ...r, month: m.month })));
         }
       }
       await supabase.from("ifpl_pnl_uploads").delete().eq("month", m.month).eq("status", "accepted");
@@ -165,5 +168,61 @@ export async function POST(request: NextRequest) {
     results.push({ month: m.month, accepted, summary: String(m.summary || "").slice(0, 300), restated: restated.length > 0 ? restated : undefined });
   }
 
-  return Response.json({ results });
+  // ── Prior-year consistency check ────────────────────────────────
+  // The workbook's own summary sheets claim what previous fiscal years did;
+  // compare against the app's stored, confirmed records. A mismatch means
+  // the file's history tabs disagree with what the CEO already signed off.
+  const priorYearWarnings: string[] = [];
+  const seenClaims = new Set<string>();
+  for (const m of months) {
+    for (const c of m.priorYearClaims || []) {
+      const fy = Math.trunc(fin(c.fy_start_year));
+      const claimed = fin(c.net_sales);
+      const source = String(c.source || "summary").slice(0, 60);
+      const key = `${source}|${fy}`;
+      if (fy < 2015 || fy > 2100 || claimed <= 0 || seenClaims.has(key)) continue;
+      seenClaims.add(key);
+      const { data: total } = await supabase.rpc("ifpl_net_sales_total", {
+        p_from: `${fy}-07-01`,
+        p_to: `${fy + 1}-06-01`,
+      });
+      const stored = Number(total) || 0;
+      if (stored <= 0) continue; // nothing confirmed for that year — nothing to compare
+      const diff = claimed - stored;
+      if (Math.abs(diff) > Math.max(stored * 0.01, 1_000_000)) {
+        priorYearWarnings.push(
+          `The file's "${source}" sheet says FY ${fy}-${String(fy + 1).slice(2)} net sales were PKR ${(claimed / 1e6).toFixed(1)}m, ` +
+          `but the app's confirmed records total PKR ${(stored / 1e6).toFixed(1)}m — out by PKR ${(diff / 1e6).toFixed(1)}m.`,
+        );
+      }
+    }
+  }
+
+  // Restatements found anywhere in this upload → email the CEO immediately
+  // (also permanently logged above; email failure never affects the upload).
+  await sendRestatementAlert({
+    companyLabel: "Imperial Footwear",
+    pagePath: "/finance/imperial-pnl",
+    uploadedBy: auth.email,
+    fileName,
+    items: allRestated,
+  });
+  if (priorYearWarnings.length > 0) {
+    const { sendNotificationEmail } = await import("../../../lib/send-email");
+    await sendNotificationEmail({
+      to: "khuram1901@gmail.com",
+      subject: `⚠ Imperial P&L upload: file's prior-year summary doesn't match confirmed records`,
+      heading: "Prior-year figures don't match",
+      body:
+        `<p>An upload to the <strong>Imperial Footwear P&amp;L</strong> contains year-summary figures that disagree with the app's confirmed records.</p>` +
+        `<p><strong>Uploaded by:</strong> ${auth.email}<br/><strong>File:</strong> ${fileName}</p>` +
+        `<ul style="padding-left:18px">${priorYearWarnings.map((w) => `<li style="margin-bottom:6px">${w}</li>`).join("")}</ul>` +
+        `<p>The app's stored months remain unchanged — this flags that the file's own history tabs are wrong or have been altered.</p>`,
+      linkUrl: "https://pulse.unze.co.uk/finance/imperial-pnl",
+      linkLabel: "Open Imperial P&L",
+      triggerType: "pnl_prior_year_mismatch",
+    }).catch((err) => console.error("[upload-ifpl] prior-year email failed:", err));
+  }
+
+  return Response.json({ results, priorYearWarnings: priorYearWarnings.length > 0 ? priorYearWarnings : undefined });
 }

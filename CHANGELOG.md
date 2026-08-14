@@ -4,6 +4,21 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-08-12 (night) — Restatements now emailed to the CEO immediately + prior-year consistency check
+
+Khuram: "I don't just want it logged, I want it reported to me." Two additions:
+
+- **Immediate restatement email (all three P&Ls)**: new `app/lib/pnl-restatement-alert.ts` — when any upload to Unze Trading, Imperial or Restaurants changes previously-confirmed figures, the upload route now emails Khuram straight away (via the existing Gmail notification account) listing each change exactly: branch/plant, line, month, old → new, who uploaded, which file. Deliberately not digest-suppressed (new trigger type `pnl_restatement` — rare and serious enough for its own email). Email failure never affects the upload; the permanent pnl_restatements log remains the source of truth.
+- **Prior-year consistency check (Imperial)**: the V2 Budget audit found the file's own summary tabs claiming FY25-26 net sales of 5,488.8m ("Year to Year Summary") and 3,263.4m ("Sales Growth") against the app's confirmed 4,493.4m. The parser now extracts these prior-year claims, and the upload route compares each against stored records via new RPC `ifpl_net_sales_total` (migration 208, applied, anon-revoked). Mismatches over 1% show as warnings in the upload results AND are emailed to Khuram (`pnl_prior_year_mismatch`) — the file cannot quietly rewrite history in its summary tabs either. tsc clean; claim extraction verified against the real V2 Budget.xlsx.
+
+---
+
+## 2026-08-12 (later) — Imperial FY26-27 "V2 Budget" workbook: parser made compatible
+
+Khuram shared the new-fiscal-year Imperial P&L workbook (V2 Budget.xlsx, Jul-26→Jun-27 with full-year budgets and new branches). Audit findings: July-26 (the only month with actuals) is missing the "Profit & Loss" header cell in A7 that the parser anchors on — the parser now falls back to anchoring on the first Gross/Cross Sales row instead of silently skipping the month. New template features handled without further change: "Gross Sales Before Dis. & Tax" + "Discount" rows (stored as other/dropped when zero), new branches (Mall of Sailkot, Faisalabad KN, Sukkur; Store 1–6 placeholders are all-zero and drop out), 44 branch blocks. Genuine file errors found for accounts to fix before upload: Hakim Mall July-26 Gross Sales Before Tax is blank (Tax 1.03m and NS 5.71m present — blocks the month, correctly); YTD 26-27 Month Wise sheet's date row says 2025-07→2026-06 (wrong year, disables the cross-check); ~18 #REF! cells in July-26 and 287–438 per later month sheet (broken projection formulas); plan-side Final Profit off for Head Office (2.11m) and Warehouse (1.00m) allocations (warning only). tsc clean.
+
+---
+
 ## 2026-08-12 — Cash sheet continuity audit: closing must match next opening
 
 Khuram asked for an automatic audit on the three cash-sheet pages (/finance/unze-trading, /finance/imperial, /finance/restaurants-daily): the previous day's closing balance must match the next day's opening balance, and any break must raise an alert so a corrupted file or wrong figure gets caught immediately.

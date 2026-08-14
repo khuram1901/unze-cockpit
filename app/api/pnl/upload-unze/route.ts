@@ -4,6 +4,7 @@ import { parseUnzePnl } from "../../../lib/excel-parsers/pnl-unze-parser";
 import { UTPL_COMPANY_ID } from "../../../lib/constants";
 import { requireAuth } from "../../../lib/api-auth";
 import { financeCompanies, type UserCtx, type PermOverrides } from "../../../lib/permissions";
+import { sendRestatementAlert } from "../../../lib/pnl-restatement-alert";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -180,6 +181,16 @@ export async function POST(request: NextRequest) {
     await supabase.from("pnl_uploads").delete().eq("id", upload.id);
     return Response.json({ error: "Checks passed but saving failed: " + writeError.message }, { status: 500 });
   }
+
+  // Restatements → email the CEO immediately (also permanently logged above;
+  // email failure never affects the upload).
+  await sendRestatementAlert({
+    companyLabel: "Unze Trading",
+    pagePath: "/finance/profit-and-loss",
+    uploadedBy: auth.email,
+    fileName: file.name || "unze-pnl.xlsx",
+    items: restated.map((r) => ({ ...r, month: parsed.month })),
+  });
 
   return Response.json({
     accepted: true,

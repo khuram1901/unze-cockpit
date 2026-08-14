@@ -3,6 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import type { ParsedRestMonth, RestCompany } from "../../../lib/excel-parsers/pnl-restaurant-parser";
 import { requireAuth } from "../../../lib/api-auth";
 import { canViewRestaurantsPnl, type UserCtx, type PermOverrides } from "../../../lib/permissions";
+import { sendRestatementAlert, type RestatementItem } from "../../../lib/pnl-restatement-alert";
 
 // Restaurant P&L upload — same pattern as Imperial: the workbook is parsed
 // in the BROWSER (pnl-restaurant-parser) and the extracted months arrive
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
 
   type Restated = { scope: string; line: string; old_value: number; new_value: number };
   const results: { month: string; accepted: boolean; summary: string; restated?: Restated[] }[] = [];
+  const allRestated: RestatementItem[] = [];
   for (const m of months) {
     const checks = m.checks.filter((c) => typeof c?.name === "string");
     const warnings = checks.filter((c) => !c.passed && !c.blocking).length;
@@ -106,6 +108,7 @@ export async function POST(request: NextRequest) {
           await supabase.from("pnl_restatements").insert(
             restated.map((r) => ({ company, month: m.month, scope: r.scope, line: r.line, old_value: r.old_value, new_value: r.new_value, changed_by: auth.email })),
           );
+          allRestated.push(...restated.map((r) => ({ ...r, month: m.month })));
         }
       }
       await supabase.from("rest_pnl_uploads").delete().eq("company", company).eq("month", m.month).eq("status", "accepted");
@@ -168,6 +171,16 @@ export async function POST(request: NextRequest) {
     }
     results.push({ month: m.month, accepted, summary: String(m.summary || "").slice(0, 300), restated: restated.length > 0 ? restated : undefined });
   }
+
+  // Restatements found anywhere in this upload → email the CEO immediately
+  // (also permanently logged above; email failure never affects the upload).
+  await sendRestatementAlert({
+    companyLabel: company === "BARANH" ? "Baranh" : "Haute Dolci",
+    pagePath: "/finance/restaurants",
+    uploadedBy: auth.email,
+    fileName,
+    items: allRestated,
+  });
 
   return Response.json({ results });
 }

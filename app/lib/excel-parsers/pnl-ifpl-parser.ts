@@ -31,12 +31,18 @@ export type IfplLine = {
 // they never reject a month (the source file has historic quirks — e.g.
 // Aug-25 Hakim Mall has sales but no COGS row — that accounts won't refile).
 export type IfplCheck = { name: string; expected: number; reported: number; diff: number; passed: boolean; blocking: boolean };
+// What the workbook's own year-summary sheets CLAIM prior fiscal years did.
+// Attached to the last parsed month; the upload route compares these against
+// the app's stored, confirmed records and warns the CEO on any mismatch —
+// the file cannot quietly rewrite history in its summary tabs either.
+export type PriorYearClaim = { source: string; fy_start_year: number; net_sales: number };
 export type ParsedIfplMonth = {
   month: string; // YYYY-MM-01
   lines: IfplLine[];
   checks: IfplCheck[];
   accepted: boolean;
   summary: string;
+  priorYearClaims?: PriorYearClaim[];
 };
 
 // Canonical names for the total/subtotal rows — the file's trailing colons,
@@ -189,8 +195,47 @@ export function parseIfplPnl(data: ArrayBuffer | Uint8Array): ParsedIfplMonth[] 
         last.summary = `${passedCount}/${last.checks.length} checks passed (${warnings} data-quality warning${warnings > 1 ? "s" : ""})`;
       }
     }
+    results[results.length - 1].priorYearClaims = readPriorYearClaims(wb, results[0].month);
   }
   return results;
+}
+
+// July-based fiscal year: Jul-2026 → FY starting 2026.
+function fyStartYear(month: string): number {
+  const [y, m] = month.split("-").map((v) => parseInt(v, 10));
+  return m >= 7 ? y : y - 1;
+}
+
+// Reads the workbook's own prior-year Net Sales claims from its summary
+// sheets ("Sales Growth", "Year to Year Summary"). Only fiscal years BEFORE
+// the earliest parsed month are collected — those are the "previously
+// confirmed" years the app can verify against its stored records.
+function readPriorYearClaims(wb: XLSX.WorkBook, earliestMonth: string): PriorYearClaim[] {
+  const claims: PriorYearClaim[] = [];
+  const earliestFy = fyStartYear(earliestMonth);
+  for (const sheetName of ["Sales Growth", "Year to Year Summary"]) {
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true });
+    // FY header cells ("FY 2025-26") sit in one of the first few rows.
+    const fyCols: { col: number; fyStart: number }[] = [];
+    for (let ri = 0; ri < Math.min(rows.length, 8) && fyCols.length === 0; ri++) {
+      const r = rows[ri] || [];
+      for (let c = 0; c < r.length; c++) {
+        const m = str(r[c]).trim().match(/^FY\s*20(\d{2})-\d{2}$/i);
+        if (m) fyCols.push({ col: c, fyStart: 2000 + parseInt(m[1], 10) });
+      }
+    }
+    if (fyCols.length === 0) continue;
+    const nsRow = rows.find((r) => cleanLabel(str(r?.[0])) === "Net Sales" || cleanLabel(str(r?.[1])) === "Net Sales");
+    if (!nsRow) continue;
+    for (const f of fyCols) {
+      if (f.fyStart >= earliestFy) continue;
+      const v = num(nsRow[f.col]);
+      if (v > 0) claims.push({ source: sheetName, fy_start_year: f.fyStart, net_sales: v });
+    }
+  }
+  return claims;
 }
 
 function readMonthWiseNetSales(wb: XLSX.WorkBook): Record<string, number> {
@@ -217,8 +262,16 @@ function parseMonthSheet(wb: XLSX.WorkBook, sheetName: string, month: string, mo
   const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, raw: true });
   if (rows.length < 10) return null;
 
-  const headerIdx = rows.findIndex((r) => cleanLabel(str(r?.[0])) === "Profit & Loss");
-  if (headerIdx < 0) return null;
+  let headerIdx = rows.findIndex((r) => cleanLabel(str(r?.[0])) === "Profit & Loss");
+  if (headerIdx < 0) {
+    // The FY26-27 "V2 Budget" workbook drops the "Profit & Loss" header cell
+    // on some month sheets (July-26 has a blank A7 while Aug-26 onwards keep
+    // it). Fall back to anchoring on the first Gross/Cross Sales row instead
+    // of silently skipping the month.
+    const gsIdx = rows.findIndex((r) => /^(gross|cross) sales/i.test(cleanLabel(str(r?.[0]))));
+    if (gsIdx < 1) return null;
+    headerIdx = gsIdx - 1;
+  }
   // The branch-name row is whichever row above the header mentions the
   // brand — its exact index shifts depending on how blank rows survive.
   const nameRow = rows.slice(0, headerIdx).find((r) => (r || []).some((c) => str(c).toUpperCase().includes("UNZE LONDON"))) || [];

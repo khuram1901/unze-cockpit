@@ -194,7 +194,7 @@ export default function ImperialPnlPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileName: uploadFile.name, months }),
       });
-      let body: { results?: UploadResult[]; error?: string } = {};
+      let body: { results?: UploadResult[]; error?: string; priorYearWarnings?: string[] } = {};
       try { body = await res.json(); } catch { /* non-JSON error page */ }
       if (!res.ok) {
         setUploadResults([{ month: "", accepted: false, summary: body.error || `Upload failed (${res.status})` }]);
@@ -209,11 +209,18 @@ export default function ImperialPnlPage() {
           .filter((c) => !c.passed && c.blocking === blocking)
           .map((c) => ({ name: c.name, expected: c.expected, reported: c.reported, diff: c.diff, blocking: c.blocking }));
       };
-      setUploadResults(((body.results || []) as UploadResult[]).map((r) => ({
+      const mapped = ((body.results || []) as UploadResult[]).map((r) => ({
         ...r,
         failed: detail(r.month, true),
         warnings: detail(r.month, false),
-      })));
+      }));
+      // Prior-year consistency: the file's own summary tabs vs the app's
+      // confirmed records — rendered as an extra warning row (also emailed
+      // to the CEO by the server).
+      for (const w of body.priorYearWarnings || []) {
+        mapped.push({ month: "", accepted: false, summary: `⚠ ${w}`, failed: [], warnings: [] });
+      }
+      setUploadResults(mapped);
       const { data } = await supabase.rpc("ifpl_kpi_by_month", { p_from: "2000-01-01", p_to: "2100-01-01", p_channel: "All", p_branch: "All" });
       setAllMonths(((data || []) as KpiRow[]).map((r) => r.month));
     } catch (err) {
