@@ -1,5 +1,25 @@
 {
   "hooks": {
-    "SessionEnd": ".claude/hooks/session-end.sh"
+    "SessionEnd": ".claude/hooks/session-end.sh",
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/jamesbond/.cache/uv/archive-v0/8bedxaEM0Zbm2l_d/bin/graphify hook-guard search"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/jamesbond/.cache/uv/archive-v0/8bedxaEM0Zbm2l_d/bin/graphify hook-guard read"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -1,0 +1,5 @@
+{
+  "hooks": {
+    "SessionEnd": ".claude/hooks/session-end.sh"
+  }
+}

@@ -50,3 +50,4 @@ sessions/
 
 # local helper script (not part of the app)
 push.command
+graphify-out/
