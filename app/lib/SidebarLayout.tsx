@@ -62,8 +62,8 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
 };
 
 function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
-  if (card.permKey === "can_view_dept_tax" &&
-      (ctx.email || "").toLowerCase() === "shakeel@unze.co.uk") return true;
+  // The Tax consultant exemption that used to be inlined here is now part of
+  // canViewDepartment(), which can_view_dept_tax already calls above.
   const perms = ctx.overrides as Record<string, boolean | string | null> | null;
   if (card.permKey === "_admin_settings") return isMainAdmin(ctx);
   if (card.permKey === "_backups") return ["khuram1901@gmail.com", "k.saleem@unzegroup.com"].includes((ctx.email || "").toLowerCase());

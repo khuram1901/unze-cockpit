@@ -12,7 +12,7 @@ import {
   useToast, useConfirm, labelStyle, inputStyle, primaryButtonStyle,
 } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
-import { canCreateAssignments, canManageTaxNotices, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { canCreateAssignments, canManageTaxNotices, isTaxSpecialist, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { downloadCSV } from "../../lib/exportUtils";
 import ImportExportButtons from "../../lib/ImportExportButtons";
@@ -203,13 +203,7 @@ export default function TaxationDashboard() {
         if (p) overrides = p as PermOverrides;
         const ctx: UserCtx = { email: userData.user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
         setUserCtx(ctx);
-        const SHAKEEL_EMAIL = "shakeel@unze.co.uk";
-        const AWAIS_EMAIL = "taxation@unze.co.uk";
-        const isTaxManager =
-          userData.user.email?.toLowerCase() === SHAKEEL_EMAIL ||
-          userData.user.email?.toLowerCase() === AWAIS_EMAIL ||
-          canManageTaxNotices(ctx);
-        setCanManage(isTaxManager);
+        setCanManage(isTaxSpecialist(ctx) || canManageTaxNotices(ctx));
       }
     }
     setLoading(false);

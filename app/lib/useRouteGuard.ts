@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, loadMyPermissions } from "./supabase";
 import {
@@ -75,10 +75,26 @@ async function loadUserCtx(email: string): Promise<UserCtx> {
   return ctx;
 }
 
-export function useRequireCapability(cap: Capability): { checking: boolean; ctx: UserCtx | null } {
+// ── Shared guard ───────────────────────────────────────────────────────────
+// Every page guard does the same four things: read the session, redirect to
+// /login if there isn't one, load the user context, then redirect to /welcome
+// if the context fails the page's test. Only that last test differs, so it is
+// the only thing the public hooks below pass in.
+//
+// `allow` is read through a ref rather than listed as an effect dependency:
+// callers pass an inline arrow that is a new function on every render, which
+// would re-run the guard (and re-redirect) on every render if it were a dep.
+// `guardKey` is the real dependency — it changes exactly when the test does.
+function useAuthGuard(
+  allow: (ctx: UserCtx) => boolean,
+  guardKey: string,
+): { checking: boolean; ctx: UserCtx | null } {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
   const [ctx, setCtx] = useState<UserCtx | null>(null);
+
+  const allowRef = useRef(allow);
+  useEffect(() => { allowRef.current = allow; });
 
   useEffect(() => {
     let active = true;
@@ -90,7 +106,7 @@ export function useRequireCapability(cap: Capability): { checking: boolean; ctx:
       if (!session?.user?.email) { router.replace("/login"); return; }
       const loaded = await loadUserCtx(session.user.email);
       if (!active) return;
-      if (!CHECKS[cap](loaded)) {
+      if (!allowRef.current(loaded)) {
         router.replace("/welcome");
         return;
       }
@@ -99,9 +115,13 @@ export function useRequireCapability(cap: Capability): { checking: boolean; ctx:
     }
     check();
     return () => { active = false; };
-  }, [cap, router]);
+  }, [guardKey, router]);
 
   return { checking, ctx };
+}
+
+export function useRequireCapability(cap: Capability): { checking: boolean; ctx: UserCtx | null } {
+  return useAuthGuard((u) => CHECKS[cap](u), `cap:${cap}`);
 }
 
 export function useBlockPA(): { checking: boolean } {
@@ -109,32 +129,12 @@ export function useBlockPA(): { checking: boolean } {
 }
 
 export function useRequireDepartment(departmentName: string): { checking: boolean } {
-  const router = useRouter();
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-    async function check() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!active) return;
-      if (!session?.user?.email) { router.replace("/login"); return; }
-      const ctx = await loadUserCtx(session.user.email);
-      if (!active) return;
-      if (departmentName === "Tax" &&
-          (ctx.email || "").toLowerCase() === "shakeel@unze.co.uk") {
-        setChecking(false);
-        return;
-      }
-      if (!canViewDepartment(ctx, departmentName)) {
-        router.replace("/welcome");
-        return;
-      }
-      setChecking(false);
-    }
-    check();
-    return () => { active = false; };
-  }, [departmentName, router]);
-
+  // The Tax consultant exemption that used to sit here now lives in
+  // canViewDepartment() — see TAX_CONSULTANT_EMAIL in permissions.ts.
+  const { checking } = useAuthGuard(
+    (u) => canViewDepartment(u, departmentName),
+    `dept:${departmentName}`,
+  );
   return { checking };
 }
 

@@ -41,6 +41,22 @@ export const ADMIN_EMAIL = "khuram1901@gmail.com";
 export const PA_EMAIL = "pa.ceo@unze.co.uk";
 export const OPS_HOD_EMAIL = "nadeem.khan@unze.co.uk";
 
+// ── Tax specialists ────────────────────────────────────────────────
+// Shakeel is the external tax consultant. He is not on the Tax department
+// establishment, so no role/department rule can ever grant him the Tax
+// pages — the access has to be granted by identity. Until 15 Aug 2026 that
+// grant was copy-pasted into four separate client files (the route guard,
+// the sidebar, and both tax dashboards), which meant revoking his access
+// required finding all four. It lives here now, once.
+//
+// IMPORTANT: this constant governs the UI only. The database enforces the
+// same rule independently in RLS — supabase/069, 070, 124, 144 and 179 all
+// hardcode the address. Changing it here does NOT change what the database
+// permits; the matching migration has to be written and applied manually.
+export const TAX_CONSULTANT_EMAIL = "shakeel@unze.co.uk";
+// Awais — in-house tax manager. Same write rights over Tax Notices.
+export const TAX_MANAGER_EMAIL = "taxation@unze.co.uk";
+
 // Both of Khuram's own accounts: undeletable, role can never be reassigned
 // away, email can never be changed. Kamran and the PA are deliberately
 // NOT here any more — as of 16 Jul 2026 they're ordinary (if senior)
@@ -89,6 +105,13 @@ export function isPrimaryCEO(u: UserCtx) { return lc(u.email) === CEO_EMAIL; }
 // True only for Kamran — used to route him to his own dashboard.
 export function isSecondaryCEO(u: UserCtx) { return lc(u.email) === CEO2_EMAIL; }
 export function isMainAdmin(u: UserCtx) { return lc(u.email) === ADMIN_EMAIL; }
+// External tax consultant (Shakeel) — see TAX_CONSULTANT_EMAIL above.
+export function isTaxConsultant(u: UserCtx) { return lc(u.email) === TAX_CONSULTANT_EMAIL; }
+// Either tax specialist — the two people who may edit Tax Notices without
+// holding a Tax department role.
+export function isTaxSpecialist(u: UserCtx) {
+  return lc(u.email) === TAX_CONSULTANT_EMAIL || lc(u.email) === TAX_MANAGER_EMAIL;
+}
 export function isPA(u: UserCtx) { return lc(u.email) === PA_EMAIL || u.role === "Executive"; }
 
 // Khuram has two real login identities (khuram1901@gmail.com = Admin,
@@ -418,6 +441,11 @@ export function canViewDepartment(u: UserCtx, departmentName: string): boolean {
     if (o !== null) return o;
   }
   if (isAdminTier(u)) return true;
+  // The external tax consultant has no department, so the role rules below
+  // can never let him in. Deliberately placed AFTER the override check so
+  // the Access Matrix can still revoke it — previously this exemption lived
+  // in the route guard and bypassed overrides entirely.
+  if (departmentName === "Tax" && isTaxConsultant(u)) return true;
   if (u.role === "Executive") return false;
   if (u.role === "Manager") {
     if (u.department === departmentName) return true;

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, authFetch, loadMyPermissions } from "../lib/supabase";
 import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, useToast } from "../lib/SharedUI";
-import { canManageTaxSchedule, isPA, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canManageTaxSchedule, isPA, widgetVisible, TAX_CONSULTANT_EMAIL, type UserCtx, type PermOverrides } from "../lib/permissions";
 import TaxComplianceSummary from "./TaxComplianceSummary";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
@@ -16,9 +16,9 @@ type ScheduleStatus = "Not Started" | "In Progress" | "External Auditors" | "Com
 type ReturnType = "FBR_SALES_TAX" | "PRA_TAX" | "INCOME_TAX";
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 
-// ── Sign-off constant ──────────────────────────────────────────────
-
-const SHAKEEL_EMAIL = "shakeel@unze.co.uk";
+// Sign-off is restricted to the external tax consultant —
+// TAX_CONSULTANT_EMAIL in lib/permissions.ts, mirrored by the RLS policy in
+// supabase/179_tax_accounts_signoffs_table.sql.
 
 // ── Schedule permission constants ──────────────────────────────────
 // Admin: full access to all statuses
@@ -310,7 +310,7 @@ export default function AccountsTaxDashboard() {
     setSignoffMeta(sofmeta);
 
     const { data: { user } } = await supabase.auth.getUser();
-    setIsShakeel(user?.email?.toLowerCase() === SHAKEEL_EMAIL.toLowerCase());
+    setIsShakeel(user?.email?.toLowerCase() === TAX_CONSULTANT_EMAIL);
 
     // Schedule KPIs (pre-computed in Postgres)
     const sk = rpc.schedule_kpis ?? {};
@@ -497,7 +497,7 @@ export default function AccountsTaxDashboard() {
 
   async function handleSignoff(section: string, entityKey: string) {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.email || user.email.toLowerCase() !== SHAKEEL_EMAIL.toLowerCase()) {
+    if (!user?.email || user.email.toLowerCase() !== TAX_CONSULTANT_EMAIL) {
       alert("Only Shakeel can sign off accounts.");
       return;
     }
