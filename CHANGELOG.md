@@ -4,6 +4,21 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-08-14 (night) — Banking cash sheets: deleting a day now really deletes it, and 5 mis-filed Unze Trading days removed
+
+Khuram reported the Unze Trading cash sheet for 3 August wouldn't take the PDF — re-uploading and even deleting the day and re-uploading changed nothing.
+
+**What was actually happening.** The cash sheet is mirrored into `daily_cash_position` (which is what the Banking overview, the Finance pages and the continuity audit actually read) and into `pdc_maturity_buckets`. `daily_cash_position.cash_sheet_id` is `ON DELETE SET NULL`, so deleting a cash sheet left the mirrored figures behind untouched. The page kept showing the old numbers no matter how many times the day was deleted and re-uploaded — the sheet was gone, the figures weren't. Confirmed in live data: UTPL 2026-08-03 had a `daily_cash_position` row with `cash_sheet_id IS NULL` and no matching `cash_sheet_uploads` row.
+
+**Where the wrong figures came from.** Those 3 August numbers (opening 1,328,638 → closing 3,367,904) are Haute Dolci's 4 August sheet. `app/api/finance/check-inbox` collapses every non-Imperial detection into UTPL (`cashFlow.company === "imperial" ? IFPL : UTPL`), so any Baranh / Haute Dolci / K&K Jhang PDF arriving by email is filed as Unze Trading. Five days were affected — 03/08 (HD), 04/08 (BRNH), 05/08, 07/08 and 12/08 (KKJ) — each an exact duplicate of a row already correct under its own company. All five removed from `cash_sheet_uploads`, `daily_cash_position` and `pdc_maturity_buckets` with the CEO's approval; the Unze Trading series is now only the genuine PKR 145–155m days.
+
+- **`app/api/banking/cash-sheets/[id]/route.ts`**: DELETE now reads `company` + `sheet_date` before removing the sheet and clears the matching `daily_cash_position` and `pdc_maturity_buckets` rows too. Failures are collected and returned as a `warning` rather than swallowed — a half-finished delete is exactly the state that made this so confusing.
+- **`app/banking/CashSheetTab.tsx`**: renders that warning instead of a plain success tick, and the confirm prompt now says the day's Banking/Finance figures go too.
+
+**Still open (causes, not yet fixed):** the email importer's company mis-filing will keep producing bad rows; `detectCompany`'s `return "baranh"` fallback guesses instead of refusing; `/api/banking/cash-sheets/pdf/parse` has no company-mismatch guard (the Finance route has had one since f152241) and returns 200 with null values on a parse failure, whose `parseWarning` the UI never displays; and `sumMatchesTotal` is computed then discarded, which is how UTPL 07/08 stored payment line items totalling PKR 95.5bn and 10/08 and 30/07 captured the closing balance as a receipt. tsc and eslint clean.
+
+---
+
 ## 2026-08-14 (later) — Welcome calendar: the real duplicate cause was the Exchange sync, now handled
 
 The first de-duplication pass keyed on event identity and on title + exact slot. Inspecting the live payload showed why duplicates survived: an Exchange↔Google sync copies meetings onto a second Google calendar (including "Travel Calendar") with a brand-new UID **and a rewritten title** — `Khuram & Lisa Governance Call` reappears as `Busy: Khuram & Lisa Governance Call [copied]`. Neither the id nor the raw title matched, so nothing collapsed. Three distinct shapes were found in the live data:

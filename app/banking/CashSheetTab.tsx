@@ -434,12 +434,15 @@ export default function CashSheetTab() {
   }
 
   async function deleteSheet(id: string) {
-    if (!confirm("Delete this entire cash sheet and all its transactions? This cannot be undone.")) return;
+    if (!confirm("Delete this entire cash sheet, its transactions, and the day's figures on the Banking and Finance pages? This cannot be undone.")) return;
     try {
       const res = await authFetch(`/api/banking/cash-sheets/${id}`, { method: "DELETE" });
       const json = await res.json();
       if (json.ok) {
-        showToast("Cash sheet deleted", "success");
+        // A partial cleanup still reports ok — say so rather than showing a
+        // plain success tick, otherwise stale figures linger with no warning.
+        if (json.warning) showToast(json.warning, "error");
+        else showToast("Cash sheet deleted", "success");
         setDetail(null);
         loadSheets();
       } else {

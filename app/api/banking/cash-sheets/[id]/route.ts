@@ -1,6 +1,19 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../lib/supabase-server";
 import { requireAuth } from "../../../../lib/api-auth";
+import {
+  UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID,
+} from "../../../../lib/constants";
+
+// cash_sheet_uploads.company → the companies.id used by daily_cash_position
+// and pdc_maturity_buckets. Kept in step with the POST route's own map.
+const COMPANY_ID_MAP: Record<string, string> = {
+  UTPL: UTPL_COMPANY_ID,
+  IFPL: IFPL_COMPANY_ID,
+  BRNH: BRNH_COMPANY_ID,
+  HD:   HD_COMPANY_ID,
+  KKJ:  KKJ_COMPANY_ID,
+};
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
@@ -155,10 +168,11 @@ export async function DELETE(
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
-  // Fetch PDF path before deleting
+  // Fetch the day's identity before deleting — we need company + date to clear
+  // the mirrored rows below, not just the PDF path.
   const { data: sheet } = await supabase
     .from("cash_sheet_uploads")
-    .select("pdf_storage_path")
+    .select("pdf_storage_path, company, sheet_date")
     .eq("id", id)
     .single();
 
@@ -169,9 +183,43 @@ export async function DELETE(
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
+  // The cash sheet is mirrored into daily_cash_position (which feeds the
+  // Banking overview, the Finance pages and the continuity audit) and into
+  // pdc_maturity_buckets. daily_cash_position's FK is ON DELETE SET NULL, so
+  // deleting the sheet used to leave the day's figures on screen forever —
+  // re-uploading looked like it "did nothing" because the stale mirrored row
+  // was what the pages were reading. Clear both here so a delete is a delete.
+  const warnings: string[] = [];
+  const companyId = sheet?.company ? COMPANY_ID_MAP[sheet.company] : undefined;
+  if (companyId && sheet?.sheet_date) {
+    const { error: dcpErr } = await supabase
+      .from("daily_cash_position")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("position_date", sheet.sheet_date);
+    if (dcpErr) warnings.push(`daily_cash_position: ${dcpErr.message}`);
+
+    const { error: pdcErr } = await supabase
+      .from("pdc_maturity_buckets")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("position_date", sheet.sheet_date);
+    if (pdcErr) warnings.push(`pdc_maturity_buckets: ${pdcErr.message}`);
+  } else if (sheet?.company) {
+    warnings.push(`no company id mapped for "${sheet.company}" — mirrored rows left in place`);
+  }
+
   // Remove PDF from storage (best-effort)
   if (sheet?.pdf_storage_path) {
-    await supabase.storage.from("cash-sheets").remove([sheet.pdf_storage_path]);
+    const { error: rmErr } = await supabase.storage.from("cash-sheets").remove([sheet.pdf_storage_path]);
+    if (rmErr) warnings.push(`storage: ${rmErr.message}`);
+  }
+
+  // Surfaced rather than swallowed: a half-finished delete is exactly the
+  // state that made this bug so confusing.
+  if (warnings.length > 0) {
+    console.error("cash-sheets DELETE: partial cleanup:", warnings.join("; "));
+    return Response.json({ ok: true, warning: `Sheet deleted, but some linked data could not be cleared: ${warnings.join("; ")}` });
   }
 
   return Response.json({ ok: true });
