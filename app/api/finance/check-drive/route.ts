@@ -6,7 +6,7 @@ import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
 import { reconcile, matchBankPositionToCashFlow } from "../../../lib/pdf-parsers/reconcile";
 import { archiveSourceDocument } from "../../../lib/document-archive";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, GOOGLE_INTEGRATION_EMAIL as TARGET_EMAIL, FINANCE_AUTO_IMPORT_ENABLED } from "../../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, GOOGLE_INTEGRATION_EMAIL as TARGET_EMAIL, FINANCE_AUTO_CASH_SHEET_IMPORT } from "../../../lib/constants";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -14,16 +14,6 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "Unauthorised" }, { status: 401 });
   }
 
-  if (!FINANCE_AUTO_IMPORT_ENABLED) {
-    return Response.json({
-      ok: true,
-      disabled: true,
-      processed: 0,
-      message:
-        "Automatic cash-sheet import is switched off. Cash sheets are uploaded on the Banking page. " +
-        "To re-enable, set FINANCE_AUTO_IMPORT_ENABLED in app/lib/constants.ts and restore this route's cron in vercel.json.",
-    });
-  }
 
   const supabase = createServiceClient();
 
@@ -170,7 +160,7 @@ export async function GET(request: NextRequest) {
 
         const rec = bankPosition ? reconcile(cashFlow, bankPosition) : null;
 
-        const { error } = await supabase.from("daily_cash_position").upsert({
+        const { error } = !FINANCE_AUTO_CASH_SHEET_IMPORT ? { error: null } : await supabase.from("daily_cash_position").upsert({
           company_id: companyId,
           position_date: positionDate,
           opening_balance: cashFlow.openingBalanceTotal,
@@ -199,7 +189,7 @@ export async function GET(request: NextRequest) {
           }, { onConflict: "company_id,position_date" });
         }
 
-        results.push({ file: group.cashFlow!.name, status: error ? "error — " + error.message : (rec ? (rec.matches ? "saved — balanced" : "saved — NOT balanced") : "saved — cash flow only"), date: positionDate, company });
+        results.push({ file: group.cashFlow!.name, status: error ? "error — " + error.message : !FINANCE_AUTO_CASH_SHEET_IMPORT ? "archived only — cash-sheet import is off (upload on the Banking page)" : (rec ? (rec.matches ? "saved — balanced" : "saved — NOT balanced") : "saved — cash flow only"), date: positionDate, company });
       }
 
       // Mark files for moving to processed

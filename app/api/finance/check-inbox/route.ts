@@ -5,7 +5,7 @@ import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-par
 import { reconcile, matchBankPositionToCashFlow } from "../../../lib/pdf-parsers/reconcile";
 
 import { createServiceClient } from "../../../lib/supabase-server";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, GOOGLE_INTEGRATION_EMAIL, FINANCE_AUTO_IMPORT_ENABLED } from "../../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, GOOGLE_INTEGRATION_EMAIL, FINANCE_AUTO_CASH_SHEET_IMPORT } from "../../../lib/constants";
 import { safeDecrypt, encrypt } from "../../../lib/crypto";
 import { archiveSourceDocument } from "../../../lib/document-archive";
 
@@ -15,16 +15,6 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "Unauthorised" }, { status: 401 });
   }
 
-  if (!FINANCE_AUTO_IMPORT_ENABLED) {
-    return Response.json({
-      ok: true,
-      disabled: true,
-      processed: 0,
-      message:
-        "Automatic cash-sheet import is switched off. Cash sheets are uploaded on the Banking page. " +
-        "To re-enable, set FINANCE_AUTO_IMPORT_ENABLED in app/lib/constants.ts and restore this route's cron in vercel.json.",
-    });
-  }
 
   try {
     const supabase = createServiceClient();
@@ -256,7 +246,7 @@ export async function GET(request: NextRequest) {
               } else {
                 await saveToDatabase(positionDate, cashFlow, bankPosition, result, group.cashFlow.filename, group.bankPosition.filename);
                 ds.add(positionDate);
-                results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate, account: targetEmail });
+                results.push({ messageId: msg.id, status: !FINANCE_AUTO_CASH_SHEET_IMPORT ? "archived only — cash-sheet import is off (upload on the Banking page)" : result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate, account: targetEmail });
               }
             }
           } catch (parseErr) {
@@ -286,7 +276,7 @@ export async function GET(request: NextRequest) {
               if (dateSet.has(positionDate)) {
                 results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate, account: targetEmail });
               } else {
-                await supabase.from("daily_cash_position").upsert({
+                if (FINANCE_AUTO_CASH_SHEET_IMPORT) await supabase.from("daily_cash_position").upsert({
                   company_id: companyId,
                   position_date: positionDate,
                   opening_balance: cashFlow.openingBalanceTotal,
@@ -301,7 +291,7 @@ export async function GET(request: NextRequest) {
                 await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
                 await saveCashSheetData(supabase, cashFlow, positionDate);
                 dateSet.add(positionDate);
-                results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (cash flow only)`, date: positionDate, account: targetEmail });
+                results.push({ messageId: msg.id, status: FINANCE_AUTO_CASH_SHEET_IMPORT ? `saved — ${cashFlow.company} (cash flow only)` : "archived only — cash-sheet import is off (upload on the Banking page)", date: positionDate, account: targetEmail });
               }
             }
           } catch (parseErr) {
@@ -330,7 +320,7 @@ export async function GET(request: NextRequest) {
               const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
               const dateSet = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
               if (!dateSet.has(positionDate)) {
-                await supabase.from("daily_cash_position").upsert({
+                if (FINANCE_AUTO_CASH_SHEET_IMPORT) await supabase.from("daily_cash_position").upsert({
                   company_id: companyId, position_date: positionDate,
                   opening_balance: cashFlow.openingBalanceTotal, total_receipts: cashFlow.receiptsTotal,
                   total_payments: cashFlow.paymentsTotal, closing_balance: cashFlow.closingBalanceUnzeTrading,
@@ -340,7 +330,7 @@ export async function GET(request: NextRequest) {
                 await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
                 await saveCashSheetData(supabase, cashFlow, positionDate);
                 dateSet.add(positionDate);
-                results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (single PDF)`, date: positionDate, account: targetEmail });
+                results.push({ messageId: msg.id, status: FINANCE_AUTO_CASH_SHEET_IMPORT ? `saved — ${cashFlow.company} (single PDF)` : "archived only — cash-sheet import is off (upload on the Banking page)", date: positionDate, account: targetEmail });
               } else {
                 results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate, account: targetEmail });
               }
@@ -382,7 +372,7 @@ export async function GET(request: NextRequest) {
                 if (!ds.has(positionDate)) {
                   await saveToDatabase(positionDate, cashFlow, bankPosition, result, pdfAttachments[0].filename, pdfAttachments[1].filename);
                   ds.add(positionDate);
-                  results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate, account: targetEmail });
+                  results.push({ messageId: msg.id, status: !FINANCE_AUTO_CASH_SHEET_IMPORT ? "archived only — cash-sheet import is off (upload on the Banking page)" : result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate, account: targetEmail });
                 } else {
                   results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate, account: targetEmail });
                 }
@@ -422,6 +412,7 @@ async function saveCashSheetData(
   cashFlow: Awaited<ReturnType<typeof parseCashFlowPDF>>[number],
   positionDate: string
 ): Promise<void> {
+  if (!FINANCE_AUTO_CASH_SHEET_IMPORT) return;
   const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
   const csCompany = cashFlow.company === "imperial" ? "IFPL" : "UTPL";
 
@@ -476,6 +467,7 @@ async function savePdcBuckets(
   positionDate: string,
   buckets: PdcBucket[]
 ) {
+  if (!FINANCE_AUTO_CASH_SHEET_IMPORT) return;
   await supabase.from("pdc_maturity_buckets").delete().eq("company_id", companyId).eq("position_date", positionDate);
   if (buckets.length > 0) {
     await supabase.from("pdc_maturity_buckets").insert(
@@ -495,7 +487,9 @@ async function saveToDatabase(
   const supabase = createServiceClient();
   const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
 
-  await supabase.from("daily_cash_position").upsert(
+  // Only the cash-sheet side is switched off — the bank-position snapshot and
+  // its reconciliation note below still get written, as they did before.
+  if (FINANCE_AUTO_CASH_SHEET_IMPORT) await supabase.from("daily_cash_position").upsert(
     {
       company_id: companyId,
       position_date: positionDate,

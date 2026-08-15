@@ -230,8 +230,29 @@ export default function CashSheetTab() {
       //       Direct browser→Supabase uploads fail with CORS errors; routing
       //       through /api avoids that entirely. The 4.5 MB Vercel body limit
       //       is not a concern for typical cash sheets.
+      // Read the file into memory FIRST. If the picked file has since moved,
+      // been renamed, or lives in iCloud Drive without a local copy, the
+      // browser can't stream it and fetch() dies with a bare "Failed to
+      // fetch" — which reads as a server fault when it isn't one. Reading it
+      // here turns that into a message that says what to actually do.
+      let fileBytes: ArrayBuffer;
+      try {
+        fileBytes = await uploadFile.arrayBuffer();
+      } catch {
+        showToast(
+          `Couldn't read "${uploadFile.name}". The file may have been moved or renamed since you picked it, ` +
+          `or it's in iCloud/OneDrive without a local copy. Open it once so it downloads (or copy it to your Desktop), then choose it again.`,
+          "error",
+        );
+        return;
+      }
+      if (fileBytes.byteLength === 0) {
+        showToast(`"${uploadFile.name}" is empty (0 bytes) — check the file and try again.`, "error");
+        return;
+      }
+
       const uploadForm2 = new FormData();
-      uploadForm2.append("file", uploadFile);
+      uploadForm2.append("file", new File([fileBytes], uploadFile.name, { type: uploadFile.type || "application/pdf" }));
       uploadForm2.append("company", company);
       uploadForm2.append("date", uploadForm.sheet_date);
       const upRes = await authFetch("/api/banking/cash-sheets/pdf/upload", {
@@ -338,8 +359,16 @@ export default function CashSheetTab() {
 
     } catch (err) {
       // Network failure / server unreachable — without this the button was
-      // stuck on "Saving…" forever with no feedback.
-      showToast("Save failed: " + (err instanceof Error ? err.message : String(err)) + " — please try again", "error");
+      // stuck on "Saving…" forever with no feedback. "Failed to fetch" is a
+      // bare browser-level TypeError with no detail, so say what to check
+      // rather than echoing it back at the user.
+      const raw = err instanceof Error ? err.message : String(err);
+      showToast(
+        /failed to fetch|load failed|networkerror/i.test(raw)
+          ? "Couldn't reach the server. Check your internet connection and that the PDF is still where you picked it from, then try again."
+          : "Save failed: " + raw + " — please try again",
+        "error",
+      );
     } finally {
       setSaving(false);
     }
