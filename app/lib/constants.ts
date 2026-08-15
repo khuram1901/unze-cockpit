@@ -11,6 +11,15 @@
 // token lookup so the assumption those routes made is actually true.
 export const GOOGLE_INTEGRATION_EMAIL = "k.saleem@unzegroup.com";
 
+// Automatic cash-sheet ingestion from Gmail (/api/finance/check-inbox) and the
+// Drive inbox folder (/api/finance/check-drive). Switched OFF on 14/08/2026:
+// both routes filed every non-Imperial PDF as Unze Trading, which put Baranh,
+// Haute Dolci and K&K Jhang cash sheets into the Unze tab (five days had to be
+// removed by hand). Cash sheets are now uploaded on the Banking page instead.
+// To re-enable: set this to true AND restore the two cron entries in
+// vercel.json — the routes stay dormant on their own without the crons.
+export const FINANCE_AUTO_IMPORT_ENABLED = false;
+
 export const UTPL_COMPANY_ID = "15884c2d-48a4-4d43-be90-0ef6e130790c";
 export const IFPL_COMPANY_ID = "77921705-8a15-4406-847a-b234f84b5ec3";
 export const BRNH_COMPANY_ID = "6401ba75-f297-4617-84c1-305bcaf35a50";

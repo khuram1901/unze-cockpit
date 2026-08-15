@@ -6,12 +6,23 @@ import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
 import { reconcile, matchBankPositionToCashFlow } from "../../../lib/pdf-parsers/reconcile";
 import { archiveSourceDocument } from "../../../lib/document-archive";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, GOOGLE_INTEGRATION_EMAIL as TARGET_EMAIL } from "../../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, GOOGLE_INTEGRATION_EMAIL as TARGET_EMAIL, FINANCE_AUTO_IMPORT_ENABLED } from "../../../lib/constants";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorised" }, { status: 401 });
+  }
+
+  if (!FINANCE_AUTO_IMPORT_ENABLED) {
+    return Response.json({
+      ok: true,
+      disabled: true,
+      processed: 0,
+      message:
+        "Automatic cash-sheet import is switched off. Cash sheets are uploaded on the Banking page. " +
+        "To re-enable, set FINANCE_AUTO_IMPORT_ENABLED in app/lib/constants.ts and restore this route's cron in vercel.json.",
+    });
   }
 
   const supabase = createServiceClient();

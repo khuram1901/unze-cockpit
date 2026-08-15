@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-08-14 (night, later) — Automatic cash-sheet import switched off (Gmail + Drive)
+
+Following the mis-filed Unze Trading days above, Khuram: "lets eliminate the email parsing now as we are uploading these files."
+
+Both automatic ingestion paths shared the same defect — `/api/finance/check-inbox` (Gmail, every 10 min) and `/api/finance/check-drive` (Drive inbox folder, every 10 min) each decide the company with `cashFlow.company === "imperial" ? IFPL : UTPL`, so every Baranh, Haute Dolci and K&K Jhang sheet was filed as Unze Trading. Switching off only the email path would have left Drive producing the same bad rows, so both are off.
+
+- **`app/lib/constants.ts`**: new `FINANCE_AUTO_IMPORT_ENABLED = false` — one switch covering both routes, with the reason and the re-enable steps in a comment beside it.
+- **`vercel.json`**: the two `*/10 * * * *` finance crons removed (17 → 15). Everything else is untouched — `/api/meetings/check-inbox`, the nightly backup, investments, tax alerts, Folderit, FlowHCM and both digests all still run.
+- **Both routes**: return early with `{ ok: true, disabled: true }` and a message pointing at the Banking page, so a stray or manual call can't ingest anything either. The parsing code is left intact, not deleted — re-enabling is flipping the constant and restoring the two cron entries.
+
+Cash sheets are now only created by a person uploading on the Banking page. Note this also stops the automatic archiving of emailed cash-flow/bank-position PDFs and the automatic bank-position reconciliation that ran alongside the import; the manual routes (`/api/finance/parse-cash-flow`, `/api/finance/upload-pdfs`, `/api/finance/bulk-upload`) are unaffected. tsc and eslint clean.
+
+---
+
 ## 2026-08-14 (night) — Banking cash sheets: deleting a day now really deletes it, and 5 mis-filed Unze Trading days removed
 
 Khuram reported the Unze Trading cash sheet for 3 August wouldn't take the PDF — re-uploading and even deleting the day and re-uploading changed nothing.

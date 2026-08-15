@@ -1,14 +1,8 @@
 {
-  "regions": ["sin1"],
+  "regions": [
+    "sin1"
+  ],
   "crons": [
-    {
-      "path": "/api/finance/check-inbox",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/finance/check-drive",
-      "schedule": "*/10 * * * *"
-    },
     {
       "path": "/api/meetings/check-inbox",
       "schedule": "*/10 * * * *"
