@@ -4,6 +4,29 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-08-16 (early) — Tax consultant access centralised; duplicated route guards merged
+
+Khuram asked for two things: delete five duplicate backup files, and decouple the department routing layer from `useToast()` to lift Community 5's cohesion score in the graph. Neither turned out to exist.
+
+**The five files were not in this repo.** No `src/` directory, no `components/` directory, no `app/meetings/[id]/` route. A search of the working tree, the git index and the full commit history for `page 2.tsx`, `.bak`, `gmail-history-pilot` and `onboard-resource-vault` returned nothing — none have ever existed here. That list came from a different project. A follow-up sweep for genuine duplicates (`* 2.*`, `*.bak`, `*.orig`, `*.old`, `*copy*`, `*~`, `*.tmp`) plus an md5 comparison of every `.ts`/`.tsx`/`.sql`/`.mjs` file found zero duplicates. Nothing was deleted.
+
+**The `useToast()` coupling was not real either.** `app/department/[slug]/page.tsx` is 50 lines and never imports `useToast`; nor does `useRequireDepartment()`, `AuthWrapper.tsx` or `department-config.ts`. Toast calls already live only in the child dashboards — the separation the refactor was meant to create was already the shape of the code. `useToast()`'s 58 edges are its app-wide degree across 28 files, not coupling to the routing layer; graphify filed it into Community 5 as a clustering artifact, which is also why cohesion reads 0.08. Refactoring working code to move that number would have been churn.
+
+**What was actually wrong, and is now fixed.** Two real problems surfaced while reading the guard layer:
+
+- **`shakeel@unze.co.uk` was hardcoded in four separate client files** — `useRouteGuard.ts`, `SidebarLayout.tsx`, `TaxationDashboard.tsx` (as a function-local `SHAKEEL_EMAIL`) and `AccountsTaxDashboard.tsx` (as a module const). Revoking his access meant finding all four. Now one constant, `TAX_CONSULTANT_EMAIL` in `permissions.ts`, alongside `CEO_EMAIL`/`PA_EMAIL`/`OPS_HOD_EMAIL`, with `isTaxConsultant()` and `isTaxSpecialist()` helpers. `TAX_MANAGER_EMAIL` (taxation@unze.co.uk, Awais) added the same way. The rule itself moved into `canViewDepartment()`, beside the existing Finance-HOD-sees-Tax case.
+- **`useRequireCapability` and `useRequireDepartment` carried ~30 lines of identical session/redirect logic.** Both now delegate to a private `useAuthGuard(allow, guardKey)`; only the `allow()` predicate differs. Public signatures unchanged, so no call sites were touched. (The suspected double-fetch of user context turned out not to be real — `loadUserCtx` already caches for 5 minutes, so the second call was a cache hit. The duplication was structural, not a performance cost.)
+
+**Two behaviour changes, both deliberate.** The exemption now sits *after* the `ov()` override check, so Shakeel's Tax access can be revoked from the Access Matrix — previously the guard returned early and ignored overrides entirely, so it could not be switched off without a code change. And `isDailyEntryOnly()` now counts Tax as a department he can see; theoretical unless he is ever granted `admin_entry`, but real.
+
+**Left alone on purpose.** Five migrations (`069`, `070`, `124`, `144`, `179`) hardcode the same address in RLS — that is the actual enforcement layer, the client constant only governs UI, and changing it needs a migration applied by hand. Separately, `taxAlertEngine.ts` finds him by `name ILIKE '%shakeel%'` rather than by email, which breaks silently if his member record is renamed; logged in BLUEPRINT §12 rather than fixed here, as it is a different mechanism.
+
+Verified with `tsc --noEmit` clean across the project and ESLint clean on all five changed files (the 4 remaining warnings are pre-existing and unrelated). Deployed as `415e56d`, Vercel build Ready in 1m 51s, live on pulse.unze.co.uk.
+
+**Also noted:** the GitHub repo `khuram1901/unze-cockpit` responds to anonymous requests — it is public. No credentials are exposed (`.env*` is gitignored and has never been committed; a scan of all tracked files found only variable names, never values), but the full permission model, RLS policies and staff email addresses are readable. Khuram confirmed this was intentional for now, with a plan to make it private.
+
+---
+
 ## 2026-08-14 (night, later) — Only the cash-sheet writing stops; archiving and everything else carries on
 
 Khuram: "lets eliminate the email parsing now as we are uploading these files" — then, on reading the consequences: "I want to ensure the previous practice of archiving carry on and just wanted the email parsing to stop, nothing else to stop, everything else to work like before." The first cut was too broad (it disabled both routes wholesale); this is the narrowed version.

@@ -44,7 +44,7 @@ export const OPS_HOD_EMAIL = "nadeem.khan@unze.co.uk";
 // ── Tax specialists ────────────────────────────────────────────────
 // Shakeel is the external tax consultant. He is not on the Tax department
 // establishment, so no role/department rule can ever grant him the Tax
-// pages — the access has to be granted by identity. Until 15 Aug 2026 that
+// pages — the access has to be granted by identity. Until 16 Aug 2026 that
 // grant was copy-pasted into four separate client files (the route guard,
 // the sidebar, and both tax dashboards), which meant revoking his access
 // required finding all four. It lives here now, once.

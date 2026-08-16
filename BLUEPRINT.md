@@ -1,6 +1,8 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 28/07/2026 (Restaurants cash sheet support — migration 204 extends cash_sheet_uploads CHECK constraint to BRNH/HD/KKJ; KKJ_COMPANY_ID added to constants; API routes + CashSheetTab extended to all 5 companies; new /finance/restaurants-daily page with 3-company tabs for Baranh/Haute Dolci/K&K Jhang daily cash positions; sidebar entry added).
+> **This is the source of truth.** Read before touching any code. Last updated: 16/08/2026 (tax consultant access rule centralised as `TAX_CONSULTANT_EMAIL` in permissions.ts — was hardcoded in four separate client files; the exemption itself moved into `canViewDepartment()` and is now subject to Access Matrix overrides; `useRequireCapability` and `useRequireDepartment` refactored onto a shared `useAuthGuard()`).
+>
+> Previous update: 28/07/2026 (Restaurants cash sheet support — migration 204 extends cash_sheet_uploads CHECK constraint to BRNH/HD/KKJ; KKJ_COMPANY_ID added to constants; API routes + CashSheetTab extended to all 5 companies; new /finance/restaurants-daily page with 3-company tabs for Baranh/Haute Dolci/K&K Jhang daily cash positions; sidebar entry added).
 >
 > Previous update: 20/07/2026 (in-app chat with Supabase Realtime; quick-add task panel; @mention assignment in task notes; backup changed to Google Drive upload; Accounts & Tax Rule 0 RPC; authFetch centralised in lib/supabase.ts; isDailyEntryOnly tightened; can_manage_locations moved server-side; audit daily log scoped to assigned member).
 >
@@ -323,7 +325,13 @@ app/
 │                                     minutes, meetings_admin, recurring_tasks, members, audit_log,
 │                                     exceptions, import_export, daily_entry, pa_dashboard,
 │                                     investments, system_backups, stock, guarantees.
-│                                     useRequireDepartment: special-case for Shakeel on Tax dept.
+│                                     Both hooks delegate to a private useAuthGuard(allow, guardKey)
+│                                     (16/08/2026) — one implementation of session → loadUserCtx →
+│                                     redirect; only the allow() predicate differs. Public signatures
+│                                     unchanged. The Shakeel/Tax special case that used to live in
+│                                     useRequireDepartment now lives in canViewDepartment().
+│                                     loadUserCtx caches ctx in memory for 5 min, so back-to-back
+│                                     guards on one page cost one fetch, not two.
     ├── useUserCtx.ts                 useUserCtx() hook — loads user role/dept/overrides
     ├── AuthWrapper.tsx               Wraps app — handles auth state, notification bell, sidebar,
 │   │                                 and the floating ChatPanel (rendered once at app root).
@@ -1640,6 +1648,8 @@ Calendar/meeting request tracking.
 - `isSecondaryCEO(ctx)` — email === 'kamran@unze.co.uk'. Routes Kamran (also role CEO) to his own dashboard
 - `isMainAdmin(ctx)` — email === 'khuram1901@gmail.com'
 - `isPA(ctx)` — email === 'pa.ceo@unze.co.uk' OR role === 'Executive'
+- `isTaxConsultant(ctx)` — **Added 16/08/2026.** email === `TAX_CONSULTANT_EMAIL` (shakeel@unze.co.uk). Shakeel is the external tax consultant, not on the Tax department establishment, so no role/department rule can ever grant him the Tax pages — the access has to be granted by identity
+- `isTaxSpecialist(ctx)` — **Added 16/08/2026.** `TAX_CONSULTANT_EMAIL` OR `TAX_MANAGER_EMAIL` (taxation@unze.co.uk, Awais). The two people who may edit Tax Notices without holding a Tax department role. Used by `TaxationDashboard.tsx` for its `canManage` flag
 - `isAdminTier(ctx)` — isMainAdmin OR role 'Admin' OR isCEO. **NOT Executive**
 - `isPrivileged(ctx)` — isAdminTier OR role 'Executive' (includes PA)
 - `myIdentityEmails(email)` — **Added 18/07/2026.** Returns `[email]` for everyone except Khuram; for either of his two accounts (`khuram1901@gmail.com` or `k.saleem@unzegroup.com`) returns both, since they're the same real person for "is this assigned to/created by me" comparisons. Use this instead of a raw email-equality check anywhere that decides "does this task/record belong to me" — a task routed to whichever of Khuram's accounts he isn't currently logged into would otherwise silently look like it belongs to someone else (this bit the Tasks "Mine" filter and the notification bell before the fix).
@@ -1678,7 +1688,7 @@ Calendar/meeting request tracking.
 | `canViewInvestments` | CEO + Admin (by email) + PA (view-only) | can_view_investments |
 | `canEditInvestments` | CEO + Admin by email only (NOT PA) | can_edit_investments |
 | `canViewPADashboard` | PA + Admin/CEO | can_view_pa_dashboard |
-| `canViewDepartment(dept)` | Admin/CEO + Manager of that dept (NOT PA) | can_view_dept_* |
+| `canViewDepartment(dept)` | Admin/CEO + Manager of that dept (NOT PA). Also Finance Managers for dept 'Tax', and the tax consultant for dept 'Tax' (16/08/2026) | can_view_dept_* |
 | `canViewGuarantees` | Admin/CEO + Finance Mgr + Ops Mgr (all via override) | can_view_guarantees |
 | `canManageGuarantees` | Admin/CEO + Finance Mgr | can_manage_guarantees |
 | `canViewTaxAccounts` | All authenticated users (NOT PA). Defaults true when NULL | can_view_dept_tax_accounts |
@@ -2140,6 +2150,12 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 38. **`canAccessBanking()` gates the Banking page (27/07/2026).** This is a capability-based override (defaults false); not a role. Use `useRequireCapability("banking")` or check `canAccessBanking(ctx)` — same pattern as investments, guarantees, etc.
 39. **Banking Cash Sheet tab is the preferred manual upload path for daily cash positions (28/07/2026).** The Finance → Upload page (`/finance/upload`) still works and is required for per-bank-account snapshots and PDC bucket extraction. The Banking → Cash Sheet tab is for quick daily balance uploads with transaction detail; it does NOT create `bank_position_snapshots` or `pdc_maturity_buckets` rows. Do not remove either path.
 
+40. **Named-person access rules live in `permissions.ts` as a constant, never inline (16/08/2026).** The tax consultant's access to the Tax pages was hardcoded as the literal `shakeel@unze.co.uk` in four separate client files — `useRouteGuard.ts`, `SidebarLayout.tsx`, `TaxationDashboard.tsx` and `AccountsTaxDashboard.tsx` — so revoking it meant finding all four. It is now `TAX_CONSULTANT_EMAIL` in `permissions.ts`, with `isTaxConsultant()` / `isTaxSpecialist()` helpers, and the rule itself sits inside `canViewDepartment()`. If you ever need to grant a named individual access to something, add a constant and a helper there; do not inline an email literal in a page, component or guard.
+
+41. **The tax consultant exemption is now revocable from the Access Matrix (16/08/2026).** It sits *after* the `ov()` override check in `canViewDepartment()`, so setting `can_view_dept_tax = false` on his member row will now deny him. Previously the route guard returned early and bypassed overrides entirely, meaning his access could not be switched off without a code change. Deliberate — but it does mean an accidental toggle in the matrix will lock him out of Tax Notices.
+
+42. **The client constant does NOT govern the database (16/08/2026).** `shakeel@unze.co.uk` is also hardcoded in RLS policies in `supabase/069`, `070`, `124`, `144` and `179`. Those are the real enforcement layer; `TAX_CONSULTANT_EMAIL` only governs the UI. Changing the constant alone will leave the database still granting (or denying) the old address — the matching migration has to be written and applied manually.
+
 ---
 
 ## 12. Known Issues and Open Questions
@@ -2154,6 +2170,8 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 | — | Ops dashboard missing stale-data banner | Home and finance have it; ops dashboard deferred |
 | — | `api/stock/authority-letters/route.ts` GET (listAll) computes letter balances in JS (2-step batch: fetch letters, fetch all dispatch_records for those IDs, sum in JS loop). Not N+1 and not user-visibly slow, but should become an RPC (`get_authority_letter_balances(letter_ids)`) when stock throughput grows. | Tech debt — flag for future. |
 | — | `api/notifications/digest/route.ts` fetches all tasks then `.filter()` for overdue/waiting/due today. Cron only, not user-facing. Could be an RPC for consistency. | Low priority |
+| — | `taxAlertEngine.ts` finds the tax consultant by `name ILIKE '%shakeel%'` rather than by email, so a rename of his member record silently breaks tax alert delivery. Should use `TAX_CONSULTANT_EMAIL`. | Tech debt — flagged 16/08/2026 |
+| — | The tax consultant's email is hardcoded in five migrations (`069`, `070`, `124`, `144`, `179`) as well as the client constant. Two sources of truth for one access rule; changing the person means a migration plus a code change. Consider a `tax_consultant` flag on `members` or a role. | Tech debt — flagged 16/08/2026 |
 
 ---
 
