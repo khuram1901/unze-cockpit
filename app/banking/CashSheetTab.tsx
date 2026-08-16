@@ -160,6 +160,8 @@ export default function CashSheetTab() {
   });
   const [draftTxns, setDraftTxns] = useState<DraftTxn[]>([]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  // The file's bytes, read at PICK time (see acceptFile) rather than at Save.
+  const [uploadBytes, setUploadBytes] = useState<ArrayBuffer | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -230,25 +232,16 @@ export default function CashSheetTab() {
       //       Direct browser→Supabase uploads fail with CORS errors; routing
       //       through /api avoids that entirely. The 4.5 MB Vercel body limit
       //       is not a concern for typical cash sheets.
-      // Read the file into memory FIRST. If the picked file has since moved,
-      // been renamed, or lives in iCloud Drive without a local copy, the
-      // browser can't stream it and fetch() dies with a bare "Failed to
-      // fetch" — which reads as a server fault when it isn't one. Reading it
-      // here turns that into a message that says what to actually do.
-      let fileBytes: ArrayBuffer;
-      try {
-        fileBytes = await uploadFile.arrayBuffer();
-      } catch {
-        showToast(
-          `Couldn't read "${uploadFile.name}". The file may have been moved or renamed since you picked it, ` +
-          `or it's in iCloud/OneDrive without a local copy. Open it once so it downloads (or copy it to your Desktop), then choose it again.`,
-          "error",
-        );
-        return;
-      }
-      if (fileBytes.byteLength === 0) {
-        showToast(`"${uploadFile.name}" is empty (0 bytes) — check the file and try again.`, "error");
-        return;
+      // Bytes were read and validated when the file was chosen (acceptFile).
+      // Fall back to reading now only if that somehow didn't happen.
+      let fileBytes = uploadBytes;
+      if (!fileBytes) {
+        try {
+          fileBytes = await uploadFile.arrayBuffer();
+        } catch {
+          showToast(`Couldn't read "${uploadFile.name}" — please choose the file again.`, "error");
+          return;
+        }
       }
 
       const uploadForm2 = new FormData();
@@ -381,7 +374,43 @@ export default function CashSheetTab() {
     setUploadForm({ sheet_date: todayISO(), opening_balance_pkr: "", closing_balance_pkr: "", notes: "" });
     setDraftTxns([]);
     setUploadFile(null);
+    setUploadBytes(null);
     if (fileRef.current) fileRef.current.value = "";
+  }
+
+  // Read the PDF the moment it is chosen, not when Save is pressed. A File
+  // picked from a mail client, a browser's download shelf, or an iCloud /
+  // OneDrive folder can stop being readable in the gap between the two, and a
+  // failure at Save time reads as "the upload is broken" when it isn't.
+  // Failing here instead points at the file while it's still fresh, and Save
+  // then works from bytes we already hold.
+  async function acceptFile(file: File | null) {
+    if (!file) { setUploadFile(null); setUploadBytes(null); return; }
+    if (file.size > 20 * 1024 * 1024) {
+      showToast("PDF must be under 20 MB", "error");
+      return;
+    }
+    try {
+      const buf = await file.arrayBuffer();
+      if (buf.byteLength === 0) {
+        setUploadFile(null); setUploadBytes(null);
+        showToast(`"${file.name}" is empty (0 bytes) — the file may not have finished downloading.`, "error");
+        return;
+      }
+      setUploadFile(file);
+      setUploadBytes(buf);
+    } catch (err) {
+      setUploadFile(null); setUploadBytes(null);
+      const name = err instanceof Error ? err.name : "Error";
+      const advice =
+        name === "NotFoundError"
+          ? "The file is no longer at that location — it was moved, renamed or deleted after you chose it."
+          : "This usually means the PDF was dragged straight out of an email or a download popup, so it was never saved to this Mac — or it's in iCloud/OneDrive with no local copy.";
+      showToast(
+        `Couldn't read "${file.name}". ${advice} Save the attachment to your Downloads folder first, then use "click to browse" instead of dragging. [${name}]`,
+        "error",
+      );
+    }
   }
 
   // ── Draft transaction helpers ───────────────────────────────────────────────
@@ -988,7 +1017,7 @@ export default function CashSheetTab() {
                     setDragOver(false);
                     const file = e.dataTransfer.files?.[0];
                     if (file && file.type === "application/pdf") {
-                      setUploadFile(file);
+                      void acceptFile(file);
                     } else if (file) {
                       showToast("Please drop a PDF file", "error");
                     }
@@ -1009,7 +1038,7 @@ export default function CashSheetTab() {
                     <div style={{ fontSize: "13px", color: COLOURS.GREEN, fontWeight: 600 }}>
                       ✓ {uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)
                       <button
-                        onClick={(e) => { e.stopPropagation(); setUploadFile(null); if (fileRef.current) fileRef.current.value = ""; }}
+                        onClick={(e) => { e.stopPropagation(); setUploadFile(null); setUploadBytes(null); if (fileRef.current) fileRef.current.value = ""; }}
                         style={{
                           marginLeft: "8px", background: "none", border: "none",
                           color: COLOURS.SLATE, cursor: "pointer", fontSize: "14px", lineHeight: 1,
@@ -1029,7 +1058,7 @@ export default function CashSheetTab() {
                   ref={fileRef}
                   type="file"
                   accept="application/pdf"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  onChange={(e) => { void acceptFile(e.target.files?.[0] || null); }}
                   style={{ display: "none" }}
                 />
               </div>

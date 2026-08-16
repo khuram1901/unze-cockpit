@@ -27,6 +27,16 @@ Verified with `tsc --noEmit` clean across the project and ESLint clean on all fi
 
 ---
 
+## 2026-08-15 — Banking upload: read the PDF when it's chosen, not when Save is pressed
+
+Khuram still hit "Couldn't read …" uploading `Unze Cash Flow 04-08-2026.pdf` — the message added earlier, so the browser really could not read the file. The endpoints were already proven healthy (all four probed live), which leaves the `File` itself.
+
+The read happened at Save time, potentially minutes after the file was picked. That gap is where a `File` goes stale: dragged straight out of a mail client or a download popup it was never written to disk in the first place; in iCloud/OneDrive it can be evicted; and it may simply have been moved or renamed in between. `File.arrayBuffer()` then throws a bare `NotReadableError`/`NotFoundError` at the worst possible moment, and it reads as the upload being broken.
+
+`acceptFile()` now reads the bytes the instant the file is chosen — from the drop zone or the browse dialog — validates them (rejecting 0-byte files), and holds them in state; Save uploads from those bytes. A file that can't be read is reported immediately, while the picker is still in mind, with advice matched to the actual DOM exception (`NotFoundError` → moved/renamed/deleted; otherwise → dragged from an email or an offline cloud file, so save it to Downloads and use "click to browse"), and the exception name appended in brackets so the cause is never a guess again. tsc and eslint clean.
+
+---
+
 ## 2026-08-14 (night, later) — Only the cash-sheet writing stops; archiving and everything else carries on
 
 Khuram: "lets eliminate the email parsing now as we are uploading these files" — then, on reading the consequences: "I want to ensure the previous practice of archiving carry on and just wanted the email parsing to stop, nothing else to stop, everything else to work like before." The first cut was too broad (it disabled both routes wholesale); this is the narrowed version.
