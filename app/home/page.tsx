@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch, loadMyPermissions } from "../lib/supabase";
 import EscalationTrafficLights from "../lib/EscalationTrafficLights";
-import { COLOURS, RADII, StatusBadge, SectionTitle, RAGStatus, ragColour, FreshnessBadge, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR, displayRole } from "../lib/SharedUI";
+import { COLOURS, RADII, StatusBadge, SectionTitle, RAGStatus, ragColour, FreshnessBadge, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR, displayRole, fixedCols, kpiGrid } from "../lib/SharedUI";
 import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtils";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES, FINANCE_COMPANIES as ALL_FINANCE_COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
@@ -2186,7 +2186,7 @@ export default function HomePage() {
             {/* ── KPI Cards ── */}
             <div style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+              gridTemplateColumns: kpiGrid(),
               gap: "8px", marginBottom: "14px",
             }}>
               <KPICard icon="📋" value={kpis.tasksDueToday} label="Tasks due today" sparkline={sparklines.dueByDay} />
@@ -3145,7 +3145,7 @@ function ExecutiveDashboardBody({
         return (
           <div style={{ ...execCard(NAVY), padding: "24px", marginBottom: "12px" }}>
             <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "16px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Cash Flow Waterfall — Latest Day</div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${waterfallData.length}, 1fr)`, gap: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${waterfallData.length}, minmax(0, 1fr))`, gap: "24px" }}>
               {waterfallData.map((w) => {
                 const maxVal = Math.max(Math.abs(w.opening), Math.abs(w.receipts), Math.abs(w.payments), Math.abs(w.postDated), Math.abs(w.closing), 1);
                 const barHeight = (v: number) => Math.max(6, (Math.abs(v) / maxVal) * 120);
@@ -3397,7 +3397,7 @@ function ExecutiveDashboardBody({
               cursor: "pointer",
             }}
             >
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "16px", marginBottom: investmentData.losers.length > 0 ? "16px" : "0" }}>
+              <div style={{ display: "grid", gridTemplateColumns: kpiGrid(200), gap: "16px", marginBottom: investmentData.losers.length > 0 ? "16px" : "0" }}>
                 <div>
                   <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Invested</div>
                   <div style={{ fontSize: "28px", fontWeight: 600, color: NAVY, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Rs {fmtMoney(investmentData.totalCost)}</div>
@@ -3578,7 +3578,7 @@ function execCard(accentColor: string, extra?: React.CSSProperties): React.CSSPr
 
 const miniGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, 1fr)",
+  gridTemplateColumns: kpiGrid(200),
   gap: "16px",
   marginBottom: "8px",
 };
@@ -3757,7 +3757,7 @@ function DepartmentScorecardUnified({
     <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", overflow: "hidden", backgroundColor: COLOURS.CARD, marginBottom: "12px" }}>
       {/* Column headers — desktop only */}
       {!isMobile && (
-        <div style={{ display: "grid", gridTemplateColumns: "8px 1fr 90px 130px 16px", gap: "0 12px", padding: "8px 16px 6px", borderBottom: `1px solid ${HAIRLINE}`, backgroundColor: CARD_ALT }}>
+        <div style={{ display: "grid", gridTemplateColumns: fixedCols("8px 1fr 90px 130px 16px"), minWidth: 384, gap: "0 12px", padding: "8px 16px 6px", borderBottom: `1px solid ${HAIRLINE}`, backgroundColor: CARD_ALT }}>
           <div />
           <div style={{ fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.07em" }}>Department</div>
           <div style={{ fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>Task mix</div>
@@ -3783,7 +3783,8 @@ function DepartmentScorecardUnified({
               onClick={canExpand ? () => setExpandedSlug(isExpanded ? null : row.slug) : undefined}
               style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "8px 1fr auto 16px" : "8px 1fr 90px 130px 16px",
+                gridTemplateColumns: isMobile ? "8px minmax(0, 1fr) auto 16px" : fixedCols("8px 1fr 90px 130px 16px"),
+                minWidth: isMobile ? undefined : 384,
                 gap: "0 12px",
                 alignItems: "center",
                 padding: "12px 16px",
@@ -4166,7 +4167,7 @@ function SkeletonPulse({ width, height, borderRadius = "6px", style }: { width: 
 function HomeSkeleton({ isMobile }: { isMobile: boolean }) {
   return (
     <>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: "14px", marginBottom: "24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: kpiGrid(), gap: "14px", marginBottom: "24px" }}>
         {[1, 2, 3, 4].map((i) => (
           <div key={i} style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "16px 18px" }}>
             <SkeletonPulse width="24px" height="24px" borderRadius="6px" />

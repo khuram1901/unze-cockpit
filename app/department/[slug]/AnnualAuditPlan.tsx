@@ -14,7 +14,7 @@ import { COMPANIES } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, RADII, SectionTitle, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
+import { COLOURS, RADII, SectionTitle, cardGrid, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { widgetVisible } from "../../lib/permissions";
 import type { UserCtx } from "../../lib/permissions";
@@ -587,7 +587,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
 
           {addProjectOpen && isManager && (
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT }}>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "10px" }}>
                 <div>
                   <div style={microLbl}>Company</div>
                   <select style={inp} value={newProj.company_id} onChange={(e) => setNewProj({ ...newProj, company_id: e.target.value })}>

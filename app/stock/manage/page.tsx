@@ -8,7 +8,7 @@ import { useMobile } from "../../lib/useMobile";
 import {
   COLOURS, RADII, PageHeader, SectionTitle, CountCard,
   useToast, useConfirm,
-  primaryButtonStyle, inputStyle, labelStyle, cardStyle,
+  primaryButtonStyle, inputStyle, labelStyle, cardStyle, fixedCols, kpiGrid,
 } from "../../lib/SharedUI";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
@@ -830,7 +830,7 @@ export default function StockManagePage() {
           <>
             {/* Stats row */}
             {!loading && (
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: "12px", marginBottom: "20px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: kpiGrid(), gap: "12px", marginBottom: "20px" }}>
                 <CountCard label="Active POs" value={activePOs.length} color={COLOURS.GREEN} />
                 <CountCard label="Closed POs" value={closedPOs.length} color={COLOURS.SLATE} />
                 <CountCard
@@ -1140,7 +1140,7 @@ export default function StockManagePage() {
                       {isExpanded && (
                         <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "16px" }}>
                           {/* Quantity grid */}
-                          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: "1px", backgroundColor: COLOURS.HAIRLINE, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, overflow: "hidden", marginBottom: "16px" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: kpiGrid(), gap: "1px", backgroundColor: COLOURS.HAIRLINE, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, overflow: "hidden", marginBottom: "16px" }}>
                             {[
                               { label: "31ft ordered", value: po.ordered_31 },
                               { label: "36ft ordered", value: po.ordered_36 },
@@ -1411,7 +1411,7 @@ export default function StockManagePage() {
               <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
                 {/* Table header */}
                 {!isMobile && (
-                  <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 1fr 120px 120px 100px 80px", gap: "0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT }}>
+                  <div style={{ display: "grid", gridTemplateColumns: fixedCols("140px 1fr 1fr 120px 120px 100px 80px"), minWidth: 840, gap: "0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT }}>
                     {["Letter #", "PO / Customer", "Contractor", "Expires", "Progress", "Status", ""].map((h) => (
                       <div key={h} style={{ padding: "10px 14px", fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: COLOURS.SLATE }}>{h}</div>
                     ))}
@@ -1449,7 +1449,7 @@ export default function StockManagePage() {
                   }
 
                   return (
-                    <div key={l.id} style={{ display: "grid", gridTemplateColumns: "140px 1fr 1fr 120px 120px 100px 80px", borderBottom: idx < filteredLetters.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
+                    <div key={l.id} style={{ display: "grid", gridTemplateColumns: fixedCols("140px 1fr 1fr 120px 120px 100px 80px"), minWidth: 840, borderBottom: idx < filteredLetters.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
                       <div style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, fontFamily: "var(--font-mono)" }}>#{l.letter_number}</div>
                       <div style={{ padding: "12px 14px" }}>
                         <div style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY }}>{l.customer_name}</div>
@@ -1665,7 +1665,7 @@ export default function StockManagePage() {
                       </div>
 
                       {/* Stats grid */}
-                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: "16px", marginBottom: "14px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: kpiGrid(), gap: "16px", marginBottom: "14px" }}>
                         {[
                           { label: "Letters issued", value: c.letters_issued, color: COLOURS.NAVY },
                           { label: "Total authorised", value: c.total_authorised.toLocaleString(), color: COLOURS.SLATE },

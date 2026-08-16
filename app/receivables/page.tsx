@@ -6,7 +6,7 @@ import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, SectionTitle, CountCard, SkeletonRows, inputStyle, labelStyle } from "../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, SectionTitle, CountCard, SkeletonRows, inputStyle, labelStyle, cardGrid } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { canEditReceivables, isAdminTier, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -445,7 +445,7 @@ export default function ReceivablesPage() {
           <div style={{ ...cardStyle, padding: "16px", marginBottom: "14px" }}>
             <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "12px", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Add New Bill</div>
             <form onSubmit={addBill}>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr", gap: "8px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "8px" }}>
                 <div>
                   <label style={lbl}>Plant</label>
                   <select style={inp} value={plantId} onChange={(e) => { setPlantId(e.target.value); const p = plants.find((x) => x.id === e.target.value); if (p) setCustomer(customersForPlant(p.name)[0] || p.name); }} required>
@@ -790,7 +790,7 @@ export default function ReceivablesPage() {
         {wv("receivables.collection_velocity", true) && !loading && stages.length > 0 && bills.length > 0 && (
           <div style={{ ...cardStyle, padding: "12px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "10px", color: COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Collection Velocity (avg days in stage)</div>
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${stages.length}, 1fr)`, gap: "6px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))`, gap: "6px" }}>
               {stages.map((stage) => {
                 const stageBills = bills.filter((b) => b.current_stage_order === stage.stage_order);
                 const avgDays = stageBills.length > 0

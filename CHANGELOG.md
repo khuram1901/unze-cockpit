@@ -27,6 +27,22 @@ Verified with `tsc --noEmit` clean across the project and ESLint clean on all fi
 
 ---
 
+## 2026-08-15 (later) — Layout: card rows crushing to one word per line, fixed app-wide
+
+Khuram: the welcome page "is hiding some column and some are too wide" — My Tasks and Group Task Health were rendering one word per line while Portfolio and Quick Links stayed wide. Then: "please ensure this is fixed properly for all users, across the app."
+
+**Cause.** Every page sits inside `SidebarLayout`, whose sidebar is a fixed 228px, so the content box is always `window − 228`. But `useMobile()` measures `window.innerWidth`, and all 66 call sites use the default 768 breakpoint — so a 1100px window is still "desktop" while the content box is only ~870px. The welcome row then asked for `"1fr 1fr 420px 300px"`: the 720px of fixed columns win, and a bare `1fr` has an automatic minimum of **min-content**, so rather than the row wrapping, those two columns crushed to the width of their longest word. Nothing was hidden — it was squeezed.
+
+**Shared helpers, new in `app/lib/SharedUI.tsx`** (which had no grid exports at all before):
+- `cardGrid(min = 300)` and `kpiGrid(min = 170)` → `repeat(auto-fit, minmax(min(100%, Npx), 1fr))`. Cards keep a readable floor, wrap to the next line when they don't fit, and share space evenly when they do. The `min(100%, …)` clamp matters: a bare `minmax(300px, 1fr)` still overflows a container narrower than 300px, which is common in nested cards — the app had 71 such half-fixed declarations.
+- `fixedCols(template)` → rewrites bare `1fr`/`2.5fr` to `minmax(0, …fr)` for grids whose columns **must** stay aligned (table headers and their body rows), so they scroll rather than crush.
+
+**Applied across 29 files.** Verified headlessly first: at container widths 1920 → 420 the new idiom gives 4 / 4 / 4 / 2 / 2 / 2 / 2 / 1 / 1 cards per row with no overflow at any width. Card and KPI rows now wrap; table-like grids (stock manage, my-minutes, meetings, folderit, AdminDashboard, DashboardView, CashSheetTab, home, HRRecruitment, TeamStats, investments factsheet) keep their alignment and gained a `minWidth` where their wrapper could scroll — two wrappers (`TeamStats`, `HRRecruitment`) had `overflow: hidden`, which would have clipped columns instead, so those were changed to `overflowX: auto`. Data-driven column counts (home waterfall, receivables stages) became `repeat(${n}, minmax(0, 1fr))`. Two-pane splits (`"260px 1fr"` in HROnboarding and MembersManager) became `"260px minmax(0, 1fr)"` — the fixed rail is intentional, only the min-content floor was wrong.
+
+A scripted audit now reports **zero** unprotected sites: no template mixes fixed px with a bare `fr`, and no row has 4+ bare `fr` columns. 169 two- and three-column form grids were deliberately left alone — they hold label/input pairs, fit comfortably, and wrapping them would be worse. tsc clean; eslint 0 errors (192 pre-existing warnings unchanged).
+
+---
+
 ## 2026-08-15 — Banking upload: read the PDF when it's chosen, not when Save is pressed
 
 Khuram still hit "Couldn't read …" uploading `Unze Cash Flow 04-08-2026.pdf` — the message added earlier, so the browser really could not read the file. The endpoints were already proven healthy (all four probed live), which leaves the `File` itself.

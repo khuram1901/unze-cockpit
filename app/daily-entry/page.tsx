@@ -6,7 +6,7 @@ import { useRequireCapability } from "../lib/useRouteGuard";
 import { isDailyEntryOnly } from "../lib/permissions";
 import { authFetch, supabase } from "../lib/supabase";
 import DateInput from "../lib/DateInput";
-import { COLOURS, RADII, PageHeader, useToast, primaryButtonStyle, inputStyle } from "../lib/SharedUI";
+import { COLOURS, RADII, PageHeader, useToast, primaryButtonStyle, inputStyle, kpiGrid } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 // routeSubmittedTask removed (migration 194): DB trigger handles routing atomically.
 
@@ -485,10 +485,10 @@ export default function DailyEntryPage() {
     display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "12px",
   };
   const recentGrid4: React.CSSProperties = {
-    display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: "4px",
+    display: "grid", gridTemplateColumns: kpiGrid(), gap: "4px",
   };
   const recentGrid3: React.CSSProperties = {
-    display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: "4px",
+    display: "grid", gridTemplateColumns: kpiGrid(), gap: "4px",
   };
 
   return (
@@ -501,7 +501,7 @@ export default function DailyEntryPage() {
         </p>
 
         {/* Form selector */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px", marginBottom: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: kpiGrid(140), gap: "6px", marginBottom: "20px" }}>
           {FORMS.map((f) => (
             <button key={f.id} onClick={() => setActiveForm(f.id)} style={btnSt(f.id)}>
               <div style={{ fontSize: isMobile ? "18px" : "20px", marginBottom: "2px" }}>{f.emoji}</div>

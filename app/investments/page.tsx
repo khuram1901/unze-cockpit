@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
-import { COLOURS, RADII, SectionTitle, PageHeader, useConfirm } from "../lib/SharedUI";
+import { COLOURS, RADII, SectionTitle, PageHeader, useConfirm, cardGrid, kpiGrid, fixedCols } from "../lib/SharedUI";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
@@ -912,7 +912,7 @@ export default function InvestmentsPage() {
                 </div>
                 <form onSubmit={handleAddHolding} style={{
                   display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)",
+                  gridTemplateColumns: cardGrid(240),
                   gap: "10px",
                 }}>
                   <input placeholder="Ticker (e.g. HBL)" value={formTicker} onChange={(e) => setFormTicker(e.target.value)} required style={inputStyle} />
@@ -1536,7 +1536,7 @@ export default function InvestmentsPage() {
                           <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
                             {editingDivId ? "Edit Dividend" : "Add Dividend"}
                           </div>
-                          <form onSubmit={handleSaveDividend} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: "10px" }}>
+                          <form onSubmit={handleSaveDividend} style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "10px" }}>
                             <div>
                               <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Ticker *</label>
                               <select
@@ -1651,7 +1651,7 @@ export default function InvestmentsPage() {
               {/* 4-metric grid */}
               <div style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+                gridTemplateColumns: kpiGrid(200),
                 gap: "12px",
                 marginBottom: "20px",
               }}>
@@ -1827,7 +1827,7 @@ export default function InvestmentsPage() {
                         {/* Return row */}
                         <div style={{
                           display: "grid",
-                          gridTemplateColumns: "repeat(5, 1fr)",
+                          gridTemplateColumns: fixedCols("1fr 1fr 1fr 1fr 1fr"),
                           gap: "4px",
                           marginBottom: "4px",
                         }}>
@@ -1839,7 +1839,7 @@ export default function InvestmentsPage() {
                         </div>
                         <div style={{
                           display: "grid",
-                          gridTemplateColumns: "repeat(5, 1fr)",
+                          gridTemplateColumns: fixedCols("1fr 1fr 1fr 1fr 1fr"),
                           gap: "4px",
                           borderTop: `1px solid ${HAIRLINE}`,
                           borderBottom: `1px solid ${HAIRLINE}`,

@@ -7,7 +7,7 @@ import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, RADII, cardStyle, PageHeader, CountCard, StatusBadge, inputStyle, primaryButtonStyle, labelStyle, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, PageHeader, CountCard, StatusBadge, inputStyle, primaryButtonStyle, labelStyle, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES, fixedCols, cardGrid } from "../lib/SharedUI";
 import { canSeeAllMinutes, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Meeting = {
@@ -387,7 +387,7 @@ function MyMinutesPage() {
             {/* Task Aging by Department — always visible when there are open tasks */}
             {taskAgingByDept.length > 0 && (
               <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: taskFilter ? "0" : "14px", marginTop: "8px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 90px", padding: "6px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT }}>
+                <div style={{ display: "grid", gridTemplateColumns: fixedCols("1fr 80px 80px 90px"), minWidth: 390, padding: "6px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT }}>
                   <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.SLATE, letterSpacing: "0.07em" }}>Dept · Open Tasks</span>
                   <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.RED, letterSpacing: "0.07em", textAlign: "center" }}>In Progress</span>
                   <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.AMBER, letterSpacing: "0.07em", textAlign: "center" }}>Pending</span>
@@ -396,7 +396,7 @@ function MyMinutesPage() {
                 {taskAgingByDept.map((row) => {
                   const ageColour = row.oldestDays > 30 ? COLOURS.RED : row.oldestDays > 14 ? COLOURS.AMBER : COLOURS.GREEN;
                   return (
-                    <div key={row.dept} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 90px", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
+                    <div key={row.dept} style={{ display: "grid", gridTemplateColumns: fixedCols("1fr 80px 80px 90px"), minWidth: 390, padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: deptAccent(row.dept), flexShrink: 0 }} />
                         <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{row.dept}</span>
@@ -556,7 +556,7 @@ function MyMinutesPage() {
 
                           {/* Decisions / Risks / Opps */}
                           {((meeting.decisions?.length ?? 0) > 0 || (meeting.risks?.length ?? 0) > 0 || (meeting.opportunities?.length ?? 0) > 0) && (
-                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                            <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), borderBottom: `1px solid ${COLOURS.BORDER}` }}>
                               {meeting.decisions && meeting.decisions.length > 0 && (
                                 <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
                                   <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.GREEN, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "6px" }}>Decisions ({meeting.decisions.length})</div>
@@ -602,7 +602,7 @@ function MyMinutesPage() {
                             </div>
                             {addingTaskFor === meeting.id && (
                               <div style={{ padding: "10px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
-                                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr 1fr 1fr", gap: "6px", marginBottom: "8px" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "6px", marginBottom: "8px" }}>
                                   <div>
                                     <label style={labelStyle}>Description ({newTaskDesc.length}/{TASK_DESCRIPTION_LIMIT})</label>
                                     <input placeholder="Task description" value={newTaskDesc} onChange={(e) => setNewTaskDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))} maxLength={TASK_DESCRIPTION_LIMIT} required style={inputStyle} />

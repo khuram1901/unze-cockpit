@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, RADII, cardStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle, SectionTitle } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle, SectionTitle, cardGrid } from "../lib/SharedUI";
 import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 
@@ -328,7 +328,7 @@ export default function OpeningBalancesForm() {
                       <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, fontFamily: "var(--font-mono)" }}>{poTotal.toLocaleString()} poles</span>
                     )}
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: cardGrid(180), gap: "8px" }}>
                     {(["qty_31", "qty_36", "qty_40", "qty_45", "qty_meter"] as const).map((field) => (
                       <label key={field} style={labelStyle}>
                         {field === "qty_31" ? "31 ft" : field === "qty_36" ? "36 ft" : field === "qty_40" ? "40 ft" : field === "qty_45" ? "45 ft" : "Meter"}

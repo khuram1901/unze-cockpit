@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { authFetch, supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
-import { COLOURS, RADII, CountCard, SectionTitle, SkeletonRows } from "../../../lib/SharedUI";
+import { COLOURS, RADII, CountCard, SectionTitle, SkeletonRows, kpiGrid } from "../../../lib/SharedUI";
 import { useMobile } from "../../../lib/useMobile";
 
 
@@ -166,7 +166,7 @@ function RecruitmentSection({ data, loading, syncLog }: { data: RecruitFunnel | 
       {loading ? <SkeletonRows count={5} /> : (
         <>
           {/* KPI strip */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: kpiGrid(), gap: "10px", marginBottom: "20px" }}>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: "28px", fontWeight: 700, color: COLOURS.AMBER }}>{data?.open_positions ?? "—"}</div>
               <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>Open Positions</div>
@@ -239,7 +239,7 @@ function PayrollSection({ data, loading, syncLog }: { data: PayrollDept | null; 
         </div>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: kpiGrid(200), gap: "10px", marginBottom: "20px" }}>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>PKR {fmt(data.total_gross)}</div>
               <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>Total Gross</div>
@@ -284,7 +284,7 @@ function PerformanceSection({ data, loading, syncLog }: { data: PerformanceSumma
 
       {loading ? <SkeletonRows count={5} /> : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: kpiGrid(), gap: "10px", marginBottom: "20px" }}>
             <CountCard label="Pending"   value={data?.pending   ?? "—"} color={COLOURS.AMBER} />
             <CountCard label="Overdue"   value={data?.overdue   ?? "—"} color={COLOURS.RED} />
             <CountCard label="Completed" value={data?.completed ?? "—"} color={COLOURS.GREEN} />
@@ -389,7 +389,7 @@ function TrainingSection({ data, loading, syncLog }: { data: TrainingCompliance 
 
       {loading ? <SkeletonRows count={5} /> : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: kpiGrid(), gap: "10px", marginBottom: "20px" }}>
             <CountCard label="Overall" value={pct(data?.compliance_pct ?? null)} color={COLOURS.NAVY} />
             <CountCard label="Attended"  value={data?.attended ?? "—"} color={COLOURS.GREEN} />
             <CountCard label="Absent"    value={data?.absent   ?? "—"} color={COLOURS.RED} />

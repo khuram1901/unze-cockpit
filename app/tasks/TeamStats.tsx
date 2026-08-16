@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { COLOURS, RADII, cardStyle } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, fixedCols } from "../lib/SharedUI";
 
 // ── Workload scoreboard (Khuram, 24/07/2026) ─────────────────────────────
 // "we need to create filters where i can see which tasks are outstanding
@@ -72,7 +72,8 @@ export default function TeamStats({ onDrill }: { onDrill?: (d: WorkloadDrill) =>
     });
   }
 
-  const GRID = "minmax(150px, 1.8fr) 0.7fr 0.7fr 0.7fr 0.7fr 0.8fr 1fr";
+  const GRID_MIN = 990;
+const GRID = fixedCols("minmax(150px, 1.8fr) 0.7fr 0.7fr 0.7fr 0.7fr 0.8fr 1fr");
 
   function CountCell({ value, colour, drill, bold }: { value: number; colour: string; drill?: WorkloadDrill; bold?: boolean }) {
     const clickable = !!onDrill && value > 0 && !!drill;
@@ -95,9 +96,9 @@ export default function TeamStats({ onDrill }: { onDrill?: (d: WorkloadDrill) =>
   }
 
   return (
-    <div style={{ ...cardStyle, overflow: "hidden", padding: 0, marginBottom: "14px" }}>
+    <div style={{ ...cardStyle, overflowX: "auto", padding: 0, marginBottom: "14px" }}>
       <div style={{
-        display: "grid", gridTemplateColumns: GRID, gap: "8px",
+        display: "grid", gridTemplateColumns: GRID, minWidth: GRID_MIN, gap: "8px",
         padding: "10px 16px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
         fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE,
       }}>
@@ -111,7 +112,7 @@ export default function TeamStats({ onDrill }: { onDrill?: (d: WorkloadDrill) =>
           <div key={d.department}>
             {/* Department rollup row */}
             <div style={{
-              display: "grid", gridTemplateColumns: GRID, gap: "8px",
+              display: "grid", gridTemplateColumns: GRID, minWidth: GRID_MIN, gap: "8px",
               padding: "11px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, alignItems: "center",
               backgroundColor: d.overdue_count > 0 ? "#FDF6F5" : COLOURS.CARD,
             }}>
@@ -138,7 +139,7 @@ export default function TeamStats({ onDrill }: { onDrill?: (d: WorkloadDrill) =>
             {/* Person rows */}
             {isOpen && people.map((p) => (
               <div key={`${d.department}-${p.person_email || p.person_name}`} style={{
-                display: "grid", gridTemplateColumns: GRID, gap: "8px",
+                display: "grid", gridTemplateColumns: GRID, minWidth: GRID_MIN, gap: "8px",
                 padding: "9px 16px 9px 36px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, alignItems: "center",
               }}>
                 <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>

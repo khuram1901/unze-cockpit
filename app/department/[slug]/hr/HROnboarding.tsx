@@ -776,7 +776,7 @@ function ManageModules({
   const modCompletions = selectedModule ? completions.filter((c) => c.module_id === selectedModule.id) : [];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "260px 1fr", gap: "14px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "260px minmax(0, 1fr)", gap: "14px" }}>
 
       {/* Left: module list */}
       <div>

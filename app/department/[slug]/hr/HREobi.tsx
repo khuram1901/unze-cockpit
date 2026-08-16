@@ -8,7 +8,7 @@ import { useMobile } from "../../../lib/useMobile";
 import { useUserCtx } from "../../../lib/useUserCtx";
 import {
   COLOURS, RADII, SectionTitle, CountCard, SkeletonRows,
-  useToast, primaryButtonStyle, inputStyle,
+  useToast, primaryButtonStyle, inputStyle, kpiGrid,
 } from "../../../lib/SharedUI";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -297,7 +297,7 @@ function OverviewTab({
       {element}
 
       {/* KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: kpiGrid(200), gap: "12px" }}>
         <CountCard label="Pending Challans" value={s?.pending_challans  ?? 0} color={COLOURS.AMBER} />
         <CountCard label="Overdue"          value={s?.overdue_challans  ?? 0} color={COLOURS.RED}   />
         <CountCard label="Paid This Month"  value={s?.paid_this_month   ?? 0} color={COLOURS.GREEN} />

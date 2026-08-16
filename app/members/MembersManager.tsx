@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, SectionTitle, inputStyle, labelStyle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, SectionTitle, inputStyle, labelStyle, useToast, useConfirm, SkeletonRows, cardGrid, kpiGrid } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import MemberDrawer from "./MemberDrawer";
@@ -661,7 +661,7 @@ export default function MembersManager() {
           {/* ── Stats cards ─────────────────────────── */}
           <div style={{
             display: "grid",
-            gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+            gridTemplateColumns: kpiGrid(),
             gap: "10px",
             marginBottom: "20px",
           }}>
@@ -775,7 +775,7 @@ export default function MembersManager() {
           {/* ── Add form ──────────────────────────────── */}
           {isAdmin && showAddForm && (
             <form onSubmit={addMember} style={{ ...cardStyle, marginBottom: "14px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1.5fr 0.8fr", gap: "8px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "8px" }}>
                 <div><label style={lbl}>First Name</label><input style={inp} value={firstName} onChange={(e) => setFirstName(e.target.value)} required /></div>
                 <div><label style={lbl}>Last Name</label><input style={inp} value={lastName} onChange={(e) => setLastName(e.target.value)} required /></div>
                 <div><label style={lbl}>Email</label><input style={inp} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
@@ -785,7 +785,7 @@ export default function MembersManager() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", marginTop: "8px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "8px", marginTop: "8px" }}>
                 <div><label style={lbl}>Department</label>
                   <select style={inp} value={department} onChange={(e) => { setDepartment(e.target.value); setBusinessUnit(""); }}>
                     <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
@@ -917,7 +917,7 @@ export default function MembersManager() {
             return (
               <div style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "260px 1fr",
+                gridTemplateColumns: isMobile ? "1fr" : "260px minmax(0, 1fr)",
                 border: `1px solid ${COLOURS.HAIRLINE}`,
                 borderRadius: RADII.CARD,
                 overflow: "hidden",

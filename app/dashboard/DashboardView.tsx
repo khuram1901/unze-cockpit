@@ -14,7 +14,7 @@ import { achievementStatus, breakageStatus as sharedBreakageStatus, ACHIEVEMENT_
 import {
   COLOURS, RADII, SHADOWS,
   cardStyle, SectionTitle, StatusBadge,
-  tableHeaderStyle, tableCellStyle, tableCellBoldStyle,
+  tableHeaderStyle, tableCellStyle, tableCellBoldStyle, fixedCols,
 } from "../lib/SharedUI";
 
 const { NAVY, SLATE, HAIRLINE, TRACK, GREEN, AMBER, RED, BLUE, INK_400,
@@ -659,7 +659,7 @@ export default function DashboardView() {
       {wv("dashboard.hero_kpi_cards", true) && (
       <div style={{
         display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "minmax(200px, 1.4fr) repeat(5, 1fr)",
+        gridTemplateColumns: isMobile ? "1fr" : fixedCols("minmax(200px, 1.4fr) 1fr 1fr 1fr 1fr 1fr"),
         gap: "12px",
         marginBottom: "32px",
       }}>
@@ -751,7 +751,7 @@ export default function DashboardView() {
             const chartScale = BREAKAGE_RED_OVER * 2;
             const barWidth = s.breakageStatus === "none" ? 0 : Math.min(rate / chartScale * 100, 100);
             return (
-              <div key={s.plant.id} style={{ display: "grid", gridTemplateColumns: "100px 1fr 80px", gap: "12px", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
+              <div key={s.plant.id} style={{ display: "grid", gridTemplateColumns: fixedCols("100px 1fr 80px"), minWidth: 320, gap: "12px", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
                 <span style={{ fontSize: "12.5px", color: NAVY, fontWeight: 500 }}>{s.plant.name.replace(" Plant", "")}</span>
                 <div style={{ position: "relative", height: "4px", background: TRACK, borderRadius: "999px", overflow: "hidden" }}>
                   <div style={{ position: "absolute", inset: 0, width: `${barWidth}%`, background: color, borderRadius: "999px" }} />

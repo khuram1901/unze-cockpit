@@ -9,7 +9,7 @@ import { useMobile } from "../../lib/useMobile";
 import {
   COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge,
   WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR,
-  useToast, useConfirm, labelStyle, inputStyle, primaryButtonStyle,
+  useToast, useConfirm, labelStyle, inputStyle, primaryButtonStyle, cardGrid,
 } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { canCreateAssignments, canManageTaxNotices, isTaxSpecialist, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
@@ -487,7 +487,7 @@ export default function TaxationDashboard() {
         ).map(([name, value]) => ({ name, value, color: TYPE_COLOURS[name] || COLOURS.SLATE })).sort((a, b) => b.value - a.value);
 
         return (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "14px", marginBottom: "14px" }}>
             {companyDonut.length > 0 && (
               <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "16px 20px", backgroundColor: COLOURS.CARD }}>
                 <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px" }}>Pending by Company</div>
@@ -612,7 +612,7 @@ export default function TaxationDashboard() {
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, marginBottom: "14px" }}>
           <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "10px" }}>New Notice</div>
           <form onSubmit={handleAdd}>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "8px" }}>
               <label style={labelStyle}>Notice Title <input style={inputStyle} value={formData.title || ""} onChange={(e) => setField("title", e.target.value)} required placeholder="e.g. Income Tax Notice FY2025" /></label>
               <label style={labelStyle}>Type <select style={inputStyle} value={formData.notice_type || ""} onChange={(e) => setField("notice_type", e.target.value)} required><option value="">Select</option>{NOTICE_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
               <label style={labelStyle}>Company <select style={inputStyle} value={formData.company_name || ""} onChange={(e) => setField("company_name", e.target.value)} required><option value="">Select</option>{COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></label>
@@ -790,7 +790,7 @@ export default function TaxationDashboard() {
                             {isEditMode && editForm ? (
                               /* ── Edit form ── */
                               <div>
-                                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "10px", marginBottom: "12px" }}>
                                   <label style={labelStyle}>Title *<input style={inputStyle} value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} /></label>
                                   <label style={labelStyle}>Type<select style={inputStyle} value={editForm.notice_type} onChange={(e) => setEditForm({ ...editForm, notice_type: e.target.value })}><option value="">Select</option>{NOTICE_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
                                   <label style={labelStyle}>Company<select style={inputStyle} value={editForm.company_name} onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })}><option value="">Select</option>{COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></label>

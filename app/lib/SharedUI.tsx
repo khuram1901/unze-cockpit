@@ -89,6 +89,37 @@ export const SHADOWS = {
 // ─────────────────────────────────────────────────────────────────
 // Shared card style — use as the base for any card container
 // ─────────────────────────────────────────────────────────────────
+/* ─── Responsive grid helpers ─────────────────────────────────────
+   Every page here sits inside SidebarLayout, whose sidebar is 228px wide, so
+   the content box is always `window - 228`. useMobile() measures
+   window.innerWidth, which means a 1100px window is still "desktop" while the
+   content box is only ~870px. Rows built as e.g. "1fr 1fr 420px 300px" then
+   can't fit — and a bare `1fr` has an automatic minimum of min-content, so
+   instead of wrapping, those columns crush down to one word per line.
+
+   Use these instead of hand-written templates:
+     cardGrid()  — rows of content cards that should wrap onto a new line
+     kpiGrid()   — rows of CountCard / stat tiles, same but a smaller floor
+     fixedCols() — when columns MUST stay aligned (table headers + body rows):
+                   keeps your template but removes the min-content floor, so
+                   the row scrolls horizontally rather than crushing.
+
+   `min(100%, Npx)` matters: a bare minmax(Npx, 1fr) still overflows a
+   container narrower than N (nested cards), min() clamps it. */
+export function cardGrid(min = 300) {
+  return `repeat(auto-fit, minmax(min(100%, ${min}px), 1fr))`;
+}
+
+export function kpiGrid(min = 170) {
+  return `repeat(auto-fit, minmax(min(100%, ${min}px), 1fr))`;
+}
+
+// Replaces every bare `1fr` / `2.5fr` with minmax(0, …) so aligned columns
+// keep their proportions but can never be forced wider by their content.
+export function fixedCols(template: string) {
+  return template.replace(/(^|\s)(\d*\.?\d*)fr(?=\s|$)/g, (_m, pre, num) => `${pre}minmax(0, ${num || "1"}fr)`);
+}
+
 export const cardStyle: React.CSSProperties = {
   background:   COLOURS.CARD,
   border:       `1px solid ${COLOURS.HAIRLINE}`,

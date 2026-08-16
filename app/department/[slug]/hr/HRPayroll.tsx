@@ -15,7 +15,7 @@ import { PKR_HR_COMPANIES, getCompanyById } from "../../../lib/constants";
 import { formatDateUK } from "../../../lib/dateUtils";
 import DateInputWithCalendar from "../../../lib/DateInputWithCalendar";
 import { useMobile } from "../../../lib/useMobile";
-import { COLOURS, RADII, cardStyle, SectionTitle } from "../../../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, SectionTitle, cardGrid } from "../../../lib/SharedUI";
 import { logAction } from "../../../lib/audit-log";
 import * as XLSX from "xlsx";
 
@@ -427,7 +427,7 @@ function AddRunForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () =
       <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "14px" }}>New payroll run</div>
       {msg && <div style={{ fontSize: "13px", color: COLOURS.RED, marginBottom: "10px" }}>{msg}</div>}
       <form onSubmit={handleSubmit}>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "10px" }}>
           <label style={lbl}>
             Company
             <select style={{ ...inp, marginTop: "4px" }} value={companyId} onChange={(e) => setCompanyId(e.target.value)} required>
@@ -623,7 +623,7 @@ function ImportTab({ onImported }: { onImported: () => void }) {
         <>
           <div style={{ ...cardStyle, padding: "16px", marginBottom: "14px" }}>
             <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "12px" }}>Step 1 — Map columns</div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "8px", marginBottom: "12px" }}>
               {EXPECTED_COLS.map((col) => (
                 <label key={col} style={lbl}>
                   {col.replace(/_/g, " ")}

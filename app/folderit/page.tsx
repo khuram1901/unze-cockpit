@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useContext, createContext } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
-import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader } from "../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, fixedCols } from "../lib/SharedUI";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { useMobile } from "../lib/useMobile";
 
@@ -573,7 +573,7 @@ function BrowseView() {
             <>
               {/* Column header */}
               <div style={{
-                display: "grid", gridTemplateColumns: "1fr 80px 100px",
+                display: "grid", gridTemplateColumns: fixedCols("1fr 80px 100px"), minWidth: 320,
                 padding: "9px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`,
                 background: COLOURS.CARD_ALT,
               }}>
@@ -588,7 +588,7 @@ function BrowseView() {
                   key={folder.uid}
                   onClick={() => { selectFolder(folder); }}
                   style={{
-                    display: "grid", gridTemplateColumns: "1fr 80px 100px",
+                    display: "grid", gridTemplateColumns: fixedCols("1fr 80px 100px"), minWidth: 320,
                     padding: "10px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`,
                     cursor: "pointer", transition: "background 0.1s",
                   }}
@@ -612,7 +612,7 @@ function BrowseView() {
                     key={file.uid}
                     onClick={() => openFile(file)}
                     style={{
-                      display: "grid", gridTemplateColumns: "1fr 80px 100px",
+                      display: "grid", gridTemplateColumns: fixedCols("1fr 80px 100px"), minWidth: 320,
                       padding: "10px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`,
                       cursor: isPreviewing ? "wait" : "pointer",
                       opacity: isPreviewing ? 0.6 : 1, transition: "background 0.1s",

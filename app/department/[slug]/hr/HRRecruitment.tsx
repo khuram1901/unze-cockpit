@@ -6,7 +6,7 @@ import { formatDateUK } from "../../../lib/dateUtils";
 
 import { useMobile } from "../../../lib/useMobile";
 import {
-  COLOURS, RADII, cardStyle, SectionTitle, CountCard, SkeletonRows,
+  COLOURS, RADII, cardStyle, SectionTitle, CountCard, SkeletonRows, kpiGrid, fixedCols,
 } from "../../../lib/SharedUI";
 
 // ── Types ───────────────────────────────────────────────────────────────────────
@@ -287,7 +287,7 @@ function CandidatePanel({
                       border: `1px solid ${COLOURS.HAIRLINE}`,
                       borderLeft: `3px solid ${STAGE_COLOURS[c.stage] ?? COLOURS.SLATE}`,
                       borderRadius: RADII.CARD,
-                      overflow: "hidden",
+                      overflowX: "auto",
                     }}
                   >
                     <div
@@ -468,7 +468,7 @@ export default function HRRecruitment() {
       {/* KPI cards */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5, 1fr)",
+        gridTemplateColumns: kpiGrid(),
         gap: "10px", marginBottom: "16px",
       }}>
         {loading ? (
@@ -529,7 +529,7 @@ export default function HRRecruitment() {
         {!isMobile && (
           <div style={{
             display: "grid",
-            gridTemplateColumns: "3fr 1.5fr 1.2fr 1fr 1.2fr 1.5fr 1fr",
+            gridTemplateColumns: fixedCols("3fr 1.5fr 1.2fr 1fr 1.2fr 1.5fr 1fr"), minWidth: 900,
             padding: "8px 16px",
             backgroundColor: "#F8FAFC",
             borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
@@ -600,7 +600,7 @@ export default function HRRecruitment() {
                 onClick={() => setPanelPos(pos)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "3fr 1.5fr 1.2fr 1fr 1.2fr 1.5fr 1fr",
+                  gridTemplateColumns: fixedCols("3fr 1.5fr 1.2fr 1fr 1.2fr 1.5fr 1fr"), minWidth: 900,
                   padding: "10px 16px",
                   borderBottom: isLast ? "none" : `1px solid ${COLOURS.HAIRLINE}`,
                   cursor: "pointer",

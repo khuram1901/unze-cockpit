@@ -476,7 +476,7 @@ export default function CalendarPage() {
           <div style={{ overflowX: "auto" }}>
             <div style={{
               display: "grid",
-              gridTemplateColumns: `50px repeat(7, 1fr)`,
+              gridTemplateColumns: `50px repeat(7, minmax(0, 1fr))`,
               minWidth: "700px",
             }}>
               {/* Corner */}

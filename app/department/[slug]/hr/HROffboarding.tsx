@@ -6,7 +6,7 @@ import { PKR_HR_COMPANIES, getCompanyById } from "../../../lib/constants";
 import { formatDateUK } from "../../../lib/dateUtils";
 import DateInputWithCalendar from "../../../lib/DateInputWithCalendar";
 import { useMobile } from "../../../lib/useMobile";
-import { COLOURS, RADII, cardStyle, SectionTitle } from "../../../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, SectionTitle, cardGrid } from "../../../lib/SharedUI";
 import { logAction } from "../../../lib/audit-log";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ function AddExitForm({ onSaved }: { onSaved: () => void }) {
   return (
     <form onSubmit={handleSubmit} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, padding: "20px", backgroundColor: COLOURS.CARD, marginBottom: "14px" }}>
       {msg && <div style={{ marginBottom: "10px", fontSize: "13px", color: COLOURS.RED }}>{msg}</div>}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "10px" }}>
         <label style={lbl}>Full name <input style={{ ...inp, marginTop: "4px" }} value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Kamran Asif" /></label>
         <label style={lbl}>Email (optional) <input style={{ ...inp, marginTop: "4px" }} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="employee@unzegroup.com" /></label>
         <label style={lbl}>

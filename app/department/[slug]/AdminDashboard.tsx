@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch, supabase } from "../../lib/supabase";
-import { COLOURS, RADII, PageHeader } from "../../lib/SharedUI";
+import { COLOURS, RADII, PageHeader, fixedCols, kpiGrid } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -152,7 +152,7 @@ function ComplianceBar({ label, stat, href }: { label: string; stat: ComplianceS
   return (
     <a href={href} style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{
-        display: "grid", gridTemplateColumns: "130px 1fr 38px 76px",
+        display: "grid", gridTemplateColumns: fixedCols("130px 1fr 38px 76px"), minWidth: 384,
         alignItems: "center", gap: "8px",
         padding: "5px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
         cursor: "pointer",
@@ -210,7 +210,7 @@ export default function AdminDashboard() {
 
   const grid4: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+    gridTemplateColumns: kpiGrid(),
     gap: "8px", marginBottom: "8px",
   };
   const grid2: React.CSSProperties = {
@@ -321,7 +321,7 @@ export default function AdminDashboard() {
                 return (
                   <a href={`${ADMIN_OPS}?tab=compliance`} style={{ textDecoration: "none", color: "inherit" }}>
                     <div style={{
-                      display: "grid", gridTemplateColumns: "130px 1fr 38px 76px",
+                      display: "grid", gridTemplateColumns: fixedCols("130px 1fr 38px 76px"), minWidth: 384,
                       alignItems: "center", gap: "8px", padding: "5px 0", cursor: "pointer",
                     }}>
                       <span style={{ fontSize: "12px", color: COLOURS.NAVY }}>Labour inspection</span>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { authFetch, supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
-import { COLOURS, RADII, CountCard, SectionTitle, SkeletonRows } from "../../../lib/SharedUI";
+import { COLOURS, RADII, CountCard, SectionTitle, SkeletonRows, kpiGrid } from "../../../lib/SharedUI";
 import { useMobile } from "../../../lib/useMobile";
 
 
@@ -276,7 +276,7 @@ export default function HRWorkforce() {
       )}
 
       {/* KPI row */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5,1fr)", gap: "12px", marginBottom: "24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: kpiGrid(), gap: "12px", marginBottom: "24px" }}>
         <CountCard label="Total Employees" value={loading ? "…" : (w?.total_employees ?? "—")} color={COLOURS.NAVY} />
         <CountCard label="Present Today"   value={loading ? "…" : (a?.present  ?? "—")} color={COLOURS.GREEN} />
         <CountCard label="Late Today"      value={loading ? "…" : (a?.late     ?? "—")} color={COLOURS.AMBER} />

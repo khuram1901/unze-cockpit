@@ -8,7 +8,7 @@ import { useMobile } from "../../../lib/useMobile";
 import { useUserCtx } from "../../../lib/useUserCtx";
 import {
   COLOURS, RADII, SectionTitle, CountCard, SkeletonRows,
-  useToast, primaryButtonStyle, inputStyle,
+  useToast, primaryButtonStyle, inputStyle, kpiGrid,
 } from "../../../lib/SharedUI";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -390,7 +390,7 @@ function SessionDetail({
               <>
                 {/* Aggregate */}
                 <div style={{
-                  display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px",
+                  display: "grid", gridTemplateColumns: kpiGrid(120), gap: "8px",
                   padding: "12px", backgroundColor: "#F8FAFC",
                   borderRadius: RADII.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
                 }}>
@@ -967,7 +967,7 @@ export default function HRTraining() {
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* KPI cards */}
       {summaryLoading ? <SkeletonRows count={1} /> : summary && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: kpiGrid(200), gap: "10px" }}>
           <CountCard label="Upcoming"          value={summary.upcoming_count}         color={COLOURS.BLUE}  />
           <CountCard label="Planned (month)"   value={summary.planned_this_month}     color={COLOURS.AMBER} />
           <CountCard label="Completed (month)" value={summary.completed_this_month}   color={COLOURS.GREEN} />

@@ -5,7 +5,7 @@ import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO, daysAgoISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, SectionTitle, useToast, useConfirm } from "../lib/SharedUI";
+import { COLOURS, SectionTitle, useToast, useConfirm, cardGrid, kpiGrid, fixedCols } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import * as XLSX from "xlsx";
@@ -510,7 +510,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5, 1fr)",
+          gridTemplateColumns: kpiGrid(200),
           gap: "12px",
           marginBottom: "8px",
         }}
@@ -694,7 +694,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           </div>
         ) : (
           <form onSubmit={saveManualForecast}>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr auto", gap: "6px", alignItems: "end" }}>
+            <div style={{ display: "grid", gridTemplateColumns: fixedCols("1fr 1fr 1fr 1fr auto"), gap: "6px", alignItems: "end" }}>
               <div><label style={kickerLabel}>Category</label>
                 <input type="text" value={mfCategory} onChange={(e) => setMfCategory(e.target.value)} placeholder="e.g. Salaries" style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }} required />
               </div>
@@ -1037,7 +1037,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             {csDetail && !csDetailLoading && (
               <>
                 {/* Balance summary tiles */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "24px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: kpiGrid(200), gap: "12px", marginBottom: "24px" }}>
                   {[
                     { label: "Opening", value: csDetail.opening, color: NAVY },
                     { label: "Receipts", value: csDetail.receipts.reduce((s, r) => s + r.amount_pkr, 0), color: GREEN },

@@ -6,7 +6,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import {
   COLOURS, RADII, SkeletonRows,
-  useToast, primaryButtonStyle, inputStyle,
+  useToast, primaryButtonStyle, inputStyle, fixedCols, cardGrid, kpiGrid,
 } from "../lib/SharedUI";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -587,7 +587,7 @@ export default function CashSheetTab() {
         backgroundColor: t.txn_type === "receipt" ? "#F0FDF4" : "#FFF7F0",
         border: `1px solid ${t.txn_type === "receipt" ? "#BBF7D0" : "#FED7AA"}`,
       }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: "6px", marginBottom: "6px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: fixedCols("1fr 100px"), minWidth: 240, gap: "6px", marginBottom: "6px" }}>
           <input
             placeholder="Description *"
             value={t.description}
@@ -851,7 +851,7 @@ export default function CashSheetTab() {
                         color: netColour((detail.closing_balance_pkr ?? 0) - (detail.opening_balance_pkr ?? 0)),
                       },
                     ];
-                    const cols = tiles.length === 5 ? "1fr 1fr 1fr 1fr 1fr" : "1fr 1fr 1fr";
+                    const cols = kpiGrid(200);
                     return (
                       <div style={{ display: "grid", gridTemplateColumns: cols, gap: "10px", marginBottom: "18px" }}>
                         {tiles.map(({ label, value, color }) => (
@@ -977,7 +977,7 @@ export default function CashSheetTab() {
             <div style={{ overflowY: "auto", padding: "18px 20px", flex: 1 }}>
 
               {/* Date + Balances */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "12px", marginBottom: "14px" }}>
                 <div>
                   <label style={labelStyle}>Date *</label>
                   <DateInput
@@ -1208,7 +1208,7 @@ function AddTxnInline({
       padding: "10px 12px", borderRadius: "8px", marginTop: "6px", marginBottom: "6px",
       backgroundColor: bg, border: `1px solid ${borderColor}`,
     }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: "8px", marginBottom: "8px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: fixedCols("1fr 120px"), minWidth: 260, gap: "8px", marginBottom: "8px" }}>
         <input
           autoFocus
           placeholder="Description *"
@@ -1224,7 +1224,7 @@ function AddTxnInline({
           style={{ ...inputStyle, fontSize: "12px" }}
         />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "8px", marginBottom: "8px" }}>
         <select
           value={draft.category}
           onChange={(e) => onChange("category", e.target.value)}

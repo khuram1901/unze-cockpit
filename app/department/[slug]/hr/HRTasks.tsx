@@ -7,7 +7,7 @@ import DateInput from "../../../lib/DateInput";
 import { useUserCtx } from "../../../lib/useUserCtx";
 import {
   COLOURS, RADII, SectionTitle, CountCard, SkeletonRows,
-  useToast, primaryButtonStyle, inputStyle,
+  useToast, primaryButtonStyle, inputStyle, kpiGrid,
 } from "../../../lib/SharedUI";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -462,7 +462,7 @@ export default function HRTasks() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: kpiGrid(), gap: "10px" }}>
         <CountCard label="Open"             value={s?.open_count           ?? 0} color={COLOURS.BLUE}  />
         <CountCard label="In Progress"      value={s?.in_progress_count    ?? 0} color={COLOURS.AMBER} />
         <CountCard label="Overdue"          value={s?.overdue_count        ?? 0} color={COLOURS.RED}   />

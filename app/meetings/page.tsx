@@ -23,6 +23,8 @@ import {
   useConfirm,
   TASK_DESCRIPTION_LIMIT,
   TASK_COMPANY_CODES,
+  fixedCols,
+  cardGrid,
 } from "../lib/SharedUI";
 
 type ExtractedMinutes = {
@@ -294,7 +296,7 @@ function MeetingCard({
                 <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} style={sf} />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "10px", marginBottom: "10px" }}>
                 <div>
                   <label style={labelStyle}>Date</label>
                   <DateInputWithCalendar value={draft.meeting_date} onChange={(e) => setDraft({ ...draft, meeting_date: e.target.value })} style={sf} />
@@ -327,7 +329,7 @@ function MeetingCard({
                   style={{ ...sf, height: "80px", resize: "vertical" }} />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "10px", marginBottom: "12px" }}>
                 {(["decisions", "risks", "opportunities"] as const).map((field) => {
                   const colours: Record<string, string> = { decisions: COLOURS.GREEN, risks: COLOURS.RED, opportunities: COLOURS.BLUE };
                   return (
@@ -391,7 +393,7 @@ function MeetingCard({
 
               {/* Decisions / Risks / Opps — compact inline lists */}
               {((m.decisions?.length ?? 0) > 0 || (m.risks?.length ?? 0) > 0 || (m.opportunities?.length ?? 0) > 0) && (
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "0", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "0", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
                   {m.decisions && m.decisions.length > 0 && (
                     <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
                       <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.GREEN, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Decisions ({m.decisions.length})</div>
@@ -1175,7 +1177,7 @@ export default function MeetingsPage() {
             {/* Task Aging by Department */}
             {taskAgingByDept.length > 0 && (
               <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "14px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 90px", padding: "6px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT }}>
+                <div style={{ display: "grid", gridTemplateColumns: fixedCols("1fr 80px 80px 90px"), minWidth: 390, padding: "6px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT }}>
                   <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.SLATE, letterSpacing: "0.07em" }}>Dept · Open Tasks</span>
                   <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.RED, letterSpacing: "0.07em", textAlign: "center" }}>In Progress</span>
                   <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.AMBER, letterSpacing: "0.07em", textAlign: "center" }}>Pending</span>
@@ -1184,7 +1186,7 @@ export default function MeetingsPage() {
                 {taskAgingByDept.map((row) => {
                   const ageColour = row.oldestDays > 30 ? COLOURS.RED : row.oldestDays > 14 ? COLOURS.AMBER : COLOURS.GREEN;
                   return (
-                    <div key={row.dept} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 90px", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
+                    <div key={row.dept} style={{ display: "grid", gridTemplateColumns: fixedCols("1fr 80px 80px 90px"), minWidth: 390, padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: deptAccent(row.dept), flexShrink: 0 }} />
                         <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{row.dept}</span>
@@ -1482,7 +1484,7 @@ export default function MeetingsPage() {
               <input value={extracted.meeting_title} onChange={(e) => setExtracted({ ...extracted, meeting_title: e.target.value })} style={inputStyle} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "10px", marginBottom: "12px" }}>
               <div>
                 <label style={labelStyle}>Date</label>
                 <input value={extracted.meeting_date} onChange={(e) => setExtracted({ ...extracted, meeting_date: e.target.value })} style={inputStyle} />
@@ -1524,7 +1526,7 @@ export default function MeetingsPage() {
               )}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "10px", marginBottom: "12px" }}>
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <label style={labelStyle}>Decisions ({extracted.decisions.length})</label>
@@ -1596,7 +1598,7 @@ export default function MeetingsPage() {
                     rows={2}
                     style={{ ...inputStyle, resize: "vertical", fontSize: "12px", color: COLOURS.SLATE }} />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
+                <div style={{ display: "grid", gridTemplateColumns: fixedCols("1fr 1fr 1fr 1fr 1fr auto"), gap: "8px", alignItems: "end" }}>
                   <div>
                     <label style={{ ...labelStyle, fontSize: "12px", color: !item.owner_name ? COLOURS.RED : undefined }}>Owner *</label>
                     <select value={item.owner_name} onChange={(e) => updateActionItem(i, { owner_name: e.target.value })}

@@ -7,7 +7,7 @@ import {
 import Link from "next/link";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch, supabase } from "../lib/supabase";
-import { COLOURS, RADII } from "../lib/SharedUI";
+import { COLOURS, RADII, cardGrid } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
 
@@ -282,7 +282,7 @@ function ClockWeatherCard({ tick, weather }: { tick: number; weather: Weather | 
   return (
     <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
       {/* Clocks */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))" }}>
         {[
           { city: "Lahore",   zone: "Asia/Karachi" },
           { city: "London",   zone: "Europe/London" },
@@ -352,7 +352,7 @@ function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; show
       <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}` }}>
         <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, letterSpacing: "-0.01em", margin: 0 }}>Quick Links</h3>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, padding: "14px 16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8, padding: "14px 16px" }}>
         {links.map((l) => (
           <Link key={l.href} href={l.href} style={linkItemStyle}
             onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
@@ -518,7 +518,7 @@ function TeamStatusCard({ data }: { data: WelcomeData }) {
         )}
       </div>
       {/* Mini stat bar */}
-      <div style={{ borderTop: `1px solid ${HAIRLINE}`, display: "grid", gridTemplateColumns: "repeat(3,1fr)" }}>
+      <div style={{ borderTop: `1px solid ${HAIRLINE}`, display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))" }}>
         {[
           { num: data.teamOverdueCount ?? 0,   label: "Overdue",      color: RED   },
           { num: data.teamTodayCount ?? 0,     label: "Today",        color: AMBER },
@@ -861,7 +861,7 @@ function MemberLayout({ data, tick, weather, email }: { data: WelcomeData; tick:
       <Hero data={data} tick={tick} weather={weather} email={email} />
       <PurposeBanner />
       <TaskBanner myOverdue={data.myOverdueCount} myToday={data.myTodayCount} myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount} />
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : cardGrid(320), gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
         <MyTasksCard tasks={data.myTasks} />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
@@ -886,7 +886,7 @@ function ManagerLayout({ data, tick, weather, email }: { data: WelcomeData; tick
         myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
         teamOverdue={data.teamOverdueCount} teamToday={data.teamTodayCount}
       />
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : hasTeam ? "1fr 1fr 320px" : "1fr 320px", gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : cardGrid(300), gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
         <MyTasksCard tasks={data.myTasks} />
         {hasTeam && <TeamStatusCard data={data} />}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -911,7 +911,7 @@ function HodLayout({ data, tick, weather, email }: { data: WelcomeData; tick: nu
         myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
         teamOverdue={data.teamOverdueCount} teamToday={data.teamTodayCount}
       />
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 320px", gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : cardGrid(300), gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
         <TeamOverdueCard data={data} />
         <MyTasksCard tasks={data.myTasks} />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1396,7 +1396,7 @@ function ThreeDayCalendar({ calEvents }: { calEvents: CalEvent[] }) {
   const [selected, setSelected] = useState<{ ev: CalEvent; color: string } | null>(null);
   const PREVIEW = 3;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 16, padding: isMobile ? "0 16px 4px" : "0 40px 4px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : cardGrid(260), gap: 16, padding: isMobile ? "0 16px 4px" : "0 40px 4px" }}>
       {[0, 1, 2].map(offset => {
         const dateStr  = dayOffset(offset);
         const events   = calEvents.filter(e => e.start.slice(0, 10) === dateStr);
@@ -1502,7 +1502,7 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal, pensi
 }) {
   const isMobile = useMobile();
   const showPortfolio = holdings.length > 0 || portfolioTotal !== null;
-  const cols = isMobile ? "1fr" : showPortfolio ? "1fr 1fr 420px 300px" : "1fr 1fr 300px";
+  const cols = isMobile ? "1fr" : cardGrid(300);
   return (
     <>
       <KhuramHero data={data} tick={tick} weather={weather} fx={fx} />
@@ -1568,7 +1568,7 @@ function KamranLayout({ data, tick, weather, fx }: {
         myOverdue={data.myOverdueCount} myToday={data.myTodayCount}
         myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
       />
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 356px", gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 44px 44px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : cardGrid(320), gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 44px 44px" }}>
         <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal assignments" />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
@@ -1607,9 +1607,7 @@ function CeoLayout({ data, tick, weather, fx, holdings, portfolioTotal, email }:
 }) {
   const isMobile = useMobile();
   const showPortfolio = holdings.length > 0 || portfolioTotal !== null;
-  const cols = isMobile ? "1fr" : showPortfolio
-    ? "1fr 1fr 1fr 300px"
-    : "1fr 1fr 300px";
+  const cols = isMobile ? "1fr" : cardGrid(300);
   return (
     <>
       <Hero data={data} tick={tick} weather={weather} fx={fx} email={email} />
