@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { authFetch } from "../../../lib/supabase";
 import { COLOURS, RADII, SectionTitle, SkeletonRows } from "../../../lib/SharedUI";
 import { useMobile } from "../../../lib/useMobile";
+import EmployeeDetailPanel from "./EmployeeDetailPanel";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -270,8 +271,8 @@ function DeptTable({ rows, loading, deptFilter, setDeptFilter, showCompany }: {
 
 // ── Employee spotlight ─────────────────────────────────────────────────────────
 
-function EmpSpotlight({ employees, loading, deptFilter }: {
-  employees: EmpRow[]; loading: boolean; deptFilter: string;
+function EmpSpotlight({ employees, loading, deptFilter, onSelect }: {
+  employees: EmpRow[]; loading: boolean; deptFilter: string; onSelect: (email: string) => void;
 }) {
   // Filter by dept if selected; deptFilter applies to the original per-dept rows,
   // but since we've already merged, filter on employee's primary department
@@ -311,7 +312,10 @@ function EmpSpotlight({ employees, loading, deptFilter }: {
     const c  = accent === "green" ? COLOURS.GREEN : COLOURS.RED;
     const bg = accent === "green" ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT;
     return (
-      <div style={isLast ? lastRow : rowStyle}>
+      <div
+        onClick={() => onSelect(emp.email)}
+        style={{ ...(isLast ? lastRow : rowStyle), cursor: "pointer" }}
+      >
         <Avatar name={emp.name} bg={bg} color={c} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -454,13 +458,14 @@ function FilterPill({ label, value, options, onChange }: {
 // ── Main component ──────────────────────────────────────────────────────────────
 
 export default function HRPerformance() {
-  const isMobile                    = useMobile();
-  const [data,        setData]      = useState<PerfData | null>(null);
-  const [loading,     setLoading]   = useState(true);
-  const [error,       setError]     = useState<string | null>(null);
-  const [days,        setDays]      = useState<number>(90);
-  const [deptFilter,  setDeptFilter] = useState<string>("");
-  const [compFilter,  setCompFilter] = useState<string>("all");
+  const isMobile                        = useMobile();
+  const [data,          setData]        = useState<PerfData | null>(null);
+  const [loading,       setLoading]     = useState(true);
+  const [error,         setError]       = useState<string | null>(null);
+  const [days,          setDays]        = useState<number>(90);
+  const [deptFilter,    setDeptFilter]  = useState<string>("");
+  const [compFilter,    setCompFilter]  = useState<string>("all");
+  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
 
   const load = useCallback(async (d: number) => {
     setLoading(true); setError(null);
@@ -588,7 +593,7 @@ export default function HRPerformance() {
       <div style={{ marginBottom: "16px" }}>
         <SectionTitle title={`Employee spotlight${deptFilter ? ` · ${deptFilter}` : ""}`} />
         <div style={{ marginTop: "10px" }}>
-          <EmpSpotlight employees={mergedEmpRows} loading={loading} deptFilter={deptFilter} />
+          <EmpSpotlight employees={mergedEmpRows} loading={loading} deptFilter={deptFilter} onSelect={setSelectedEmail} />
         </div>
       </div>
 
@@ -600,6 +605,15 @@ export default function HRPerformance() {
         </div>
         <SubmittedAwaitingHOD managers={data?.managers ?? []} loading={loading} />
       </div>
+
+      {/* Employee detail panel */}
+      {selectedEmail && (
+        <EmployeeDetailPanel
+          email={selectedEmail}
+          days={days}
+          onClose={() => setSelectedEmail(null)}
+        />
+      )}
     </div>
   );
 }
