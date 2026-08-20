@@ -15,11 +15,13 @@ import HRTasks from "./hr/HRTasks";
 import HRWorkforce from "./hr/HRWorkforce";
 import HRInsights from "./hr/HRInsights";
 import HRLegal from "./hr/HRLegal";
+import HRPerformance from "./hr/HRPerformance";
 
 // ─── Tab definitions ────────────────────────────────────────────────────────
 const ALL_HR_TABS = [
   { key: "workforce",   label: "Workforce",              widgetKey: "hr_tabs.workforce" },
   { key: "insights",    label: "HR Insights",            widgetKey: "hr_tabs.insights" },
+  { key: "performance", label: "Performance",            widgetKey: "hr_tabs.performance" },
   { key: "recruitment", label: "Recruitment",            widgetKey: "hr_tabs.recruitment" },
   { key: "onboarding",  label: "Onboarding",             widgetKey: "hr_tabs.onboarding" },
   { key: "offboarding", label: "Off-boarding",           widgetKey: "hr_tabs.offboarding" },
@@ -116,6 +118,7 @@ export default function HRDashboard() {
       {safeTab === "od"           && <ComingSoon label="OD Interventions" />}
       {safeTab === "td"           && <HRTraining />}
       {safeTab === "tasks"        && <HRTasks />}
+      {safeTab === "performance"  && <HRPerformance />}
       {safeTab === "legal"        && <HRLegal />}
     </main>
   );
