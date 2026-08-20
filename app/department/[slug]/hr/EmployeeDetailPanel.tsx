@@ -103,7 +103,6 @@ function WeeklyChart({ weeks }: { weeks: WeekRow[] }) {
         {weeks.map((w, i) => {
           const heightPct = w.total / maxTotal;
           const onTimePct = w.total > 0 ? w.on_time / w.total : 0;
-          const latePct   = w.total > 0 ? w.late    / w.total : 0; // not directly in WeekRow but computed
           const overduePct = w.total > 0 ? w.overdue / w.total : 0;
           const completedPct = w.total > 0 ? w.completed / w.total : 0;
 

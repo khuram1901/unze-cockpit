@@ -434,7 +434,22 @@ export default function MembersManager() {
     const m = members.find((x) => x.id === id);
     const target: UserCtx = { email: m?.email, role: m?.role };
     if (!canDeleteMember(me, target)) { toast.show("You do not have permission to remove this member.", "error"); return; }
-    if (!await dialog.confirm(`Remove ${nm}?`, true)) return;
+
+    // Check for open tasks before allowing deletion
+    const taskCount = openTaskCounts.get(m?.name || "") || 0;
+    if (taskCount > 0) {
+      const goOffboard = await dialog.confirm(
+        `${nm} has ${taskCount} open task${taskCount > 1 ? "s" : ""} assigned to them.\n\nYou should use the Offboard tab to reassign their work before removing them. Go to Offboard now?`,
+        true,
+      );
+      if (goOffboard) {
+        setLeavingId(id);
+        setActiveTab("offboard");
+      }
+      return;
+    }
+
+    if (!await dialog.confirm(`Remove ${nm}? They have no open tasks, so this is safe to proceed.`, true)) return;
     const { error } = await supabase.from("members").delete().eq("id", id);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
     logAction("Deleted", "members", `Removed ${nm}`, id);
