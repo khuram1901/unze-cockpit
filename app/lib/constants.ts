@@ -117,8 +117,9 @@ export const BUDGET_COMPANIES: CompanyConfig[] = COMPANIES.filter(
 
 // MEMBER_COMPANY_NAMES — full list of company names available in the Members
 // module. Covers all companies so any new company added to COMPANIES is
-// automatically available in member records.
-export const MEMBER_COMPANY_NAMES: string[] = COMPANIES.map((c) => c.name);
+// automatically available in member records. "Unze Group" is appended for
+// members who span both entities (shared/group-level staff).
+export const MEMBER_COMPANY_NAMES: string[] = [...COMPANIES.map((c) => c.name), "Unze Group"];
 
 // PKR_HR_COMPANIES — companies on the PKR payroll tracked by the HR module
 // (Payroll, Onboarding, Offboarding). Excludes Unze London which runs on GBP.
