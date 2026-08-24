@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import LegalCases from "./LegalCases";
-import { widgetVisible, isAdminTier } from "../lib/permissions";
+import { widgetVisible, isAdminTier, isPrivileged } from "../lib/permissions";
 import { useUserCtx } from "../lib/useUserCtx";
 import { authFetch, supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
@@ -57,9 +57,11 @@ type FuelRow = {
 };
 
 type FuelFill = {
+  id: string;
   date: string; price_per_litre: number; quantity_litres: number;
   amount_pkr: number; previous_odometer: number | null;
   current_odometer: number | null; km_per_litre: number | null; mileage_km: number | null;
+  notes: string | null; entered_by: string | null;
 };
 
 type MaintenanceRecord = {
@@ -232,6 +234,11 @@ export default function AdminDataPage() {
     ? (isAdminTier(ctx) || !!ctx.overrides?.can_manage_locations)
     : false;
 
+  // canAmendFuel — Admin tier, Executive (Sunaina), or Manager in Admin dept (Akhlaq)
+  const canAmendFuel = ctx
+    ? (isPrivileged(ctx) || (ctx.role === "Manager" && ctx.department === "Admin"))
+    : false;
+
   // ── Add location modal state ───────────────────────────────────────
   const [addingLocation, setAddingLocation] = useState(false);
   const [newLocation, setNewLocation] = useState({
@@ -266,6 +273,10 @@ export default function AdminDataPage() {
   const [vehicleDetailYear, setVehicleDetailYear] = useState(CURRENT_FY_START);
   const [loadingVehicleDetail, setLoadingVehicleDetail] = useState(false);
   const vehicleDetailCache = useRef<Map<string, { fuel: FuelFill[]; maintenance: MaintenanceRecord[] }>>(new Map());
+
+  // ── Fuel amendment state ───────────────────────────────────────────
+  const [editingFuel, setEditingFuel] = useState<FuelFill | null>(null);
+  const [savingFuelEdit, setSavingFuelEdit] = useState(false);
 
   // ── Import modal ───────────────────────────────────────────────────
   const [importModal, setImportModal] = useState<{
@@ -2419,19 +2430,39 @@ export default function AdminDataPage() {
                         <th style={thR}>Amount (PKR)</th>
                         <th style={thR}>Odometer</th>
                         <th style={thR}>km/L</th>
+                        {canAmendFuel && <th style={thR}></th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {fuel.map((f, i) => (
-                        <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#FAFBFC" }}>
-                          <td style={tdS}>{formatDateUK(f.date)}</td>
-                          <td style={tdR}>{f.quantity_litres.toFixed(1)}</td>
-                          <td style={tdR}>{f.price_per_litre.toFixed(1)}</td>
-                          <td style={{ ...tdR, fontWeight: 600 }}>{f.amount_pkr ? Math.round(f.amount_pkr).toLocaleString() : "—"}</td>
-                          <td style={{ ...tdR, color: COLOURS.SLATE, fontFamily: "monospace" }}>{f.current_odometer ? f.current_odometer.toLocaleString() : "—"}</td>
-                          <td style={{ ...tdR, color: f.km_per_litre ? COLOURS.GREEN : COLOURS.SLATE, fontWeight: f.km_per_litre ? 600 : 400 }}>{f.km_per_litre ? f.km_per_litre.toFixed(1) : "—"}</td>
-                        </tr>
-                      ))}
+                      {fuel.map((f, i) => {
+                        const gapDays = i > 0
+                          ? Math.round((new Date(f.date).getTime() - new Date(fuel[i - 1].date).getTime()) / 86400000)
+                          : 0;
+                        return (
+                          <React.Fragment key={f.id || i}>
+                            {i > 0 && gapDays > 14 && (
+                              <tr>
+                                <td colSpan={canAmendFuel ? 7 : 6} style={{ padding: "4px 10px", fontSize: "11px", fontWeight: 700, color: "#92400E", backgroundColor: "#FFFBEB", borderTop: "1px dashed #FDE68A", borderBottom: "1px dashed #FDE68A", textAlign: "center" }}>
+                                  ⚠ GAP: {gapDays} days — possible missed slip
+                                </td>
+                              </tr>
+                            )}
+                            <tr style={{ backgroundColor: i % 2 === 0 ? "white" : "#FAFBFC" }}>
+                              <td style={tdS}>{formatDateUK(f.date)}</td>
+                              <td style={tdR}>{f.quantity_litres.toFixed(1)}</td>
+                              <td style={tdR}>{f.price_per_litre.toFixed(1)}</td>
+                              <td style={{ ...tdR, fontWeight: 600 }}>{f.amount_pkr ? Math.round(f.amount_pkr).toLocaleString() : "—"}</td>
+                              <td style={{ ...tdR, color: COLOURS.SLATE, fontFamily: "monospace" }}>{f.current_odometer ? f.current_odometer.toLocaleString() : "—"}</td>
+                              <td style={{ ...tdR, color: f.km_per_litre ? COLOURS.GREEN : COLOURS.SLATE, fontWeight: f.km_per_litre ? 600 : 400 }}>{f.km_per_litre ? f.km_per_litre.toFixed(1) : "—"}</td>
+                              {canAmendFuel && (
+                                <td style={{ ...tdR, width: "28px", padding: "4px" }}>
+                                  <button onClick={() => setEditingFuel({ ...f })} style={{ border: "none", background: "none", cursor: "pointer", color: COLOURS.SLATE, fontSize: "13px", padding: "2px 5px", borderRadius: "4px" }} title="Edit entry">✎</button>
+                                </td>
+                              )}
+                            </tr>
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                     <tfoot>
                       <tr style={{ backgroundColor: "#F0F4F8" }}>
@@ -2441,6 +2472,7 @@ export default function AdminDataPage() {
                         <td style={{ ...tdR, fontWeight: 700 }}>{Math.round(totalFuelCost).toLocaleString()}</td>
                         <td style={{ ...tdR, color: COLOURS.SLATE, fontFamily: "monospace" }}>{totalKm > 0 ? `${totalKm.toLocaleString()} km` : "—"}</td>
                         <td style={{ ...tdR, fontWeight: 700, color: COLOURS.GREEN }}>{totalLitres > 0 && totalKm > 0 ? (totalKm / totalLitres).toFixed(1) : "—"}</td>
+                        {canAmendFuel && <td></td>}
                       </tr>
                     </tfoot>
                   </table>
@@ -3002,6 +3034,112 @@ export default function AdminDataPage() {
       {renderManageSolar()}
       {/* Manage Utility Sites modal */}
       {renderManageUtility()}
+
+      {/* ── Fuel entry amendment modal ───────────────────────────────────── */}
+      {editingFuel && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => !savingFuelEdit && setEditingFuel(null)}
+        >
+          <div
+            style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "440px", maxWidth: "92vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 18px", fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>Edit Fuel Entry</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Date</span>
+                <input type="date" value={editingFuel.date}
+                  onChange={e => setEditingFuel(f => f && ({ ...f, date: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Qty (Litres)</span>
+                <input type="number" step="0.1" min="0" value={editingFuel.quantity_litres}
+                  onChange={e => setEditingFuel(f => f && ({ ...f, quantity_litres: parseFloat(e.target.value) || 0 }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>PKR / Litre</span>
+                <input type="number" step="0.01" min="0" value={editingFuel.price_per_litre}
+                  onChange={e => setEditingFuel(f => f && ({ ...f, price_per_litre: parseFloat(e.target.value) || 0 }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Prev Odometer</span>
+                <input type="number" min="0" value={editingFuel.previous_odometer ?? ""}
+                  onChange={e => setEditingFuel(f => f && ({ ...f, previous_odometer: e.target.value ? parseInt(e.target.value) : null }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Curr Odometer</span>
+                <input type="number" min="0" value={editingFuel.current_odometer ?? ""}
+                  onChange={e => setEditingFuel(f => f && ({ ...f, current_odometer: e.target.value ? parseInt(e.target.value) : null }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Notes</span>
+                <textarea value={editingFuel.notes ?? ""}
+                  onChange={e => setEditingFuel(f => f && ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", resize: "vertical", boxSizing: "border-box" as const }} />
+              </label>
+            </div>
+            {editingFuel.entered_by && (
+              <p style={{ fontSize: "11px", color: COLOURS.SLATE, margin: "10px 0 0" }}>Originally entered by {editingFuel.entered_by}</p>
+            )}
+            <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+              <button
+                disabled={savingFuelEdit}
+                onClick={async () => {
+                  setSavingFuelEdit(true);
+                  await authFetch("/api/admin/fuel", {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                      id: editingFuel.id,
+                      date: editingFuel.date,
+                      price_per_litre: editingFuel.price_per_litre,
+                      quantity_litres: editingFuel.quantity_litres,
+                      previous_odometer: editingFuel.previous_odometer,
+                      current_odometer: editingFuel.current_odometer,
+                      notes: editingFuel.notes || null,
+                    }),
+                  });
+                  vehicleDetailCache.current.clear();
+                  if (vehiclePanel) loadVehicleDetail(vehiclePanel.vehicleId, vehicleDetailYear);
+                  setEditingFuel(null);
+                  setSavingFuelEdit(false);
+                }}
+                style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: savingFuelEdit ? "default" : "pointer", opacity: savingFuelEdit ? 0.7 : 1 }}
+              >
+                {savingFuelEdit ? "Saving…" : "Save Changes"}
+              </button>
+              <button
+                disabled={savingFuelEdit}
+                onClick={async () => {
+                  if (!window.confirm("Delete this fuel entry? This cannot be undone.")) return;
+                  setSavingFuelEdit(true);
+                  await authFetch(`/api/admin/fuel?id=${editingFuel.id}`, { method: "DELETE" });
+                  vehicleDetailCache.current.clear();
+                  if (vehiclePanel) loadVehicleDetail(vehiclePanel.vehicleId, vehicleDetailYear);
+                  setEditingFuel(null);
+                  setSavingFuelEdit(false);
+                }}
+                style={{ padding: "9px 14px", backgroundColor: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: savingFuelEdit ? "default" : "pointer" }}
+              >
+                Delete
+              </button>
+              <button
+                disabled={savingFuelEdit}
+                onClick={() => setEditingFuel(null)}
+                style={{ padding: "9px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AuthWrapper>
   );
 }
