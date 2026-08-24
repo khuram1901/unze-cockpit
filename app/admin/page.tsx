@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import LegalCases from "./LegalCases";
@@ -2439,7 +2439,7 @@ export default function AdminDataPage() {
                           ? Math.round((new Date(f.date).getTime() - new Date(fuel[i - 1].date).getTime()) / 86400000)
                           : 0;
                         return (
-                          <React.Fragment key={f.id || i}>
+                          <Fragment key={f.id || i}>
                             {i > 0 && gapDays > 14 && (
                               <tr>
                                 <td colSpan={canAmendFuel ? 7 : 6} style={{ padding: "4px 10px", fontSize: "11px", fontWeight: 700, color: "#92400E", backgroundColor: "#FFFBEB", borderTop: "1px dashed #FDE68A", borderBottom: "1px dashed #FDE68A", textAlign: "center" }}>
@@ -2460,7 +2460,7 @@ export default function AdminDataPage() {
                                 </td>
                               )}
                             </tr>
-                          </React.Fragment>
+                          </Fragment>
                         );
                       })}
                     </tbody>
