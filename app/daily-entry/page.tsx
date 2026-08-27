@@ -640,7 +640,7 @@ export default function DailyEntryPage() {
               </Field>
 
               <div style={{ marginTop: "14px" }}>
-                <label style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>FUEL SLIP PHOTO (OPTIONAL)</label>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>FUEL SLIP PHOTO *</label>
                 <label style={{
                   display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px",
                   border: `1.5px dashed ${slipPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
