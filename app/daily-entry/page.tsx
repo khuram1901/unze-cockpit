@@ -385,7 +385,13 @@ export default function DailyEntryPage() {
       fd.append("file", slipFile);
       const upRes = await authFetch("/api/admin/fuel/upload", { method: "POST", body: fd });
       const upJson = await upRes.json();
-      if (upRes.ok) slip_image_url = upJson.url;
+      if (upRes.ok) {
+        slip_image_url = upJson.url;
+      } else {
+        setSubmittingFuel(false);
+        showToast(upJson.error || "Failed to upload slip image", "error");
+        return;
+      }
     }
     const res = await authFetch("/api/admin/fuel", {
       method: "POST",

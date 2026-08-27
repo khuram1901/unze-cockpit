@@ -2507,7 +2507,7 @@ export default function AdminDataPage() {
                               </td>
                               {canAmendFuel && (
                                 <td style={{ ...tdR, width: "28px", padding: "4px" }}>
-                                  <button onClick={() => setEditingFuel({ ...f })} style={{ border: "none", background: "none", cursor: "pointer", color: COLOURS.SLATE, fontSize: "13px", padding: "2px 5px", borderRadius: "4px" }} title="Edit entry">✎</button>
+                                  <button onClick={() => { if (editSlipPreviewUrl) URL.revokeObjectURL(editSlipPreviewUrl); setEditSlipFile(null); setEditSlipPreviewUrl(null); setEditingFuel({ ...f }); }} style={{ border: "none", background: "none", cursor: "pointer", color: COLOURS.SLATE, fontSize: "13px", padding: "2px 5px", borderRadius: "4px" }} title="Edit entry">✎</button>
                                 </td>
                               )}
                             </tr>
