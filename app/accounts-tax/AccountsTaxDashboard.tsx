@@ -70,7 +70,7 @@ const ANNUAL_STEPS = [
 ];
 
 const RETURN_TYPES = [
-  { key: "FBR_SALES_TAX" as ReturnType, label: "FBR Sales Tax",  frequency: "monthly"   as const, entities: ["UT","IMP"],              dueDay: 15 },
+  { key: "FBR_SALES_TAX" as ReturnType, label: "FBR Sales Tax",  frequency: "monthly"   as const, entities: ["UT","IMP","BARANH","HD","KK_JHANG"], dueDay: 15 },
   { key: "PRA_TAX"       as ReturnType, label: "PRA Tax",        frequency: "monthly"   as const, entities: ["UT","IMP","BARANH","HD"], dueDay: 15 },
   { key: "INCOME_TAX"    as ReturnType, label: "Income Tax",     frequency: "quarterly" as const, entities: ["UT","IMP","BARANH","HD"], dueDay: 15 },
 ];
@@ -170,7 +170,14 @@ export function isOverdue(
     if (!ds) return false;
     dueDate = new Date(ds + "T00:00:00");
   } else {
-    dueDate = new Date(`${periodKey}-15T00:00:00`);
+    // Monthly returns are due on the 15th of the FOLLOWING month
+    // e.g. July filing → due 15 August, August filing → due 15 September
+    const [yearStr, monthStr] = periodKey.split("-");
+    const pYear  = parseInt(yearStr, 10);
+    const pMonth = parseInt(monthStr, 10);
+    const dueMonth = pMonth === 12 ? 1 : pMonth + 1;
+    const dueYear  = pMonth === 12 ? pYear + 1 : pYear;
+    dueDate = new Date(`${dueYear}-${String(dueMonth).padStart(2, "0")}-15T00:00:00`);
   }
 
   return today > dueDate;
@@ -1139,7 +1146,7 @@ export default function AccountsTaxDashboard() {
                             </thead>
                             <tbody>
                               {rt.entities.map((ek, ri) => {
-                                const entity = QUARTERLY_ENTITIES.find((e) => e.key === ek);
+                                const entity = QUARTERLY_ENTITIES.find((e) => e.key === ek) ?? ANNUAL_ENTITIES.find((e) => e.key === ek);
                                 const even = ri % 2 === 1;
                                 return (
                                   <tr key={ek}>

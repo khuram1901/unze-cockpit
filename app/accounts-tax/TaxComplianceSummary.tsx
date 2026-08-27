@@ -39,7 +39,7 @@ const RETURN_ROWS = [
   {
     key: "FBR_SALES_TAX" as const,
     label: "FBR Sales Tax",
-    entities: ["UT", "IMP"],
+    entities: ["UT", "IMP", "BARANH", "HD", "KK_JHANG"],
     frequency: "monthly" as const,
   },
   {

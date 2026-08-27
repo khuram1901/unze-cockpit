@@ -161,7 +161,7 @@ begin
            e.ek,
            m.mo,
            'monthly'::text        as freq
-    from unnest(array['UT','IMP']) as e(ek)
+    from unnest(array['UT','IMP','BARANH','HD','KK_JHANG']) as e(ek)
     cross join unnest(v_all_months) as m(mo)
 
     union all
@@ -185,7 +185,9 @@ begin
       exp.ek,
       exp.mo,
       case
-        when exp.freq = 'monthly' then (exp.mo || '-15')::date
+        when exp.freq = 'monthly' then
+          -- Due on 15th of the following month (e.g. July filing → 15 Aug)
+          (date_trunc('month', to_date(exp.mo, 'YYYY-MM')) + interval '1 month' + interval '14 days')::date
         when exp.mo = 'Q1'        then make_date(v_sy, 10, 15)
         when exp.mo = 'Q2'        then make_date(v_ny,  1, 15)
         when exp.mo = 'Q3'        then make_date(v_ny,  4, 15)
@@ -214,7 +216,8 @@ begin
             when 'UT'     then 'Unze Trading'
             when 'IMP'    then 'Imperial'
             when 'BARANH' then 'Baranh'
-            when 'HD'     then 'Haute Dolci'
+            when 'HD'       then 'Haute Dolci'
+            when 'KK_JHANG' then 'K&K Jhang'
             else ek end,
           'return_label', rl,
           'period',       mo
