@@ -3209,14 +3209,12 @@ export default function AdminDataPage() {
                   try {
                     let slip_image_url: string | null = null;
 
-                    // Upload image if provided
-                    // Use native fetch so the browser sets the multipart Content-Type boundary
+                    // Upload image if provided — authFetch adds Bearer token, lets browser set multipart boundary
                     if (addingFuel.slipFile) {
                       const fd = new FormData();
                       fd.append("file", addingFuel.slipFile);
-                      const uploadRes = await fetch("/api/admin/fuel/upload", {
+                      const uploadRes = await authFetch("/api/admin/fuel/upload", {
                         method: "POST",
-                        credentials: "same-origin",
                         body: fd,
                       });
                       if (uploadRes.ok) {
