@@ -3313,6 +3313,26 @@ export default function AdminDataPage() {
                   rows={2}
                   style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", resize: "vertical", boxSizing: "border-box" as const }} />
               </label>
+              {/* Slip image — view attached photo for this record */}
+              {editingFuel.slip_image_url && (
+                <div style={{ gridColumn: "1/-1" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Fuel Slip Photo</span>
+                  <div style={{ position: "relative", display: "inline-block", borderRadius: "8px", overflow: "hidden", border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <img
+                      src={editingFuel.slip_image_url}
+                      alt="Fuel slip"
+                      style={{ display: "block", maxWidth: "100%", maxHeight: "220px", objectFit: "contain", backgroundColor: "#F8F9FA" }}
+                    />
+                    <a
+                      href={editingFuel.slip_image_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ position: "absolute", top: "6px", right: "6px", background: "rgba(0,0,0,0.55)", color: "white", fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: "6px", textDecoration: "none" }}>
+                      View full ↗
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
             {editingFuel.entered_by && (
               <p style={{ fontSize: "11px", color: COLOURS.SLATE, margin: "10px 0 0" }}>Originally entered by {editingFuel.entered_by}</p>
