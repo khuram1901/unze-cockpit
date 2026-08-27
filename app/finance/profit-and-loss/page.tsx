@@ -302,6 +302,111 @@ function RatioRow({ label, value, colour }: { label: string; value: string; colo
 
 // ── Balance Sheet note definitions ──────────────────────────────────────────
 // These descriptions appear in the note detail panel when a note number is clicked.
+// ── Plain-English CEO insights for the Key Ratios ────────────────────────────
+// Every sentence is computed from the selected month's numbers, so the
+// explanation updates automatically as the month changes.
+function BsInsightsCard({ monthLabel, data, prev, currentRatio, quickRatio, cashRatio, debtToEquity, equityRatio, workingCapital, isMobile }: {
+  monthLabel: string;
+  data: BsRow;
+  prev: BsRow | null;
+  currentRatio: number | null;
+  quickRatio: number | null;
+  cashRatio: number | null;
+  debtToEquity: number | null;
+  equityRatio: number | null;
+  workingCapital: number | null;
+  isMobile: boolean;
+}) {
+  const rs = (n: number) => `₨${fmtM(n)}`;
+
+  // ── Verdicts ──
+  const liqVerdict = currentRatio === null ? null
+    : currentRatio >= 2 ? { word: "comfortable", colour: COLOURS.GREEN }
+    : currentRatio >= 1 ? { word: "adequate but worth watching", colour: COLOURS.AMBER }
+    : { word: "strained — bills due exceed liquid assets", colour: COLOURS.RED };
+  const levVerdict = debtToEquity === null ? null
+    : debtToEquity < 0.5 ? { word: "very low reliance on borrowed money", colour: COLOURS.GREEN }
+    : debtToEquity < 1 ? { word: "moderate reliance on borrowed money", colour: COLOURS.AMBER }
+    : { word: "heavy reliance on borrowed money", colour: COLOURS.RED };
+  const cashPct = cashRatio !== null ? Math.round(cashRatio * 100) : null;
+
+  const overall =
+    liqVerdict && levVerdict
+      ? currentRatio! >= 2 && debtToEquity! < 0.5
+        ? "Overall this is a strong position: the business owns far more than it owes, carries very little debt, and can cover its short-term bills several times over."
+        : currentRatio! >= 1 && debtToEquity! < 1
+        ? "Overall the position is sound, though not without things to keep an eye on — see below."
+        : "Overall the position needs attention: short-term obligations or debt levels are high relative to the resources available."
+      : "";
+
+  // ── Watch items (computed, max 3) ──
+  const watch: string[] = [];
+  if (cashRatio !== null && cashRatio < 0.5) {
+    watch.push(`Actual cash covers only ${cashPct}% of short-term bills — the rest depends on collecting receivables and selling stock on time. If a big customer pays late, cash could get tight even though the ratios look fine.`);
+  }
+  if (data.total_current > 0 && data.receivables / data.total_current > 0.4) {
+    watch.push(`${Math.round((data.receivables / data.total_current) * 100)}% of your short-term assets is money owed TO you (${rs(data.receivables)}). That wealth is real but not in the bank yet — chasing collections is the single fastest way to turn paper strength into usable cash.`);
+  }
+  if (data.total_current > 0 && data.stocks / data.total_current > 0.25) {
+    watch.push(`Stock is ${rs(data.stocks)} (${Math.round((data.stocks / data.total_current) * 100)}% of current assets). Stock only becomes money when it sells — if it sits, it quietly eats storage cost and working capital.`);
+  }
+  if (prev && prev.cash_bank > 0 && Math.abs(data.cash_bank - prev.cash_bank) / prev.cash_bank > 0.3) {
+    const dir = data.cash_bank > prev.cash_bank ? "rose" : "fell";
+    watch.push(`Cash ${dir} sharply vs last month (${rs(prev.cash_bank)} → ${rs(data.cash_bank)}). One-off movements are fine; a repeating slide is the earliest warning sign a CEO gets.`);
+  }
+  if (data.retained_earnings < 0) {
+    watch.push(`Retained earnings are negative — accumulated losses have eaten into reserves. Profitability, not liquidity, is the issue to fix.`);
+  }
+  const watchShown = watch.slice(0, 3);
+
+  const wcChange = prev ? workingCapital! - (prev.total_current - prev.total_cl) : null;
+
+  const para: React.CSSProperties = { fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7, marginBottom: "10px" };
+  const h: React.CSSProperties = { fontSize: "11px", fontWeight: 700, color: COLOURS.NAVY, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px", marginTop: "12px" };
+
+  return (
+    <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: isMobile ? "14px 16px" : "18px 22px", marginBottom: "20px" }}>
+      <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "2px" }}>What these numbers mean — {monthLabel}</div>
+      <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "10px" }}>A plain-English read of the ratios above. Every figure updates with the month you select.</div>
+
+      {overall && <div style={{ ...para, fontWeight: 600, color: COLOURS.NAVY }}>{overall}</div>}
+
+      <div style={h}>Can the business pay its bills? (Liquidity)</div>
+      <div style={para}>
+        {currentRatio !== null && <>For every ₨1 of bills due within the year, you hold <b>₨{currentRatio.toFixed(2)}</b> in assets that are cash or will soon become cash — {liqVerdict && <span style={{ color: liqVerdict.colour, fontWeight: 600 }}>{liqVerdict.word}</span>}. (Above 2 is comfortable; below 1 means bills exceed liquid resources.) </>}
+        {quickRatio !== null && <>Even ignoring stock — which takes time to sell — you still hold <b>₨{quickRatio.toFixed(2)}</b> per ₨1 owed. </>}
+        {cashRatio !== null && <>In actual cash at the bank today, you hold <b>₨{cashRatio.toFixed(2)}</b> per ₨1 owed — meaning roughly <b>{cashPct}%</b> of all short-term dues could be settled immediately without collecting a single receivable.</>}
+      </div>
+
+      <div style={h}>Whose money runs the business? (Solvency)</div>
+      <div style={para}>
+        {equityRatio !== null && <><b>{equityRatio.toFixed(0)}%</b> of everything the company owns is funded by the owners&apos; money; only <b>{(100 - equityRatio).toFixed(0)}%</b> comes from lenders and suppliers. </>}
+        {debtToEquity !== null && <>Put differently, the business owes <b>₨{debtToEquity.toFixed(2)}</b> for every ₨1 of the owners&apos; own capital — {levVerdict && <span style={{ color: levVerdict.colour, fontWeight: 600 }}>{levVerdict.word}</span>}. </>}
+        Low debt means banks cannot squeeze the business in a bad month, and there is unused borrowing capacity if a genuine growth opportunity appears.
+      </div>
+
+      <div style={h}>The cushion (Working Capital)</div>
+      <div style={para}>
+        {workingCapital !== null && <>If every short-term bill were paid tomorrow, <b>{rs(workingCapital)}</b> would still be left working inside the business — that cushion is what absorbs late payments, seasonal dips, and surprises. </>}
+        {wcChange !== null && Math.abs(wcChange) > 1_000_000 && <>The cushion {wcChange > 0 ? "grew" : "shrank"} by <b>{rs(Math.abs(wcChange))}</b> versus last month{wcChange < 0 ? " — worth understanding why before it becomes a trend" : ""}.</>}
+      </div>
+
+      {watchShown.length > 0 && (
+        <>
+          <div style={h}>What to watch</div>
+          {watchShown.map((w, i) => (
+            <div key={i} style={{ ...para, marginBottom: "6px", paddingLeft: "10px", borderLeft: `2.5px solid ${COLOURS.AMBER}` }}>{w}</div>
+          ))}
+        </>
+      )}
+
+      <div style={{ fontSize: "10px", color: COLOURS.INK_400, marginTop: "8px", fontStyle: "italic" }}>
+        Rule of thumb: liquidity ratios answer &ldquo;can I pay this year&apos;s bills?&rdquo;, solvency ratios answer &ldquo;who really owns this business?&rdquo;, and working capital is the shock absorber between the two.
+      </div>
+    </div>
+  );
+}
+
 const BS_NOTES: Record<string, { title: string; description: string }> = {
   "1":   { title: "Property, Plant & Equipment", description: "Tangible fixed assets carried at cost less accumulated depreciation and any impairment losses. Major categories include land & buildings, plant & machinery, vehicles, and furniture & fittings. Check for significant additions or disposals during the period — large movements should be cross-referenced with the fixed asset register. Depreciation is charged on the reducing-balance or straight-line basis as per the accounting policy." },
   "2":   { title: "Long Term Investment", description: "Deposits and investments held for periods exceeding twelve months. For Unze Trading this typically includes security deposits paid to utility companies and landlords, and any strategic equity investments. These are carried at cost unless impairment evidence exists." },
@@ -1596,6 +1701,20 @@ export default function ProfitAndLossPage() {
                     <RatioRow label="Cash & Equivalents" value={fmtM(bsData.cash_bank)}        colour={COLOURS.NAVY} />
                   </div>
                 </div>
+
+                {/* ── Plain-English CEO insights (updates with each month) ── */}
+                <BsInsightsCard
+                  monthLabel={MONTH_LABEL(bsMonth)}
+                  data={bsData}
+                  prev={bsPrev}
+                  currentRatio={bsCurrentRatio}
+                  quickRatio={bsQuickRatio}
+                  cashRatio={bsCashRatio}
+                  debtToEquity={bsDebtToEquity}
+                  equityRatio={bsEquityRatio}
+                  workingCapital={bsWorkingCapital}
+                  isMobile={isMobile}
+                />
               </>
             )}
           </>
