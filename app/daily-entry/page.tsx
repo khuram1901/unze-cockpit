@@ -378,38 +378,37 @@ export default function DailyEntryPage() {
       showToast("Please attach a photo of the fuel slip before saving", "error"); return;
     }
     setSubmittingFuel(true);
-    // Upload slip image first (if provided)
-    let slip_image_url: string | null = null;
-    if (slipFile) {
+    try {
+      // Upload slip image first — abort if upload fails
+      let slip_image_url: string | null = null;
       const fd = new FormData();
       fd.append("file", slipFile);
       const upRes = await authFetch("/api/admin/fuel/upload", { method: "POST", body: fd });
       const upJson = await upRes.json();
-      if (upRes.ok) {
-        slip_image_url = upJson.url;
-      } else {
-        setSubmittingFuel(false);
+      if (!upRes.ok) {
         showToast(upJson.error || "Failed to upload slip image", "error");
         return;
       }
-    }
-    const res = await authFetch("/api/admin/fuel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...fuel, slip_image_url }),
-    });
-    const json = await res.json();
-    setSubmittingFuel(false);
-    if (json.ok) {
-      showToast("Fuel entry saved ✓", "success");
-      setFuel((f) => ({ ...f, price_per_litre: "", quantity_litres: "", current_odometer: "", notes: "" }));
-      if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl);
-      setSlipFile(null);
-      setSlipPreviewUrl(null);
-      authFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
-        .then((r) => r.json()).then((j) => setRecentFuel(j.data || []));
-    } else {
-      showToast(json.error || "Failed to save", "error");
+      slip_image_url = upJson.url;
+      const res = await authFetch("/api/admin/fuel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...fuel, slip_image_url }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        showToast("Fuel entry saved ✓", "success");
+        setFuel((f) => ({ ...f, price_per_litre: "", quantity_litres: "", current_odometer: "", notes: "" }));
+        if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl);
+        setSlipFile(null);
+        setSlipPreviewUrl(null);
+        authFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
+          .then((r) => r.json()).then((j) => setRecentFuel(j.data || []));
+      } else {
+        showToast(json.error || "Failed to save", "error");
+      }
+    } finally {
+      setSubmittingFuel(false);
     }
   }
 
