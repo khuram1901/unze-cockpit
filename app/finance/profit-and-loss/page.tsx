@@ -279,7 +279,7 @@ function RatioRow({ label, value, colour }: { label: string; value: string; colo
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
       <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{label}</span>
-      <span style={{ fontSize: "12.5px", fontWeight: 700, fontFamily: "monospace", color }}>{value}</span>
+      <span style={{ fontSize: "12.5px", fontWeight: 700, fontFamily: "monospace", color: colour }}>{value}</span>
     </div>
   );
 }
