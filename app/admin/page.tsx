@@ -61,7 +61,7 @@ type FuelFill = {
   date: string; price_per_litre: number; quantity_litres: number;
   amount_pkr: number; previous_odometer: number | null;
   current_odometer: number | null; km_per_litre: number | null; mileage_km: number | null;
-  notes: string | null; entered_by: string | null;
+  notes: string | null; entered_by: string | null; slip_image_url: string | null;
 };
 
 type MaintenanceRecord = {
@@ -277,6 +277,42 @@ export default function AdminDataPage() {
   // ── Fuel amendment state ───────────────────────────────────────────
   const [editingFuel, setEditingFuel] = useState<FuelFill | null>(null);
   const [savingFuelEdit, setSavingFuelEdit] = useState(false);
+
+  // ── Fuel add-entry state ───────────────────────────────────────────
+  const [addingFuel, setAddingFuel] = useState<{
+    date: string; price_per_litre: string; quantity_litres: string;
+    previous_odometer: string; current_odometer: string; notes: string;
+    slipFile: File | null; slipPreviewUrl: string | null;
+  } | null>(null);
+  const [savingFuelAdd, setSavingFuelAdd] = useState(false);
+
+  // Canvas-based image compression: resize to max 480px (≈ 72 DPI slip), JPEG quality 0.65
+  function compressImage(file: File): Promise<File> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX_PX = 480;
+        let { width, height } = img;
+        if (width > height) {
+          if (width > MAX_PX) { height = Math.round(height * MAX_PX / width); width = MAX_PX; }
+        } else {
+          if (height > MAX_PX) { width = Math.round(width * MAX_PX / height); height = MAX_PX; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (!blob) { resolve(file); return; }
+          resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
+        }, "image/jpeg", 0.65);
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
+      img.src = objectUrl;
+    });
+  }
 
   // ── Import modal ───────────────────────────────────────────────────
   const [importModal, setImportModal] = useState<{
@@ -2402,13 +2438,20 @@ export default function AdminDataPage() {
                 {totalLitres > 0 && totalKm > 0 && <span style={{ fontSize: "12px", fontWeight: 600, padding: "3px 11px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>{(totalKm / totalLitres).toFixed(1)} km/L avg</span>}
               </div>
             )}
-            {/* Tabs */}
-            <div style={{ display: "flex", gap: "4px", marginTop: "12px" }}>
+            {/* Tabs + Add Entry button */}
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "12px" }}>
               {(["fuel", "maintenance", "summary"] as const).map((t) => (
                 <button key={t} onClick={() => setVehicleDetailTab(t)} style={{ padding: "5px 14px", borderRadius: "20px", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer", backgroundColor: vehicleDetailTab === t ? COLOURS.NAVY : "transparent", color: vehicleDetailTab === t ? "white" : COLOURS.SLATE }}>
                   {t === "fuel" ? `Fuel Log${!loadingVehicleDetail && fuel.length ? ` (${fuel.length})` : ""}` : t === "maintenance" ? `Maintenance${!loadingVehicleDetail && maintenance.length ? ` (${maintenance.length})` : ""}` : "YTD Summary"}
                 </button>
               ))}
+              {vehicleDetailTab === "fuel" && (
+                <button
+                  onClick={() => setAddingFuel({ date: new Date().toISOString().slice(0, 10), price_per_litre: "", quantity_litres: "", previous_odometer: "", current_odometer: "", notes: "", slipFile: null, slipPreviewUrl: null })}
+                  style={{ marginLeft: "auto", padding: "5px 13px", borderRadius: "20px", border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "white", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const }}>
+                  ＋ Log Entry
+                </button>
+              )}
             </div>
           </div>
 
@@ -2430,6 +2473,7 @@ export default function AdminDataPage() {
                         <th style={thR}>Amount (PKR)</th>
                         <th style={thR}>Odometer</th>
                         <th style={thR}>km/L</th>
+                        <th style={thR}>Slip</th>
                         {canAmendFuel && <th style={thR}></th>}
                       </tr>
                     </thead>
@@ -2442,7 +2486,7 @@ export default function AdminDataPage() {
                           <Fragment key={f.id || i}>
                             {i > 0 && gapDays > 14 && (
                               <tr>
-                                <td colSpan={canAmendFuel ? 7 : 6} style={{ padding: "4px 10px", fontSize: "11px", fontWeight: 700, color: "#92400E", backgroundColor: "#FFFBEB", borderTop: "1px dashed #FDE68A", borderBottom: "1px dashed #FDE68A", textAlign: "center" }}>
+                                <td colSpan={canAmendFuel ? 8 : 7} style={{ padding: "4px 10px", fontSize: "11px", fontWeight: 700, color: "#92400E", backgroundColor: "#FFFBEB", borderTop: "1px dashed #FDE68A", borderBottom: "1px dashed #FDE68A", textAlign: "center" }}>
                                   ⚠ GAP: {gapDays} days — possible missed slip
                                 </td>
                               </tr>
@@ -2454,6 +2498,11 @@ export default function AdminDataPage() {
                               <td style={{ ...tdR, fontWeight: 600 }}>{f.amount_pkr ? Math.round(f.amount_pkr).toLocaleString() : "—"}</td>
                               <td style={{ ...tdR, color: COLOURS.SLATE, fontFamily: "monospace" }}>{f.current_odometer ? f.current_odometer.toLocaleString() : "—"}</td>
                               <td style={{ ...tdR, color: f.km_per_litre ? COLOURS.GREEN : COLOURS.SLATE, fontWeight: f.km_per_litre ? 600 : 400 }}>{f.km_per_litre ? f.km_per_litre.toFixed(1) : "—"}</td>
+                              <td style={{ ...tdR, width: "36px", padding: "4px" }}>
+                                {f.slip_image_url
+                                  ? <a href={f.slip_image_url} target="_blank" rel="noreferrer" title="View fuel slip" style={{ fontSize: "15px", textDecoration: "none" }}>📷</a>
+                                  : <span style={{ fontSize: "11px", color: COLOURS.SLATE, opacity: 0.4 }}>—</span>}
+                              </td>
                               {canAmendFuel && (
                                 <td style={{ ...tdR, width: "28px", padding: "4px" }}>
                                   <button onClick={() => setEditingFuel({ ...f })} style={{ border: "none", background: "none", cursor: "pointer", color: COLOURS.SLATE, fontSize: "13px", padding: "2px 5px", borderRadius: "4px" }} title="Edit entry">✎</button>
@@ -2472,6 +2521,7 @@ export default function AdminDataPage() {
                         <td style={{ ...tdR, fontWeight: 700 }}>{Math.round(totalFuelCost).toLocaleString()}</td>
                         <td style={{ ...tdR, color: COLOURS.SLATE, fontFamily: "monospace" }}>{totalKm > 0 ? `${totalKm.toLocaleString()} km` : "—"}</td>
                         <td style={{ ...tdR, fontWeight: 700, color: COLOURS.GREEN }}>{totalLitres > 0 && totalKm > 0 ? (totalKm / totalLitres).toFixed(1) : "—"}</td>
+                        <td></td>
                         {canAmendFuel && <td></td>}
                       </tr>
                     </tfoot>
@@ -3034,6 +3084,187 @@ export default function AdminDataPage() {
       {renderManageSolar()}
       {/* Manage Utility Sites modal */}
       {renderManageUtility()}
+
+      {/* ── Fuel add-entry modal ────────────────────────────────────────── */}
+      {addingFuel && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={() => !savingFuelAdd && setAddingFuel(null)}
+        >
+          <div
+            style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "460px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>Log Fuel Entry</h3>
+            <p style={{ margin: "0 0 18px", fontSize: "12px", color: COLOURS.SLATE }}>{vehiclePanel?.vehicleName} · {vehiclePanel?.plateNumber}</p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              {/* Date */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Date</span>
+                <input type="date" value={addingFuel.date}
+                  onChange={e => setAddingFuel(f => f && ({ ...f, date: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Qty */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Qty (Litres)</span>
+                <input type="number" step="0.1" min="0" placeholder="e.g. 40.0" value={addingFuel.quantity_litres}
+                  onChange={e => setAddingFuel(f => f && ({ ...f, quantity_litres: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Price per litre */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>PKR / Litre</span>
+                <input type="number" step="0.01" min="0" placeholder="e.g. 270.00" value={addingFuel.price_per_litre}
+                  onChange={e => setAddingFuel(f => f && ({ ...f, price_per_litre: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Prev odometer */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Prev Odometer</span>
+                <input type="number" min="0" placeholder="km" value={addingFuel.previous_odometer}
+                  onChange={e => setAddingFuel(f => f && ({ ...f, previous_odometer: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Curr odometer */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Curr Odometer</span>
+                <input type="number" min="0" placeholder="km" value={addingFuel.current_odometer}
+                  onChange={e => setAddingFuel(f => f && ({ ...f, current_odometer: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Notes */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Notes (optional)</span>
+                <textarea value={addingFuel.notes}
+                  onChange={e => setAddingFuel(f => f && ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", resize: "vertical", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Fuel slip image capture */}
+              <div style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Fuel Slip Photo (optional)</span>
+                <label style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  padding: "10px 14px", borderRadius: "8px",
+                  border: `1.5px dashed ${addingFuel.slipPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+                  cursor: "pointer", backgroundColor: addingFuel.slipPreviewUrl ? "#F0FDF4" : "#FAFBFC",
+                  transition: "border-color 0.15s",
+                }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const raw = e.target.files?.[0];
+                      if (!raw) return;
+                      const compressed = await compressImage(raw);
+                      const previewUrl = URL.createObjectURL(compressed);
+                      setAddingFuel(f => f && ({ ...f, slipFile: compressed, slipPreviewUrl: previewUrl }));
+                    }}
+                  />
+                  <span style={{ fontSize: "20px" }}>📷</span>
+                  <div>
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>
+                      {addingFuel.slipFile ? addingFuel.slipFile.name : "Tap to capture slip"}
+                    </div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>
+                      {addingFuel.slipFile
+                        ? `${(addingFuel.slipFile.size / 1024).toFixed(0)} KB · compressed to 72 DPI`
+                        : "Opens phone camera · auto-compressed to 72 DPI"}
+                    </div>
+                  </div>
+                  {addingFuel.slipPreviewUrl && (
+                    <img src={addingFuel.slipPreviewUrl} alt="slip preview"
+                      style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "6px", marginLeft: "auto", border: `1px solid ${COLOURS.HAIRLINE}` }} />
+                  )}
+                </label>
+                {addingFuel.slipFile && (
+                  <button
+                    onClick={() => {
+                      if (addingFuel.slipPreviewUrl) URL.revokeObjectURL(addingFuel.slipPreviewUrl);
+                      setAddingFuel(f => f && ({ ...f, slipFile: null, slipPreviewUrl: null }));
+                    }}
+                    style={{ marginTop: "6px", fontSize: "11px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    ✕ Remove photo
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+              <button
+                disabled={savingFuelAdd || !addingFuel.date || !addingFuel.price_per_litre || !addingFuel.quantity_litres}
+                onClick={async () => {
+                  if (!vehiclePanel) return;
+                  setSavingFuelAdd(true);
+                  try {
+                    let slip_image_url: string | null = null;
+
+                    // Upload image if provided
+                    // Use native fetch so the browser sets the multipart Content-Type boundary
+                    if (addingFuel.slipFile) {
+                      const fd = new FormData();
+                      fd.append("file", addingFuel.slipFile);
+                      const uploadRes = await fetch("/api/admin/fuel/upload", {
+                        method: "POST",
+                        credentials: "same-origin",
+                        body: fd,
+                      });
+                      if (uploadRes.ok) {
+                        const { url } = await uploadRes.json();
+                        slip_image_url = url;
+                      }
+                    }
+
+                    await authFetch("/api/admin/fuel", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        vehicle_id:        vehiclePanel.vehicleId,
+                        date:              addingFuel.date,
+                        price_per_litre:   addingFuel.price_per_litre,
+                        quantity_litres:   addingFuel.quantity_litres,
+                        previous_odometer: addingFuel.previous_odometer || null,
+                        current_odometer:  addingFuel.current_odometer  || null,
+                        notes:             addingFuel.notes || null,
+                        slip_image_url,
+                      }),
+                    });
+
+                    if (addingFuel.slipPreviewUrl) URL.revokeObjectURL(addingFuel.slipPreviewUrl);
+                    vehicleDetailCache.current.clear();
+                    loadVehicleDetail(vehiclePanel.vehicleId, vehicleDetailYear);
+                    setAddingFuel(null);
+                  } finally {
+                    setSavingFuelAdd(false);
+                  }
+                }}
+                style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: (savingFuelAdd || !addingFuel.date || !addingFuel.price_per_litre || !addingFuel.quantity_litres) ? "default" : "pointer", opacity: (savingFuelAdd || !addingFuel.date || !addingFuel.price_per_litre || !addingFuel.quantity_litres) ? 0.6 : 1 }}
+              >
+                {savingFuelAdd ? (addingFuel.slipFile ? "Uploading slip…" : "Saving…") : "Save Entry"}
+              </button>
+              <button
+                disabled={savingFuelAdd}
+                onClick={() => {
+                  if (addingFuel.slipPreviewUrl) URL.revokeObjectURL(addingFuel.slipPreviewUrl);
+                  setAddingFuel(null);
+                }}
+                style={{ padding: "9px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Fuel entry amendment modal ───────────────────────────────────── */}
       {editingFuel && (

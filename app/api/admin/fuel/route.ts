@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const {
     vehicle_id, date, price_per_litre, quantity_litres,
-    previous_odometer, current_odometer, notes,
+    previous_odometer, current_odometer, notes, slip_image_url,
   } = body;
 
   if (!vehicle_id || !date || !price_per_litre || !quantity_litres) {
@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
     previous_odometer: previous_odometer ? parseInt(previous_odometer) : null,
     current_odometer:  current_odometer  ? parseInt(current_odometer)  : null,
     notes: notes || null,
+    slip_image_url: slip_image_url || null,
     entered_by: auth.email,
   });
 
