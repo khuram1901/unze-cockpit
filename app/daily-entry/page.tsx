@@ -96,6 +96,8 @@ export default function DailyEntryPage() {
   });
   const [loadingOdo, setLoadingOdo] = useState(false);
   const [submittingFuel, setSubmittingFuel] = useState(false);
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [slipPreviewUrl, setSlipPreviewUrl] = useState<string | null>(null);
 
   // ── Maintenance last-ODO (to show reference + validate forward-only) ─
   const [lastMaintOdo, setLastMaintOdo] = useState<number | null>(null);
@@ -329,6 +331,33 @@ export default function DailyEntryPage() {
   }
 
   // ── Submit handlers ────────────────────────────────────────────────
+  function compressImage(file: File): Promise<File> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX_PX = 480;
+        let { width, height } = img;
+        if (width > height) {
+          if (width > MAX_PX) { height = Math.round(height * MAX_PX / width); width = MAX_PX; }
+        } else {
+          if (height > MAX_PX) { width = Math.round(width * MAX_PX / height); height = MAX_PX; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (!blob) { resolve(file); return; }
+          resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
+        }, "image/jpeg", 0.65);
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
+      img.src = objectUrl;
+    });
+  }
+
   async function submitFuel(e: React.FormEvent) {
     e.preventDefault();
     if (!fuel.vehicle_id || !fuel.date || !fuel.price_per_litre || !fuel.quantity_litres) {
@@ -345,16 +374,28 @@ export default function DailyEntryPage() {
       }
     }
     setSubmittingFuel(true);
+    // Upload slip image first (if provided)
+    let slip_image_url: string | null = null;
+    if (slipFile) {
+      const fd = new FormData();
+      fd.append("file", slipFile);
+      const upRes = await authFetch("/api/admin/fuel/upload", { method: "POST", body: fd });
+      const upJson = await upRes.json();
+      if (upRes.ok) slip_image_url = upJson.url;
+    }
     const res = await authFetch("/api/admin/fuel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(fuel),
+      body: JSON.stringify({ ...fuel, slip_image_url }),
     });
     const json = await res.json();
     setSubmittingFuel(false);
     if (json.ok) {
       showToast("Fuel entry saved ✓", "success");
       setFuel((f) => ({ ...f, price_per_litre: "", quantity_litres: "", current_odometer: "", notes: "" }));
+      if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl);
+      setSlipFile(null);
+      setSlipPreviewUrl(null);
       authFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
         .then((r) => r.json()).then((j) => setRecentFuel(j.data || []));
     } else {
@@ -587,6 +628,39 @@ export default function DailyEntryPage() {
                   rows={2} placeholder="Any notes about this fill-up…"
                   style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const, marginTop: "12px" }} />
               </Field>
+
+              <div style={{ marginTop: "14px" }}>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>FUEL SLIP PHOTO (OPTIONAL)</label>
+                <label style={{
+                  display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px",
+                  border: `1.5px dashed ${slipPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+                  borderRadius: RADII.SM, cursor: "pointer",
+                  backgroundColor: slipPreviewUrl ? "#F0FDF4" : "#FAFBFC",
+                }}>
+                  <span style={{ fontSize: "22px" }}>📷</span>
+                  <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>
+                    {slipFile ? `${slipFile.name} (${(slipFile.size / 1024).toFixed(0)} KB)` : "Tap to capture slip · auto-compressed to 72 DPI"}
+                  </span>
+                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const compressed = await compressImage(file);
+                      const previewUrl = URL.createObjectURL(compressed);
+                      if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl);
+                      setSlipFile(compressed);
+                      setSlipPreviewUrl(previewUrl);
+                      e.target.value = "";
+                    }} />
+                </label>
+                {slipPreviewUrl && (
+                  <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
+                    <img src={slipPreviewUrl} alt="slip preview" style={{ height: "64px", borderRadius: "6px", objectFit: "cover", border: `1px solid ${COLOURS.HAIRLINE}` }} />
+                    <button type="button" onClick={() => { if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl); setSlipFile(null); setSlipPreviewUrl(null); }}
+                      style={{ fontSize: "12px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Remove</button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <button type="submit" disabled={submittingFuel} style={{ ...primaryButtonStyle, width: "100%", padding: "14px", fontSize: "15px", opacity: submittingFuel ? 0.6 : 1 }}>
