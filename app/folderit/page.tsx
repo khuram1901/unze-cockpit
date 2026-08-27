@@ -110,6 +110,14 @@ type BrowseAccount = {
 };
 type BrowseFolder = { uid: string; name: string };
 type BrowseFile = { uid: string; name: string; createdAt: number | null; size: number | null };
+type FlatCabinetFile = {
+  uid: string;
+  name: string;
+  folder_path: string | null;
+  size: number | null;
+  createdAt: number | null;
+  folderit_url: string;
+};
 
 // Same as fetchPreviewBlobUrl but passes account_uid explicitly — browse
 // files aren't in the inbox/HR sync tables so the RPC lookup would 404.
@@ -323,6 +331,18 @@ function BrowseView() {
   const [previewingFile, setPreviewingFile] = useState<string | null>(null);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [rootLoading, setRootLoading] = useState(false);
+  // Files sitting at the very top of the cabinet (outside any folder) —
+  // shown in the right pane before a folder is selected.
+  const [rootFiles, setRootFiles] = useState<BrowseFile[]>([]);
+  // "All Files" flat view — every file in the cabinet, no clicking through
+  // folders. Khuram: "i want you to build the feature where i can view any
+  // files from any of the cabinets."
+  const [viewMode, setViewMode] = useState<"folders" | "all">("folders");
+  const [allFiles, setAllFiles] = useState<FlatCabinetFile[]>([]);
+  const [allFilesLoading, setAllFilesLoading] = useState(false);
+  const [allFilesError, setAllFilesError] = useState<string | null>(null);
+  const [allFilesTruncated, setAllFilesTruncated] = useState(false);
+  const [fileFilter, setFileFilter] = useState("");
 
   useEffect(() => {
     authFetch("/api/folderit/accounts")
@@ -333,19 +353,43 @@ function BrowseView() {
   async function loadRootFolders(acc: BrowseAccount) {
     setRootLoading(true);
     setRootFolders([]);
+    setRootFiles([]);
     setExpandedFolders(new Map());
     setSelectedFolder(null);
     setRightFolders([]);
     setRightFiles([]);
     setRightError(null);
+    setViewMode("folders");
+    setAllFiles([]);
+    setAllFilesError(null);
+    setFileFilter("");
     try {
       const res = await authFetch(`/api/folderit/browse?account_uid=${acc.account_uid}`);
       const json = await res.json();
       setRootFolders((json.folders ?? []).sort((a: BrowseFolder, b: BrowseFolder) => a.name.localeCompare(b.name)));
+      setRootFiles((json.files ?? []).sort((a: BrowseFile, b: BrowseFile) => a.name.localeCompare(b.name)));
     } catch {
       setRootFolders([]);
     } finally {
       setRootLoading(false);
+    }
+  }
+
+  async function loadAllFiles(acc: BrowseAccount) {
+    setViewMode("all");
+    if (allFiles.length || allFilesLoading) return; // already loaded for this cabinet
+    setAllFilesLoading(true);
+    setAllFilesError(null);
+    try {
+      const res = await authFetch(`/api/folderit/all-files?account_uid=${acc.account_uid}`);
+      const json = await res.json();
+      if (!res.ok) { setAllFilesError(json.error ?? "Failed to list files"); return; }
+      setAllFiles(json.files ?? []);
+      setAllFilesTruncated(json.truncated === true);
+    } catch {
+      setAllFilesError("Network error");
+    } finally {
+      setAllFilesLoading(false);
     }
   }
 
@@ -533,8 +577,123 @@ function BrowseView() {
         <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>
           {selectedAccount.company?.name ?? selectedAccount.account_name}
         </span>
+
+        {/* View toggle: folder tree vs flat all-files list */}
+        <div style={{ marginLeft: "auto", display: "flex", border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.PILL, overflow: "hidden" }}>
+          {([
+            { key: "folders", label: "📁 Folders" },
+            { key: "all",     label: "📄 All Files" },
+          ] as { key: "folders" | "all"; label: string }[]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => key === "all" ? loadAllFiles(selectedAccount) : setViewMode("folders")}
+              style={{
+                border: "none", cursor: "pointer", padding: "6px 14px", fontSize: "12px", fontWeight: 600,
+                background: viewMode === key ? COLOURS.NAVY : "white",
+                color: viewMode === key ? "white" : COLOURS.SLATE,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {viewMode === "all" ? (
+        /* ── Flat all-files view ─────────────────────────────────────────── */
+        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", background: "#fff", minHeight: "520px" }}>
+          <div style={{ padding: "10px 12px", borderBottom: `1px solid ${COLOURS.BORDER}`, background: COLOURS.CARD_ALT, display: "flex", alignItems: "center", gap: "10px" }}>
+            <input
+              value={fileFilter}
+              onChange={(e) => setFileFilter(e.target.value)}
+              placeholder="Filter files by name or folder…"
+              style={{
+                flex: 1, maxWidth: "360px", padding: "7px 10px", fontSize: "13px",
+                border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD,
+                outline: "none", color: COLOURS.NAVY, background: "white",
+              }}
+            />
+            {!allFilesLoading && (
+              <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                {(() => {
+                  const filtered = fileFilter.trim()
+                    ? allFiles.filter((f) =>
+                        f.name.toLowerCase().includes(fileFilter.trim().toLowerCase()) ||
+                        (f.folder_path ?? "").toLowerCase().includes(fileFilter.trim().toLowerCase()))
+                    : allFiles;
+                  return `${filtered.length} file${filtered.length !== 1 ? "s" : ""}${allFilesTruncated ? " (capped)" : ""}`;
+                })()}
+              </span>
+            )}
+          </div>
+
+          {allFilesLoading ? (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>
+              Listing every file in this cabinet… this can take a moment on the first load.
+            </div>
+          ) : allFilesError ? (
+            <div style={{ padding: "16px", color: COLOURS.RED, fontSize: "13px" }}>{allFilesError}</div>
+          ) : (
+            <>
+              <div style={{
+                display: "grid", gridTemplateColumns: fixedCols("1.4fr 1fr 70px 90px 40px"), minWidth: 480,
+                padding: "9px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`, background: COLOURS.CARD_ALT,
+              }}>
+                {["Name", "Folder", "Size", "Date", ""].map((h, i) => (
+                  <span key={i} style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: i >= 2 ? "right" : "left" }}>{h}</span>
+                ))}
+              </div>
+              {(fileFilter.trim()
+                ? allFiles.filter((f) =>
+                    f.name.toLowerCase().includes(fileFilter.trim().toLowerCase()) ||
+                    (f.folder_path ?? "").toLowerCase().includes(fileFilter.trim().toLowerCase()))
+                : allFiles
+              ).slice(0, 500).map((file) => {
+                const isPreviewing = previewingFile === file.uid;
+                return (
+                  <div
+                    key={file.uid}
+                    onClick={() => openFile({ uid: file.uid, name: file.name, createdAt: file.createdAt, size: file.size })}
+                    style={{
+                      display: "grid", gridTemplateColumns: fixedCols("1.4fr 1fr 70px 90px 40px"), minWidth: 480,
+                      padding: "9px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                      cursor: isPreviewing ? "wait" : "pointer",
+                      opacity: isPreviewing ? 0.6 : 1, alignItems: "center",
+                    }}
+                    onMouseEnter={(e) => !isPreviewing && (e.currentTarget.style.background = COLOURS.CARD_ALT)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                      <span style={{ fontSize: "15px", flexShrink: 0 }}>{fileIcon(file.name)}</span>
+                      <span style={{ fontSize: "13px", color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
+                      {isPreviewing && <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>Opening…</span>}
+                    </div>
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.folder_path ?? "—"}</span>
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, textAlign: "right" }}>{formatFileSize(file.size)}</span>
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, textAlign: "right" }}>{formatFileDate(file.createdAt)}</span>
+                    <span style={{ textAlign: "right" }}>
+                      <a
+                        href={file.folderit_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Open in Folderit"
+                        style={{ fontSize: "13px", color: COLOURS.SLATE, textDecoration: "none" }}
+                      >↗</a>
+                    </span>
+                  </div>
+                );
+              })}
+              {allFiles.length === 0 && (
+                <div style={{ padding: "32px 16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>
+                  No files found in this cabinet.
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+      <>
       {/* Two-panel layout */}
       <div style={{
         display: "flex", border: `1px solid ${COLOURS.BORDER}`,
@@ -561,10 +720,43 @@ function BrowseView() {
         {/* Right: file list */}
         <div style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
           {!selectedFolder ? (
+            rootFiles.length > 0 ? (
+              /* Files sitting at the top level of the cabinet, outside any folder */
+              <>
+                <div style={{ padding: "9px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`, background: COLOURS.CARD_ALT, fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Files at cabinet root
+                </div>
+                {rootFiles.map((file) => {
+                  const isPreviewing = previewingFile === file.uid;
+                  return (
+                    <div
+                      key={file.uid}
+                      onClick={() => openFile(file)}
+                      style={{
+                        display: "grid", gridTemplateColumns: fixedCols("1fr 80px 100px"), minWidth: 320,
+                        padding: "10px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                        cursor: isPreviewing ? "wait" : "pointer", opacity: isPreviewing ? 0.6 : 1,
+                      }}
+                      onMouseEnter={(e) => !isPreviewing && (e.currentTarget.style.background = COLOURS.CARD_ALT)}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                        <span style={{ fontSize: "15px", flexShrink: 0 }}>{fileIcon(file.name)}</span>
+                        <span style={{ fontSize: "13px", color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
+                        {isPreviewing && <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>Opening…</span>}
+                      </div>
+                      <span style={{ fontSize: "12px", color: COLOURS.SLATE, textAlign: "right" }}>{formatFileSize(file.size)}</span>
+                      <span style={{ fontSize: "12px", color: COLOURS.SLATE, textAlign: "right" }}>{formatFileDate(file.createdAt)}</span>
+                    </div>
+                  );
+                })}
+              </>
+            ) : (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "10px", color: COLOURS.SLATE }}>
               <span style={{ fontSize: "32px" }}>📂</span>
               <span style={{ fontSize: "13px" }}>Select a folder on the left to view its contents</span>
             </div>
+            )
           ) : rightLoading ? (
             <div style={{ padding: "16px", color: COLOURS.SLATE, fontSize: "13px" }}>Loading…</div>
           ) : rightError ? (
@@ -642,6 +834,8 @@ function BrowseView() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

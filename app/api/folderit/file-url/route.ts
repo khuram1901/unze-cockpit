@@ -99,6 +99,43 @@ async function requestFolderitDownloadLink(accountUid: string, fileUid: string):
   return null;
 }
 
+// Content types the browser can render inline with no conversion and no
+// script-execution risk. text/html is intentionally absent — serving an
+// arbitrary uploaded HTML file inline from our own origin would let it run
+// JavaScript with the app's cookies.
+const SAFE_INLINE_TYPES = /^(application\/pdf|image\/(png|jpe?g|gif|webp|bmp|svg\+xml)|text\/(plain|csv))/i;
+
+// Last-resort preview: fetch the original file bytes and stream them inline
+// if (and only if) their content type is safely renderable by the browser.
+// Returns null when the type isn't safe — caller falls through to an error.
+async function tryStreamOriginalInline(accountUid: string, fileUid: string): Promise<Response | null> {
+  try {
+    const downloadUrl = await requestFolderitDownloadLink(accountUid, fileUid);
+    if (!downloadUrl) return null;
+    const fileRes = await fetch(downloadUrl);
+    if (!fileRes.ok) return null;
+
+    let contentType = fileRes.headers.get("content-type") || "application/octet-stream";
+    if (!SAFE_INLINE_TYPES.test(contentType)) return null;
+    // Serve SVG as plain text — rendered SVG can carry scripts.
+    if (/svg/i.test(contentType)) contentType = "text/plain; charset=utf-8";
+    // CSV renders better as plain text than as a download prompt.
+    if (/text\/csv/i.test(contentType)) contentType = "text/plain; charset=utf-8";
+
+    const buffer = await fileRes.arrayBuffer();
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": contentType,
+        "Content-Disposition": "inline",
+        "Cache-Control": "private, max-age=60",
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
 const SPREADSHEET_TABLE_CSS = `
   body { font-family: system-ui, -apple-system, sans-serif; padding: 16px; color: #1e293b; }
   h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin: 24px 0 8px; }
@@ -219,7 +256,7 @@ export async function GET(request: NextRequest) {
         // preview for at all (see requestFolderitPreviewLink above). Try
         // rendering it ourselves before giving up; if the bytes aren't a
         // spreadsheet SheetJS can parse, this returns null and we fall
-        // through to the original, honest error message.
+        // through to the next fallback.
         const spreadsheetHtml = await tryRenderSpreadsheetPreview(accountUid, fileUid);
         if (spreadsheetHtml) {
           return new Response(spreadsheetHtml, {
@@ -231,6 +268,14 @@ export async function GET(request: NextRequest) {
             },
           });
         }
+        // Second fallback: stream the ORIGINAL bytes inline if they're a
+        // type the browser can render safely by itself (PDF, images,
+        // plain text/CSV). Khuram: "Some files won't open/preview" — this
+        // covers files Folderit never generates renditions for. HTML is
+        // deliberately NOT allowed (it would execute scripts under the
+        // app's own origin); anything else keeps the honest error below.
+        const inlineOriginal = await tryStreamOriginalInline(accountUid, fileUid);
+        if (inlineOriginal) return inlineOriginal;
         return Response.json({ error: result.message }, { status: result.status });
       }
       // result.kind === "retry"

@@ -106,9 +106,15 @@ export async function GET(request: NextRequest) {
     // names). Users WITH a Folderit mapping use /access instead, so
     // Folderit's own folder-level permissions are enforced for them.
     if (isAdmin || !mapping) {
-      const rootRes = await folderitFetch(
-        `/v2/accounts/${accountUid}/folders?per-page=500`
-      );
+      // Fetch root folders AND root-level files in parallel. Khuram:
+      // "Files missing at cabinet root" — files sitting at the top level
+      // of a cabinet weren't shown because only /folders was called.
+      // The root /files endpoint may not exist on every Folderit plan, so
+      // a failure there degrades to an empty list rather than an error.
+      const [rootRes, rootFilesRes] = await Promise.all([
+        folderitFetch(`/v2/accounts/${accountUid}/folders?per-page=500`),
+        folderitFetch(`/v2/accounts/${accountUid}/files?per-page=500`),
+      ]);
       if (!rootRes.ok) {
         const body = await rootRes.text().catch(() => "");
         return Response.json(
@@ -118,9 +124,23 @@ export async function GET(request: NextRequest) {
       }
       const rootJson = await rootRes.json();
       const rootFolders: FolderitRawItem[] = rootJson?.folders ?? rootJson ?? [];
+
+      let rootFiles: FolderitRawItem[] = [];
+      if (rootFilesRes.ok) {
+        const filesJson = await rootFilesRes.json().catch(() => null);
+        rootFiles = filesJson?.files ?? (Array.isArray(filesJson) ? filesJson : []);
+      }
+
       return Response.json({
         folders: rootFolders.map((f) => ({ uid: f.uid, name: f.name ?? f.uid })),
-        files: [],
+        files: rootFiles
+          .filter((f) => f.uid)
+          .map((f) => ({
+            uid: f.uid,
+            name: f.name ?? f.uid,
+            createdAt: f.createdAt ?? null,
+            size: f.size ?? null,
+          })),
       });
     }
 

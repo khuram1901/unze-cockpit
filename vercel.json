@@ -64,6 +64,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/folderit/sync-files",
+      "schedule": "5,35 * * * *"
+    },
+    {
       "path": "/api/notifications/ceo-digest",
       "schedule": "30 6 * * 1-5"
     },
