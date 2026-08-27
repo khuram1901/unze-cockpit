@@ -17,7 +17,14 @@ import { findErrorCells } from "./workbook-audit";
 export type PnlLineItem = { plant: string; line: string; amount: number };
 export type PnlLedgerLine = { plant: string; accountGroup: string; accountCode: string | null; accountName: string | null; amount: number };
 export type PnlAllocationPct = { plant: string; pct: number };
-export type PnlCheck = { name: string; expected: number; reported: number; diff: number; passed: boolean };
+export type PnlCheck = {
+  name: string;
+  expected: number;
+  reported: number;
+  diff: number;
+  passed: boolean;
+  warning?: boolean; // true = soft check (shown as advisory, doesn't affect acceptance)
+};
 
 export type ParsedUnzePnl = {
   month: string;        // YYYY-MM-01
@@ -193,17 +200,10 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
     }
     const groupMatch = !colB && colA.match(/^[A-Za-z]+-\d+\s*-\s*(.+)$/);
     if (groupMatch) {
-      // Account-group header row, e.g. "O-61120000 - Admin-Utility" — the
-      // source file isn't fully consistent with spacing around the dash
-      // (compare "C-51110000 - Cost of Finished Goods" to the Taxation
-      // group's "TAX-81110000- Taxation"), so this allows either.
       currentGroup = groupMatch[1].trim();
       continue;
     }
     if (colB && colD) {
-      // Account-code detail row. Bound against the full header set (so HO's
-      // right edge is the Total column, not +Infinity), then drop the Total
-      // column itself — it's a rollup of the plant columns, not a plant.
       const vals = valuesByHeader(row, headers);
       for (const [plant, amount] of Object.entries(vals)) {
         if (plant === "Total" || amount === 0) continue;
@@ -212,14 +212,8 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
     }
   }
 
-  // ── Validation checks ──────────────────────────────────────────────
+  // ── Hard validation checks (all must pass for acceptance) ─────────────────
   const checks: PnlCheck[] = [];
-  // Confirmed against a real file: this raw monthly export's "Total" column
-  // is the sum of the three operating plants ONLY (FEDMIC + MEPCO + PESCO).
-  // HO is Head Office overhead shown separately, pre-allocation — it isn't
-  // folded into Total here (unlike the finished dashboard's own Total,
-  // which is post-allocation). Confirm this reading is correct before
-  // relying on it for real uploads.
   const plants = ["FEDMIC", "MEPCO", "PESCO"];
 
   for (const canonical of Object.values(SUMMARY_LINE_MAP)) {
@@ -249,12 +243,8 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
   const allocSum = allocationPct.reduce((s, a) => s + a.pct, 0);
   checks.push({ name: "Allocation percentages sum to 100%", expected: 100, reported: allocSum, diff: allocSum - 100, passed: Math.abs(allocSum - 100) <= 0.1 });
 
-  // Every ledger line across all five sections (Cost of sales, Non-operating,
-  // Operating costs, Taxation, Turnover) rolls up, per plant, to the exact
-  // negative of that plant's final line — confirmed against a real file.
-  // This is what actually verifies "every cell, every row" rather than just
-  // the 8 summary lines: if a single account-code cell were wrong, this
-  // catches it even though the summary lines above would still balance.
+  // Ledger-to-summary rollup — the most powerful check: every individual
+  // account code line must sum to exactly the final net profit per plant.
   for (const plant of ["FEDMIC", "MEPCO", "PESCO", "HO"]) {
     const ledgerSum = ledgerLines.filter((l) => l.plant === plant).reduce((s, l) => s + l.amount, 0);
     const expected = -(t("Net Profit Final", plant) || 0);
@@ -267,7 +257,86 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
     });
   }
 
-  const accepted = checks.length > 0 && checks.every((c) => c.passed);
+  // ── Additional hard checks ────────────────────────────────────────────────
+
+  // Gross Sale must be positive for the consolidated total (zero sales = file issue)
+  const totalSale = t("Gross Sale");
+  checks.push({
+    name: "Total Gross Sale > 0 (sales cannot be zero)",
+    expected: 1,
+    reported: totalSale,
+    diff: totalSale,
+    passed: totalSale > 0,
+  });
+
+  // Cost of Sale should be ≤ 0 (it's a cost — negative in P&L convention)
+  const totalCogs = t("Total Cost of Sale");
+  checks.push({
+    name: "Total Cost of Sale ≤ 0 (COGS must be negative in P&L)",
+    expected: 0,
+    reported: totalCogs,
+    diff: totalCogs,
+    passed: totalCogs <= TOL,
+  });
+
+  // Operating Expenses should be ≤ 0
+  const totalOpex = t("Operating Expenses");
+  checks.push({
+    name: "Operating Expenses ≤ 0 (must be negative in P&L)",
+    expected: 0,
+    reported: totalOpex,
+    diff: totalOpex,
+    passed: totalOpex <= TOL,
+  });
+
+  // ── Soft advisory checks (warning: true — shown but don't reject) ─────────
+
+  // Gross margin sanity: GP / Gross Sale should be between -10% and 85%
+  if (totalSale > 0) {
+    const gpTotal = t("GP");
+    const margin = gpTotal / totalSale;
+    checks.push({
+      name: "Gross margin within expected range (−10% to 85%)",
+      expected: 0,
+      reported: Math.round(margin * 1000) / 10,
+      diff: Math.round(margin * 1000) / 10,
+      passed: margin >= -0.10 && margin <= 0.85,
+      warning: true,
+    });
+  }
+
+  // Per-plant: each operating plant should have non-zero sales if it's active
+  for (const plant of plants) {
+    const sale = t("Gross Sale", plant);
+    if (sale === 0) {
+      checks.push({
+        name: `${plant} has zero Gross Sale — confirm plant was inactive this month`,
+        expected: 1,
+        reported: 0,
+        diff: -1,
+        passed: false,
+        warning: true,
+      });
+    }
+  }
+
+  // NPAT should not be more than 100% of sales (implausibly high profit)
+  if (totalSale > 0) {
+    const npat = t("Net Profit After Tax");
+    const npatMargin = npat / totalSale;
+    checks.push({
+      name: "Net margin after tax < 100% of sales (plausibility check)",
+      expected: 1,
+      reported: Math.round(npatMargin * 1000) / 10,
+      diff: npatMargin - 1,
+      passed: npatMargin < 1.0,
+      warning: true,
+    });
+  }
+
+  // ── Acceptance: only hard checks (non-warning) must all pass ─────────────
+  const hardChecks = checks.filter((c) => !c.warning);
+  const accepted = hardChecks.length > 0 && hardChecks.every((c) => c.passed);
 
   const auditIssues = findErrorCells(wb, [wb.SheetNames[0]]).map((a) => a.name);
   return { month, lineItems, ledgerLines, allocationPct, checks, accepted, auditIssues };

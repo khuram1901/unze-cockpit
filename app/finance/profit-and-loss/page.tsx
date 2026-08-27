@@ -229,14 +229,18 @@ function BsSubHeader({ label }: { label: string }) {
   );
 }
 
-function BsItem({ label, note, cur, prev }: { label: string; note?: string; cur: number; prev?: number | null }) {
+function BsItem({ label, note, cur, prev, onNoteClick }: { label: string; note?: string; cur: number; prev?: number | null; onNoteClick?: (n: string) => void }) {
   const chg = prev != null ? chgLabel(cur, prev) : null;
   const isNeg = cur < 0;
   const prevNeg = prev != null && prev < 0;
   return (
     <tr style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
       <td style={{ padding: "5px 10px 5px 22px", fontSize: "12px", color: COLOURS.INK_700 }}>{label}</td>
-      <td style={{ padding: "5px 10px", fontSize: "10px", color: COLOURS.INK_400, textAlign: "right", whiteSpace: "nowrap" }}>{note}</td>
+      <td style={{ padding: "5px 10px", fontSize: "10px", textAlign: "right", whiteSpace: "nowrap" }}>
+        {note && onNoteClick
+          ? <button onClick={() => onNoteClick(note)} style={{ background: "none", border: "none", cursor: "pointer", color: COLOURS.BLUE, fontSize: "10px", fontWeight: 700, textDecoration: "underline", padding: 0, fontFamily: "inherit" }}>{note}</button>
+          : <span style={{ color: COLOURS.INK_400 }}>{note}</span>}
+      </td>
       <td style={{ padding: "5px 10px", fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: isNeg ? COLOURS.RED : COLOURS.INK_700 }}>{fmtPKR(cur)}</td>
       <td style={{ padding: "5px 10px", fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: prevNeg ? COLOURS.RED : COLOURS.INK_400 }}>{prev != null ? fmtPKR(prev) : "—"}</td>
       <td style={{ padding: "5px 10px", fontSize: "10.5px", textAlign: "right", color: chg ? (chg.up ? COLOURS.GREEN : COLOURS.RED) : COLOURS.INK_400 }}>{chg ? chg.text : "—"}</td>
@@ -283,6 +287,27 @@ function RatioRow({ label, value, colour }: { label: string; value: string; colo
     </div>
   );
 }
+
+// ── Balance Sheet note definitions ──────────────────────────────────────────
+// These descriptions appear in the note detail panel when a note number is clicked.
+const BS_NOTES: Record<string, { title: string; description: string }> = {
+  "1":   { title: "Property, Plant & Equipment", description: "Tangible fixed assets carried at cost less accumulated depreciation and any impairment losses. Major categories include land & buildings, plant & machinery, vehicles, and furniture & fittings. Check for significant additions or disposals during the period — large movements should be cross-referenced with the fixed asset register. Depreciation is charged on the reducing-balance or straight-line basis as per the accounting policy." },
+  "2":   { title: "Long Term Investment", description: "Deposits and investments held for periods exceeding twelve months. For Unze Trading this typically includes security deposits paid to utility companies and landlords, and any strategic equity investments. These are carried at cost unless impairment evidence exists." },
+  "3":   { title: "Investment, Deposits & Receivables", description: "Current-period trade debtors (amounts owed by customers for goods already delivered) plus short-term advances to suppliers and other receivables due within twelve months. Review the ageing profile to assess collectability — debts over 90 days should be reviewed for provisioning. Does not include advance taxation (see Note 7)." },
+  "4–5": { title: "Stocks — Raw Materials, WIP, Finished Goods & Stores", description: "Inventories valued at the lower of cost and net realisable value. Includes: Note 4 — raw materials (leather, sole materials, chemicals), work-in-progress at various stages of the manufacturing process, and finished goods awaiting dispatch. Note 5 — stores and spares (factory consumables, maintenance parts) that don't meet the fixed-asset threshold. Significant month-on-month swings often indicate timing differences in production runs or dispatch patterns." },
+  "6":   { title: "Advance & Prepayments", description: "Advances paid to suppliers for goods/services not yet received, and prepaid expenses (rent, insurance premiums, subscriptions) that will be consumed within the next twelve months. These should reduce each month as the underlying service/goods are received. Rising advances can indicate supplier payment terms tightening or material procurement for an upcoming production cycle." },
+  "7":   { title: "Advance Taxation", description: "Income tax payments made in advance — comprising withholding tax deducted at source on sales and advance tax paid under Section 147 of the Income Tax Ordinance. This represents a refundable asset if total advance payments exceed the final assessed tax liability. It should grow through the year and reduce when the tax assessment is finalised or a refund is received." },
+  "8":   { title: "Cash at Bank & in Hand", description: "Bank account balances (current, savings, and FX accounts) plus petty cash held on premises. Should be reconciled to bank statements monthly. Significant unexplained reductions may indicate unauthorised withdrawals or timing differences. Large balances should be cross-checked against the treasury policy for idle-cash management." },
+  "9":   { title: "Owner Capital (Paid-Up Share Capital)", description: "The registered and fully paid share capital of Unze Trading Pvt. Ltd. This figure is fixed at the time of incorporation and only changes when new shares are issued or existing shares are bought back — both require a board resolution and Companies Act filing. If this figure changes unexpectedly between months, verify the source file immediately." },
+  "10":  { title: "HBL Short Term Facility", description: "Running finance facility (short-term borrowing / overdraft) from Habib Bank Limited. Key parameters to monitor: sanctioned limit, current utilisation, mark-up rate (typically KIBOR-linked), and the next annual renewal date. Utilisation above 80% of the sanctioned limit or approaching the renewal date without confirmation are red flags. Month-on-month increases should be linked to seasonal working capital needs." },
+  "11":  { title: "Loan from Family", description: "Unsecured loans provided by family members of the owners. These are typically interest-free or at below-market rates and classified as non-current based on agreed repayment schedules. Any change in balance should be supported by a written loan agreement. Repayment may be restricted by the terms of the HBL facility — check covenant compliance." },
+  "12":  { title: "Mazhar Sb A/c", description: "Director / principal shareholder current account with the business. Movements represent drawings (reductions) or capital injections (increases). Net drawings in excess of retained earnings could indicate liquidity stress. This account should be monitored alongside retained earnings — large debit movements in profitable months warrant explanation." },
+  "13":  { title: "Loan from Associates", description: "Amounts payable to associated companies or related parties under common ownership. Should be supported by written agreements specifying repayment terms and any interest provisions. Related-party loans require disclosure under IAS 24 and must be at arm's length or disclosed as non-arm's-length. Increases should be approved and documented." },
+  "14":  { title: "Lease Liabilities", description: "Present-value of future lease payments for right-of-use assets under IFRS 16 / IAS 17 (factories, retail outlets, warehouses). The non-current portion shown here covers payments due beyond twelve months. Monthly movements reflect the unwinding of the present-value discount (finance charge) less principal repayment. Compare against the lease schedule to verify." },
+  "15":  { title: "Accrued Liabilities", description: "Expenses incurred but not yet invoiced or paid at the balance sheet date. Typical items: accrued salaries and wages, utility bills received but not processed, professional fees (audit, legal), and other period-end accruals. A sudden drop may indicate under-accrual; a large jump may reflect catch-up accruals or a one-off provision." },
+  "16":  { title: "Payable Controls", description: "Trade creditors — amounts owed to suppliers for goods received but not yet paid. Also includes other current payables such as customer advances (deposits received for future orders). The payable days ratio (payables / COGS × 30) gives a sense of payment terms being utilised. Rapid reduction could indicate early-payment discounts being taken or supplier pressure." },
+  "17":  { title: "Taxation (Income Tax Payable)", description: "Estimated income tax liability for the current financial year, net of advance tax payments (Note 7). If advance tax exceeds the estimated liability, the net figure sits in Note 7 as a receivable. The provision should be updated each month based on year-to-date taxable profits. Prior-year under/over-provisions should also be reflected here until settled." },
+};
 
 export default function ProfitAndLossPage() {
   const { checking } = useRequireCapability("finance");
@@ -338,14 +363,17 @@ export default function ProfitAndLossPage() {
 
   // ── BS upload state ──────────────────────────────────────────────────
   const [showBsUpload, setShowBsUpload] = useState(false);
-  const [bsUploadMonth, setBsUploadMonth] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
   const [bsUploadFile, setBsUploadFile] = useState<File | null>(null);
+  // Which note number is expanded in the BS table notes panel
+  const [selectedNote, setSelectedNote] = useState<string | null>(null);
   const [bsUploading, setBsUploading] = useState(false);
-  const [bsUploadResult, setBsUploadResult] = useState<{ ok: boolean; month?: string; sheetUsed?: string; parsed?: Record<string, number>; error?: string } | null>(null);
+  const [bsUploadResult, setBsUploadResult] = useState<{
+    accepted?: boolean; ok?: boolean; month?: string; sheetUsed?: string;
+    parsed?: Record<string, number>; error?: string; summary?: string;
+    checks?: { name: string; expected: number; reported: number; diff: number; passed: boolean; note?: string }[];
+    auditWarnings?: string[];
+    restated?: { field: string; old_value: number; new_value: number }[];
+  } | null>(null);
 
   // ── PNL: load month list ─────────────────────────────────────────────
   const { monthFrom, monthTo } = useMemo(() => {
@@ -454,12 +482,12 @@ export default function ProfitAndLossPage() {
     setBsUploadResult(null);
     const form = new FormData();
     form.append("file", bsUploadFile);
-    form.append("month", bsUploadMonth);
+    // Month is auto-detected server-side from filename + sheet names
     const res = await authFetch("/api/finance/bs-upload", { method: "POST", body: form });
     const body = await res.json();
     setBsUploadResult(body);
     setBsUploading(false);
-    if (body.ok) {
+    if (body.accepted) {
       setBsUploadFile(null);
       // Refresh months list
       const { data } = await supabase.rpc("get_balance_sheet_months", { p_company_id: companyId });
@@ -661,12 +689,17 @@ export default function ProfitAndLossPage() {
     <AuthWrapper>
       <main style={{ padding: "14px 18px", maxWidth: "1100px" }}>
 
-        {/* Page header + upload button */}
+        {/* Page header + upload button (tab-aware) */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
           <PageHeader />
           {canUploadUnze && activeTab === "pnl" && (
             <button onClick={() => { setShowUpload(!showUpload); setUploadResults([]); }} style={chipBtn(showUpload)}>
               {showUpload ? "Close upload" : "Upload months"}
+            </button>
+          )}
+          {canUploadUnze && activeTab === "bs" && (
+            <button onClick={() => { setShowBsUpload(!showBsUpload); setBsUploadResult(null); }} style={chipBtn(showBsUpload)}>
+              {showBsUpload ? "Close upload" : "Upload month"}
             </button>
           )}
         </div>
@@ -1143,75 +1176,102 @@ export default function ProfitAndLossPage() {
               </div>
             ) : (
               <>
-                {/* ── BS Upload section ── */}
-                {canUploadUnze && (
+                {/* ── BS Upload panel (button lives in the page header) ── */}
+                {canUploadUnze && showBsUpload && (
                   <div style={{ marginBottom: "14px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                      <button
-                        onClick={() => { setShowBsUpload(!showBsUpload); setBsUploadResult(null); }}
-                        style={chipBtn(showBsUpload)}
-                      >
-                        {showBsUpload ? "Close upload" : "Upload month"}
-                      </button>
-                    </div>
-                    {showBsUpload && (
-                      <div style={{ ...cardStyle, marginTop: "10px" }}>
-                        <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY, marginBottom: "10px" }}>Upload Balance Sheet</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "flex-end" }}>
-                          <div>
-                            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "4px", fontWeight: 600 }}>MONTH</div>
-                            <input
-                              type="month"
-                              value={bsUploadMonth}
-                              onChange={(e) => setBsUploadMonth(e.target.value)}
-                              style={{ padding: "6px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px", fontFamily: "inherit" }}
-                            />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "4px", fontWeight: 600 }}>FILE (.xlsx)</div>
-                            <input
-                              type="file"
-                              accept=".xlsx"
-                              onChange={(e) => { setBsUploadFile(e.target.files?.[0] || null); setBsUploadResult(null); }}
-                              style={{ fontSize: "13px" }}
-                            />
-                          </div>
-                          <button
-                            onClick={handleBsUpload}
-                            disabled={!bsUploadFile || bsUploading}
-                            style={{ ...chipBtn(true), opacity: !bsUploadFile || bsUploading ? 0.5 : 1, cursor: !bsUploadFile || bsUploading ? "not-allowed" : "pointer" }}
-                          >
-                            {bsUploading ? "Uploading…" : "Upload"}
-                          </button>
+                    <div style={{ ...cardStyle }}>
+                      <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY, marginBottom: "10px" }}>Upload Balance Sheet</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "flex-end" }}>
+                        <div>
+                          <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "4px", fontWeight: 600 }}>FILE (.xlsx)</div>
+                          <input
+                            type="file"
+                            accept=".xlsx"
+                            onChange={(e) => { setBsUploadFile(e.target.files?.[0] || null); setBsUploadResult(null); }}
+                            style={{ fontSize: "13px" }}
+                          />
                         </div>
-                        <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "7px" }}>
-                          The parser looks for the &ldquo;BS (R)&rdquo; sheet and matches rows by label. Accepts the same Excel format as the June file.
-                        </div>
+                        <button
+                          onClick={handleBsUpload}
+                          disabled={!bsUploadFile || bsUploading}
+                          style={{ ...chipBtn(true), opacity: !bsUploadFile || bsUploading ? 0.5 : 1, cursor: !bsUploadFile || bsUploading ? "not-allowed" : "pointer" }}
+                        >
+                          {bsUploading ? "Uploading…" : "Upload"}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "7px" }}>
+                        Month is detected automatically from the filename (e.g. &ldquo;Balance Sheet Jun-26.xlsx&rdquo;). The parser looks for the &ldquo;BS (R)&rdquo; sheet and matches rows by label.
+                      </div>
                         {bsUploadResult && (
-                          <div style={{ marginTop: "12px", padding: "10px 14px", borderRadius: RADII.SM, background: bsUploadResult.ok ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT }}>
-                            {bsUploadResult.ok ? (
-                              <>
-                                <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.GREEN, marginBottom: "6px" }}>
-                                  ✓ Saved — {bsUploadResult.month?.slice(0, 7)} from sheet &ldquo;{bsUploadResult.sheetUsed}&rdquo;
-                                </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "3px 14px" }}>
-                                  {bsUploadResult.parsed && Object.entries(bsUploadResult.parsed).map(([k, v]) => (
-                                    <div key={k} style={{ fontSize: "11px", color: COLOURS.INK_700 }}>
-                                      <span style={{ color: COLOURS.SLATE }}>{k.replace(/_/g, " ")}:</span>{" "}
-                                      <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{Math.round(v).toLocaleString()}</span>
+                          <div style={{ marginTop: "12px" }}>
+                            {/* Summary banner */}
+                            <div style={{ padding: "10px 14px", borderRadius: RADII.SM, background: (bsUploadResult.accepted ?? bsUploadResult.ok) ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, marginBottom: "10px" }}>
+                              <div style={{ fontWeight: 700, fontSize: "13px", color: (bsUploadResult.accepted ?? bsUploadResult.ok) ? COLOURS.GREEN : COLOURS.RED }}>
+                                {(bsUploadResult.accepted ?? bsUploadResult.ok) ? "✓ " : "✗ "}{bsUploadResult.summary || bsUploadResult.error}
+                              </div>
+                              {bsUploadResult.sheetUsed && (
+                                <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px" }}>Sheet used: &ldquo;{bsUploadResult.sheetUsed}&rdquo; · {bsUploadResult.month?.slice(0, 7)}</div>
+                              )}
+                            </div>
+                            {/* Checks */}
+                            {bsUploadResult.checks && bsUploadResult.checks.length > 0 && (
+                              <div style={{ marginBottom: "10px" }}>
+                                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "5px", letterSpacing: ".05em" }}>INTEGRITY CHECKS</div>
+                                {bsUploadResult.checks.map((c, i) => (
+                                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, gap: "10px" }}>
+                                    <div>
+                                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: c.passed ? COLOURS.GREEN : COLOURS.RED }}>{c.passed ? "✓" : "✗"} </span>
+                                      <span style={{ fontSize: "11.5px", color: COLOURS.INK_700 }}>{c.name}</span>
+                                      {c.note && <div style={{ fontSize: "10.5px", color: COLOURS.RED, marginTop: "2px" }}>{c.note}</div>}
+                                    </div>
+                                    {!c.passed && (
+                                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, textAlign: "right", flexShrink: 0, fontFamily: "monospace" }}>
+                                        diff: {Math.round(c.diff).toLocaleString()}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {/* Audit warnings */}
+                            {bsUploadResult.auditWarnings && bsUploadResult.auditWarnings.length > 0 && (
+                              <div style={{ padding: "10px 12px", borderRadius: RADII.SM, background: COLOURS.WARNING_SOFT, marginBottom: "10px" }}>
+                                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.AMBER, marginBottom: "5px" }}>AUDIT WARNINGS</div>
+                                {bsUploadResult.auditWarnings.map((w, i) => (
+                                  <div key={i} style={{ fontSize: "11.5px", color: COLOURS.INK_700, padding: "2px 0" }}>⚠ {w}</div>
+                                ))}
+                              </div>
+                            )}
+                            {/* Restatements */}
+                            {bsUploadResult.restated && bsUploadResult.restated.length > 0 && (
+                              <div style={{ padding: "10px 12px", borderRadius: RADII.SM, background: COLOURS.INFO_SOFT, marginBottom: "10px" }}>
+                                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.BLUE, marginBottom: "5px" }}>CHANGES TO PREVIOUSLY REPORTED FIGURES</div>
+                                {bsUploadResult.restated.map((r, i) => (
+                                  <div key={i} style={{ fontSize: "11.5px", color: COLOURS.INK_700, padding: "2px 0", fontFamily: "monospace" }}>
+                                    ↺ {r.field}: {Math.round(r.old_value).toLocaleString()} → {Math.round(r.new_value).toLocaleString()}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {/* Parsed values (if accepted) */}
+                            {(bsUploadResult.accepted ?? bsUploadResult.ok) && bsUploadResult.parsed && (
+                              <details style={{ fontSize: "11px" }}>
+                                <summary style={{ cursor: "pointer", color: COLOURS.SLATE, marginBottom: "6px" }}>View parsed line items</summary>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "3px 14px", paddingTop: "6px" }}>
+                                  {Object.entries(bsUploadResult.parsed).map(([k, v]) => (
+                                    <div key={k} style={{ color: COLOURS.INK_700 }}>
+                                      <span style={{ color: COLOURS.SLATE }}>{k.replace(/_/g, " ")}: </span>
+                                      <span style={{ fontFamily: "monospace", fontWeight: 600, color: v < 0 ? COLOURS.RED : COLOURS.NAVY }}>{Math.round(v).toLocaleString()}</span>
                                     </div>
                                   ))}
                                 </div>
-                              </>
-                            ) : (
-                              <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.RED }}>{bsUploadResult.error}</div>
+                              </details>
                             )}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
 
                 {/* ── Period chips ── */}
                 <div style={{ display: "flex", gap: "5px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px" }}>
@@ -1377,18 +1437,18 @@ export default function ProfitAndLossPage() {
                         {/* ASSETS */}
                         <BsSectionHeader label="Assets" />
                         <BsSubHeader label="Fixed Assets" />
-                        <BsItem label="Property, Plant & Equipment"  note="1"   cur={bsData.ppe}                  prev={bsPrev?.ppe} />
-                        <BsItem label="Long Term Investment"          note="2"   cur={bsData.long_term_investment} prev={bsPrev?.long_term_investment} />
+                        <BsItem label="Property, Plant & Equipment"  note="1"   cur={bsData.ppe}                  prev={bsPrev?.ppe}                  onNoteClick={setSelectedNote} />
+                        <BsItem label="Long Term Investment"          note="2"   cur={bsData.long_term_investment} prev={bsPrev?.long_term_investment}  onNoteClick={setSelectedNote} />
                         <BsSubtotal label="Total Fixed Assets"                  cur={bsData.total_fixed}          prev={bsPrev?.total_fixed} />
 
                         <BsSpacer />
                         <BsSubHeader label="Current Assets" />
-                        <BsItem label="Investment, Deposits & Receivables" note="3"   cur={bsData.receivables}          prev={bsPrev?.receivables} />
-                        <BsItem label="Stocks — RM, WIP, FG, Stores & Spares" note="4–5" cur={bsData.stocks}            prev={bsPrev?.stocks} />
-                        <BsItem label="Advance & Prepayments"               note="6"   cur={bsData.advances_prepayments} prev={bsPrev?.advances_prepayments} />
-                        <BsItem label="Advance Taxation"                     note="7"   cur={bsData.advance_taxation}     prev={bsPrev?.advance_taxation} />
-                        <BsItem label="Cash at Bank & in Hand"               note="8"   cur={bsData.cash_bank}            prev={bsPrev?.cash_bank} />
-                        <BsSubtotal label="Total Current Assets"                        cur={bsData.total_current}        prev={bsPrev?.total_current} />
+                        <BsItem label="Investment, Deposits & Receivables"      note="3"   cur={bsData.receivables}          prev={bsPrev?.receivables}          onNoteClick={setSelectedNote} />
+                        <BsItem label="Stocks — RM, WIP, FG, Stores & Spares"  note="4–5" cur={bsData.stocks}                prev={bsPrev?.stocks}               onNoteClick={setSelectedNote} />
+                        <BsItem label="Advance & Prepayments"                   note="6"   cur={bsData.advances_prepayments} prev={bsPrev?.advances_prepayments}  onNoteClick={setSelectedNote} />
+                        <BsItem label="Advance Taxation"                         note="7"   cur={bsData.advance_taxation}     prev={bsPrev?.advance_taxation}      onNoteClick={setSelectedNote} />
+                        <BsItem label="Cash at Bank & in Hand"                   note="8"   cur={bsData.cash_bank}            prev={bsPrev?.cash_bank}             onNoteClick={setSelectedNote} />
+                        <BsSubtotal label="Total Current Assets"                            cur={bsData.total_current}        prev={bsPrev?.total_current} />
 
                         <BsSpacer />
                         <BsGrandTotal label="TOTAL ASSETS" cur={bsData.total_assets} prev={bsPrev?.total_assets} />
@@ -1397,26 +1457,26 @@ export default function ProfitAndLossPage() {
                         <BsSpacer />
                         <BsSectionHeader label="Equity & Liabilities" />
                         <BsSubHeader label="Capital & Reserves" />
-                        <BsItem label="Owner Capital"      note="9"  cur={bsData.owner_capital}    prev={bsPrev?.owner_capital} />
+                        <BsItem label="Owner Capital"      note="9"  cur={bsData.owner_capital}    prev={bsPrev?.owner_capital}    onNoteClick={setSelectedNote} />
                         <BsItem label="Revenue Reserves"             cur={bsData.revenue_reserves}  prev={bsPrev?.revenue_reserves} />
                         <BsItem label="Retained Earnings"            cur={bsData.retained_earnings} prev={bsPrev?.retained_earnings} />
                         <BsSubtotal label="Total Owner's Equity"     cur={bsData.total_equity}      prev={bsPrev?.total_equity} />
 
                         <BsSpacer />
                         <BsSubHeader label="Non-Current Liabilities" />
-                        <BsItem label="HBL Short Term Facility"   note="10" cur={bsData.hbl_stf}          prev={bsPrev?.hbl_stf} />
-                        <BsItem label="Loan from Family"           note="11" cur={bsData.loan_family}      prev={bsPrev?.loan_family} />
-                        <BsItem label="Mazhar Sb A/c"              note="12" cur={bsData.mazhar_sb_ac}     prev={bsPrev?.mazhar_sb_ac} />
-                        <BsItem label="Loan from Associates"       note="13" cur={bsData.loan_associates}  prev={bsPrev?.loan_associates} />
-                        <BsItem label="Lease Liabilities"          note="14" cur={bsData.lease_liabilities} prev={bsPrev?.lease_liabilities} />
+                        <BsItem label="HBL Short Term Facility"   note="10" cur={bsData.hbl_stf}           prev={bsPrev?.hbl_stf}           onNoteClick={setSelectedNote} />
+                        <BsItem label="Loan from Family"           note="11" cur={bsData.loan_family}       prev={bsPrev?.loan_family}        onNoteClick={setSelectedNote} />
+                        <BsItem label="Mazhar Sb A/c"              note="12" cur={bsData.mazhar_sb_ac}      prev={bsPrev?.mazhar_sb_ac}       onNoteClick={setSelectedNote} />
+                        <BsItem label="Loan from Associates"       note="13" cur={bsData.loan_associates}   prev={bsPrev?.loan_associates}    onNoteClick={setSelectedNote} />
+                        <BsItem label="Lease Liabilities"          note="14" cur={bsData.lease_liabilities} prev={bsPrev?.lease_liabilities}  onNoteClick={setSelectedNote} />
                         <BsSubtotal label="Total Non-Current Liabilities" cur={bsData.total_ncl} prev={bsPrev?.total_ncl} />
 
                         <BsSpacer />
                         <BsSubHeader label="Current Liabilities" />
-                        <BsItem label="Accrued Liabilities" note="15" cur={bsData.accrued_liabilities} prev={bsPrev?.accrued_liabilities} />
-                        <BsItem label="Payable Controls"    note="16" cur={bsData.payable_controls}    prev={bsPrev?.payable_controls} />
-                        <BsItem label="Taxation"            note="17" cur={bsData.taxation}             prev={bsPrev?.taxation} />
-                        <BsSubtotal label="Total Current Liabilities"  cur={bsData.total_cl}           prev={bsPrev?.total_cl} />
+                        <BsItem label="Accrued Liabilities" note="15" cur={bsData.accrued_liabilities} prev={bsPrev?.accrued_liabilities} onNoteClick={setSelectedNote} />
+                        <BsItem label="Payable Controls"    note="16" cur={bsData.payable_controls}     prev={bsPrev?.payable_controls}    onNoteClick={setSelectedNote} />
+                        <BsItem label="Taxation"            note="17" cur={bsData.taxation}              prev={bsPrev?.taxation}            onNoteClick={setSelectedNote} />
+                        <BsSubtotal label="Total Current Liabilities"  cur={bsData.total_cl}            prev={bsPrev?.total_cl} />
 
                         <BsSpacer />
                         <BsGrandTotal label="TOTAL EQUITY & LIABILITIES" cur={bsData.total_equity_liabilities} prev={bsPrev?.total_equity_liabilities} />
@@ -1424,6 +1484,30 @@ export default function ProfitAndLossPage() {
                     </table>
                   </div>
                 </div>
+
+                {/* ── Note Detail Panel ── */}
+                {selectedNote && BS_NOTES[selectedNote] && (
+                  <div style={{ marginBottom: "16px", border: `1.5px solid ${COLOURS.BLUE}`, borderRadius: RADII.SM, background: COLOURS.INFO_SOFT, padding: "16px 20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span style={{ background: COLOURS.BLUE, color: "#fff", borderRadius: RADII.PILL, fontWeight: 700, fontSize: "11px", padding: "2px 9px", letterSpacing: "0.02em" }}>
+                          Note {selectedNote}
+                        </span>
+                        <span style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY }}>
+                          {BS_NOTES[selectedNote].title}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setSelectedNote(null)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: COLOURS.SLATE, fontSize: "16px", lineHeight: 1, padding: "2px 4px", fontFamily: "inherit" }}
+                        aria-label="Close note"
+                      >×</button>
+                    </div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, lineHeight: 1.6 }}>
+                      {BS_NOTES[selectedNote].description}
+                    </div>
+                  </div>
+                )}
 
                 {/* ── Key Ratios ── */}
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" }}>
