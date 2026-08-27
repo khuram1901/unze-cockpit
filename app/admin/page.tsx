@@ -3364,35 +3364,47 @@ export default function AdminDataPage() {
                 disabled={savingFuelEdit}
                 onClick={async () => {
                   setSavingFuelEdit(true);
-                  // Upload new slip image if selected
-                  let slip_image_url: string | undefined = undefined;
-                  if (editSlipFile) {
-                    const fd = new FormData();
-                    fd.append("file", editSlipFile);
-                    const upRes = await authFetch("/api/admin/fuel/upload", { method: "POST", body: fd });
-                    const upJson = await upRes.json();
-                    if (upRes.ok) slip_image_url = upJson.url;
+                  try {
+                    // Upload new slip image if selected — abort if upload fails
+                    let slip_image_url: string | undefined = undefined;
+                    if (editSlipFile) {
+                      const fd = new FormData();
+                      fd.append("file", editSlipFile);
+                      const upRes = await authFetch("/api/admin/fuel/upload", { method: "POST", body: fd });
+                      const upJson = await upRes.json();
+                      if (!upRes.ok) {
+                        showToast(upJson.error || "Failed to upload slip image", "error");
+                        return;
+                      }
+                      slip_image_url = upJson.url;
+                    }
+                    const patchRes = await authFetch("/api/admin/fuel", {
+                      method: "PATCH",
+                      body: JSON.stringify({
+                        id: editingFuel.id,
+                        date: editingFuel.date,
+                        price_per_litre: editingFuel.price_per_litre,
+                        quantity_litres: editingFuel.quantity_litres,
+                        previous_odometer: editingFuel.previous_odometer,
+                        current_odometer: editingFuel.current_odometer,
+                        notes: editingFuel.notes || null,
+                        ...(slip_image_url !== undefined ? { slip_image_url } : {}),
+                      }),
+                    });
+                    const patchJson = await patchRes.json();
+                    if (!patchRes.ok) {
+                      showToast(patchJson.error || "Failed to save changes", "error");
+                      return;
+                    }
+                    if (editSlipPreviewUrl) URL.revokeObjectURL(editSlipPreviewUrl);
+                    setEditSlipFile(null);
+                    setEditSlipPreviewUrl(null);
+                    vehicleDetailCache.current.clear();
+                    if (vehiclePanel) loadVehicleDetail(vehiclePanel.vehicleId, vehicleDetailYear);
+                    setEditingFuel(null);
+                  } finally {
+                    setSavingFuelEdit(false);
                   }
-                  await authFetch("/api/admin/fuel", {
-                    method: "PATCH",
-                    body: JSON.stringify({
-                      id: editingFuel.id,
-                      date: editingFuel.date,
-                      price_per_litre: editingFuel.price_per_litre,
-                      quantity_litres: editingFuel.quantity_litres,
-                      previous_odometer: editingFuel.previous_odometer,
-                      current_odometer: editingFuel.current_odometer,
-                      notes: editingFuel.notes || null,
-                      ...(slip_image_url !== undefined ? { slip_image_url } : {}),
-                    }),
-                  });
-                  if (editSlipPreviewUrl) URL.revokeObjectURL(editSlipPreviewUrl);
-                  setEditSlipFile(null);
-                  setEditSlipPreviewUrl(null);
-                  vehicleDetailCache.current.clear();
-                  if (vehiclePanel) loadVehicleDetail(vehiclePanel.vehicleId, vehicleDetailYear);
-                  setEditingFuel(null);
-                  setSavingFuelEdit(false);
                 }}
                 style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: savingFuelEdit ? "default" : "pointer", opacity: savingFuelEdit ? 0.7 : 1 }}
               >
