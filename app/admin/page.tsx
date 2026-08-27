@@ -3089,7 +3089,7 @@ export default function AdminDataPage() {
       {addingFuel && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
-          onClick={() => !savingFuelAdd && setAddingFuel(null)}
+          onClick={() => { if (!savingFuelAdd) { if (addingFuel?.slipPreviewUrl) URL.revokeObjectURL(addingFuel.slipPreviewUrl); setAddingFuel(null); } }}
         >
           <div
             style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "460px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}
