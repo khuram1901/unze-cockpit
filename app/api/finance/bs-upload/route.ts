@@ -49,34 +49,49 @@ type BsParsed = {
   r_total_eq_liab: number;
 };
 
-// ── Keyword matchers ─────────────────────────────────────────────────────────
-const LINE_KEYWORDS: [keyof BsParsed, string[]][] = [
-  ["ppe",                  ["property, plant", "ppe", "fixed assets (net)", "tangible fixed"]],
-  ["long_term_investment",  ["long term invest", "long-term invest"]],
-  ["receivables",           ["investment, deposit", "receivables", "trade receivables", "debtors"]],
-  ["stocks",                ["stocks", "inventories", "stock -", "raw material", "finished goods"]],
-  ["advances_prepayments",  ["advance & prepay", "advances & prepay", "advance and prepay", "prepayments"]],
-  ["advance_taxation",      ["advance taxation", "advance tax"]],
-  ["cash_bank",             ["cash at bank", "cash & bank", "cash and bank", "bank balances", "cash in hand"]],
-  ["owner_capital",         ["owner capital", "owner's capital", "paid-up capital", "paid up capital", "share capital"]],
-  ["revenue_reserves",      ["revenue reserves", "general reserve", "capital reserve"]],
-  ["retained_earnings",     ["retained earnings", "accumulated profit", "profit & loss account", "profit and loss account", "accumulated loss"]],
-  ["hbl_stf",               ["hbl", "short term facility", "stf", "bank overdraft", "running finance"]],
-  ["loan_family",           ["loan from family", "family loan", "directors loan", "director's loan"]],
-  ["mazhar_sb_ac",          ["mazhar", "mazhar sb"]],
-  ["loan_associates",       ["loan from associates", "associates loan", "related party loan"]],
-  ["lease_liabilities",     ["lease liabilit", "right-of-use", "rou liability", "finance lease"]],
-  ["accrued_liabilities",   ["accrued liabilit", "accruals", "other payables"]],
-  ["payable_controls",      ["payable control", "trade and other payable", "creditors", "trade payable"]],
-  ["taxation",              ["taxation payable", "income tax payable", "tax payable", "provision for tax", "taxation -"]],
-  // Reported subtotals
-  ["r_total_fixed",         ["total fixed assets", "total non-current assets", "total tangible"]],
-  ["r_total_current",       ["total current assets"]],
-  ["r_total_assets",        ["total assets"]],
-  ["r_total_equity",        ["total equity", "total capital & reserves", "total capital and reserves", "total shareholders"]],
-  ["r_total_ncl",           ["total non-current liabilit", "total long term liabilit", "total ncl"]],
-  ["r_total_cl",            ["total current liabilit"]],
-  ["r_total_eq_liab",       ["total equity & liabilit", "total equity and liabilit", "total liabilit"]],
+// ── Field matchers ───────────────────────────────────────────────────────────
+// Built against the real "BS  (R)" sheet in Unze's monthly workbooks
+// (verified Feb–Jun 2026). `exact` = label must equal (after lowercasing and
+// space-collapsing); `contains` = substring match. Exact wins first so plain
+// "Taxation" can't collide with "Advance Taxation", and "Total Equity" (which
+// in this workbook is the GRAND total, equity + liabilities) can't swallow
+// "Owner's Equity" (the actual equity subtotal).
+type FieldMatcher = { exact?: string[]; contains?: string[] };
+const FIELD_MATCHERS: [keyof BsParsed, FieldMatcher][] = [
+  ["ppe",                  { contains: ["property, plant", "property plant", "ppe"] }],
+  ["long_term_investment", { contains: ["long term invest", "long-term invest"] }],
+  ["receivables",          { contains: ["investment, deposit", "receivable", "debtors"] }],
+  ["stocks",               { contains: ["stocks", "inventories", "raw material"] }],
+  ["advances_prepayments", { contains: ["advance & prepay", "advances & prepay", "advance and prepay", "prepayment"] }],
+  ["advance_taxation",     { contains: ["advance taxation", "advance tax"] }],
+  ["cash_bank",            { contains: ["cash at bank", "cash & bank", "cash and bank", "cash in hand", "bank balance"] }],
+  ["owner_capital",        { contains: ["owner capital", "owner's capital", "paid-up capital", "paid up capital", "share capital"] }],
+  ["revenue_reserves",     { contains: ["revenue reserve", "general reserve", "capital reserve"] }],
+  // Source file writes "Retain Earning Account" — match the stem.
+  ["retained_earnings",    { contains: ["retain earning", "retained earning", "accumulated profit", "accumulated loss", "profit & loss account", "profit and loss account"] }],
+  // Short-term bank facility slot: "HBL Short term Facility (STF)" from
+  // Jun-26 onward; "Faysal Bank - Overdraft Morahba Facility" in earlier
+  // months. Same balance-sheet slot (note 10) → same DB column.
+  ["hbl_stf",              { contains: ["hbl", "short term facility", "stf", "overdraft", "faysal", "morahba", "running finance"] }],
+  ["loan_family",          { contains: ["loan from family", "family loan", "directors loan", "director's loan"] }],
+  ["mazhar_sb_ac",         { contains: ["mazhar"] }],
+  ["loan_associates",      { contains: ["loan from associate", "associates loan", "related party loan"] }],
+  ["lease_liabilities",    { contains: ["lease liabilit", "right-of-use", "finance lease"] }],
+  // Source file spells it "Accrued Libilities" — match "accrued" alone.
+  ["accrued_liabilities",  { contains: ["accrued", "accruals"] }],
+  ["payable_controls",     { contains: ["payable control", "trade and other payable", "creditors", "trade payable"] }],
+  ["taxation",             { exact: ["taxation"], contains: ["taxation payable", "income tax payable", "tax payable", "provision for tax"] }],
+  // Reported totals as this workbook labels them:
+  //   "Total Assets"   → total assets
+  //   "Owner's Equity" → equity subtotal
+  //   "Total Equity"   → grand total (equity + liabilities) — quirk of this format
+  ["r_total_fixed",        { exact: ["total fixed assets", "total non-current assets"] }],
+  ["r_total_current",      { exact: ["total current assets"] }],
+  ["r_total_assets",       { exact: ["total assets"] }],
+  ["r_total_equity",       { exact: ["owner's equity", "owners equity", "total owner's equity"] }],
+  ["r_total_ncl",          { exact: ["total non-current liabilities", "total long term liabilities"] }],
+  ["r_total_cl",           { exact: ["total current liabilities"] }],
+  ["r_total_eq_liab",      { exact: ["total equity", "total equity & liabilities", "total equity and liabilities", "total capital & liabilities"] }],
 ];
 
 // Normally non-zero fields — flag these if they come back 0
@@ -87,70 +102,57 @@ const NORMALLY_NONZERO: (keyof BsParsed)[] = [
 ];
 
 // ── Month auto-detection ─────────────────────────────────────────────────────
-// Searches filename and sheet names for a readable month reference.
-// Handles: "Jun-26", "Jun26", "June 2026", "2026-06", "26-06" etc.
-function detectMonth(filename: string, wb: XLSX.WorkBook): string | null {
-  const MONTH_SHORT: Record<string, string> = {
-    jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
-    jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
-  };
-  // Sources in priority order: filename (most likely to be labelled correctly), then sheet names
+// Priority: ① the BS sheet's own title row ("AS AT FEBRUARY 28, 2026") — the
+// most reliable source; ② the filename; ③ other sheet names (last resort —
+// these workbooks carry stale tabs like "Mar-26" in every month's file).
+// Filename handles "Jun-26", "Jun26", "June 2026", "February 28 26"
+// (day-then-year — the LAST number is the year), and ISO "2026-06".
+const MONTH_SHORT: Record<string, string> = {
+  jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+  jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+};
+const MONTH_RE = "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
+
+function detectMonth(filename: string, wb: XLSX.WorkBook, bsRows: unknown[][] | null): string | null {
+  // ① Sheet title: "AS AT <MONTH> <DAY>, <YEAR>"
+  if (bsRows) {
+    for (const row of bsRows.slice(0, 8)) {
+      for (const cell of row) {
+        const s = String(cell ?? "").toLowerCase();
+        const m = s.match(new RegExp(`as\\s+at\\s+(${MONTH_RE})\\s+(\\d{1,2})[,\\s]+(\\d{4})`));
+        if (m) {
+          const mn = MONTH_SHORT[m[1].slice(0, 3)];
+          if (mn) return `${m[3]}-${mn}-01`;
+        }
+      }
+    }
+  }
+  // ② Filename, then ③ sheet names
   const sources = [filename, ...wb.SheetNames];
   for (const src of sources) {
     const s = src.toLowerCase();
-
-    // ① Named month + 2-or-4 digit year: "Jun-26" "june 2026" "Jun26"
-    const named = s.match(
-      /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[- _]?(\d{2,4})\b/
-    );
+    // Named month followed by 1–2 numbers. Two numbers ("February 28 26")
+    // means day-then-year — the LAST number is the year.
+    const named = s.match(new RegExp(`\\b(${MONTH_RE})[- _]?(\\d{1,4})(?:[- _,]+(\\d{2,4}))?\\b`));
     if (named) {
-      const short = named[1].slice(0, 3);
-      const mn = MONTH_SHORT[short];
-      let yr = named[2];
+      const mn = MONTH_SHORT[named[1].slice(0, 3)];
+      let yr = named[3] || named[2];
+      if (yr.length === 1) continue; // single digit — ambiguous, keep looking
       if (yr.length === 2) yr = `20${yr}`;
-      if (mn && yr.length === 4) return `${yr}-${mn}-01`;
+      if (mn && yr.length === 4 && +yr >= 2000 && +yr <= 2099) return `${yr}-${mn}-01`;
     }
-
-    // ② ISO-ish: "2026-06" or "2026/06"
+    // ISO-ish: "2026-06" or "2026/06"
     const iso = s.match(/\b(20\d{2})[- /](\d{2})\b/);
-    if (iso) {
-      const yr = iso[1], mm = iso[2];
-      if (parseInt(mm) >= 1 && parseInt(mm) <= 12) return `${yr}-${mm}-01`;
-    }
+    if (iso && +iso[2] >= 1 && +iso[2] <= 12) return `${iso[1]}-${iso[2]}-01`;
   }
   return null;
-}
-
-function lastNonZeroNum(row: unknown[]): number | null {
-  let last: number | null = null;
-  for (let i = 1; i < row.length; i++) {
-    const v = row[i];
-    if (typeof v === "number" && !Number.isNaN(v) && v !== 0) last = v;
-  }
-  return last;
-}
-function firstNum(row: unknown[]): number | null {
-  for (let i = 1; i < row.length; i++) {
-    const v = row[i];
-    if (typeof v === "number" && !Number.isNaN(v)) return v;
-  }
-  return null;
-}
-
-function findValue(rows: unknown[][], keywords: string[]): number {
-  for (const row of rows) {
-    const label = String(row[0] ?? row[1] ?? "").toLowerCase().trim();
-    if (keywords.some((k) => label.includes(k.toLowerCase()))) {
-      const v = lastNonZeroNum(row) ?? firstNum(row);
-      if (v !== null) return v;
-    }
-  }
-  return 0;
 }
 
 function findBsSheet(wb: XLSX.WorkBook): { sheet: XLSX.WorkSheet; name: string } | null {
+  // Sheet is named "BS  (R)" (two spaces) in the real files — collapse
+  // whitespace before matching.
   const preferred = wb.SheetNames.find((n) =>
-    /bs\s*\(\s*r\s*\)/i.test(n.replace(/\s/g, "")) || /^bs[\s_-]?r$/i.test(n.trim())
+    /bs\s*\(\s*r\s*\)/i.test(n.replace(/\s+/g, " ")) || /^bs[\s_-]?r$/i.test(n.trim())
   );
   if (preferred) return { sheet: wb.Sheets[preferred], name: preferred };
   const fallback = wb.SheetNames.find((n) => /\bbs\b/i.test(n));
@@ -158,17 +160,47 @@ function findBsSheet(wb: XLSX.WorkBook): { sheet: XLSX.WorkSheet; name: string }
   return null;
 }
 
-function parseSheet(wb: XLSX.WorkBook): { parsed: BsParsed; sheetUsed: string } | { error: string } {
+// The current-month value column: the sheet has paired columns (current month
+// then prior year), each headed "Rupees" with a "%" beside it. The FIRST
+// "Rupees" header is the current month. Falls back to column D.
+function findValueCol(rows: unknown[][]): number {
+  for (const row of rows.slice(0, 10)) {
+    for (let c = 0; c < row.length; c++) {
+      if (String(row[c] ?? "").trim().toLowerCase() === "rupees") return c;
+    }
+  }
+  return 3;
+}
+
+function parseSheet(wb: XLSX.WorkBook): { parsed: BsParsed; sheetUsed: string; rows: unknown[][] } | { error: string } {
   const found = findBsSheet(wb);
   if (!found) {
     return { error: `No Balance Sheet sheet found. Available sheets: ${wb.SheetNames.join(", ")}. Expecting a sheet named "BS (R)" or similar.` };
   }
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(found.sheet, { header: 1, defval: null });
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(found.sheet, { header: 1, defval: null, raw: true });
+  const valueCol = findValueCol(rows);
   const parsed = {} as BsParsed;
-  for (const [field, keywords] of LINE_KEYWORDS) {
-    (parsed as Record<string, number>)[field] = findValue(rows, keywords);
+  for (const [field] of FIELD_MATCHERS) (parsed as Record<string, number>)[field] = 0;
+
+  const matchedRows = new Set<number>();
+  for (const [field, m] of FIELD_MATCHERS) {
+    for (let r = 0; r < rows.length; r++) {
+      if (matchedRows.has(r)) continue;
+      const row = rows[r];
+      const label = String(row[1] ?? row[0] ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+      if (!label) continue;
+      const isExact = (m.exact || []).some((k) => label === k);
+      const isContains = !isExact && (m.contains || []).some((k) => label.includes(k));
+      if (!isExact && !isContains) continue;
+      const v = row[valueCol];
+      if (typeof v === "number" && !Number.isNaN(v)) {
+        (parsed as Record<string, number>)[field] = v;
+        matchedRows.add(r);
+        break;
+      }
+    }
   }
-  return { parsed, sheetUsed: found.name };
+  return { parsed, sheetUsed: found.name, rows };
 }
 
 // ── Audit checks ─────────────────────────────────────────────────────────────
@@ -389,20 +421,21 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
 
-    // Auto-detect month from filename and sheet names
-    const detected = detectMonth(file.name, wb);
-    if (!detected) {
-      return NextResponse.json({
-        error: `Could not detect the month from the filename "${file.name}" or sheet names (${wb.SheetNames.join(", ")}). ` +
-          `Rename the file to include the month, e.g. "Balance Sheet Jun-26.xlsx", and re-upload.`,
-      }, { status: 422 });
-    }
-    month = detected;
-
     const result = parseSheet(wb);
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 422 });
     parsed = result.parsed;
     sheetUsed = result.sheetUsed;
+
+    // Auto-detect month: BS sheet title ("AS AT ...") first, then filename,
+    // then sheet names.
+    const detected = detectMonth(file.name, wb, result.rows);
+    if (!detected) {
+      return NextResponse.json({
+        error: `Could not detect the month from the sheet title, the filename "${file.name}", or sheet names. ` +
+          `Rename the file to include the month, e.g. "Balance Sheet Jun-26.xlsx", and re-upload.`,
+      }, { status: 422 });
+    }
+    month = detected;
   } catch (e) {
     return NextResponse.json({ error: "Could not read this file: " + (e instanceof Error ? e.message : String(e)) }, { status: 400 });
   }
