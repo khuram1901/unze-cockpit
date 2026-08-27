@@ -18,6 +18,7 @@ import AuthWrapper from "../../lib/AuthWrapper";
 import { authFetch, supabase } from "../../lib/supabase";
 import { COLOURS, RADII, cardStyle, PageHeader, SkeletonRows } from "../../lib/SharedUI";
 import { useRequireCapability } from "../../lib/useRouteGuard";
+import { IFPL_COMPANY_ID } from "../../lib/constants";
 import { useUserCtx } from "../../lib/useUserCtx";
 import { widgetVisible } from "../../lib/permissions";
 import { formatDateUK } from "../../lib/dateUtils";
@@ -74,6 +75,239 @@ const chipBtn = (active: boolean): React.CSSProperties => ({
 const sectionTitle: React.CSSProperties = { fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY };
 const sectionCaption: React.CSSProperties = { fontSize: "11px", color: COLOURS.INK_400, marginBottom: "8px", marginTop: "2px" };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Balance Sheet (mirrors the Unze Trading BS tab, adapted to Imperial's
+// statement structure: partner-funded equity, supplier-credit-heavy current
+// liabilities, retail stock as the dominant asset).
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Row returned by get_balance_sheet_ifl RPC (raw table row)
+type IflBsRow = {
+  month: string;
+  partner_waqas: number; partner_remon: number; partner_samira: number;
+  retained_earnings: number;
+  lt_payable_khurram: number; lt_provident_fund: number;
+  trade_creditors: number; security_deposits: number; charity_uk: number;
+  payable_related_parties: number; intercompany_payables: number;
+  other_payables: number; accrued_expenses: number;
+  fixed_assets: number; receivables_kamran: number; long_term_investments: number;
+  provident_fund_asset: number;
+  stock: number; intercompany_receivables: number; receivables_directors: number;
+  trade_debtors: number; supplier_deposits: number; prepayments: number;
+  employee_loans: number; advance_income_tax: number; cash_bank: number;
+  audit_warnings?: string[] | null;
+};
+
+// Account-level note line returned by get_balance_sheet_notes RPC
+type BsNoteLine = {
+  note_no: number;
+  section: string | null;
+  account_code: string | null;
+  account_name: string;
+  amount: number | null;
+  is_total: boolean;
+  is_header: boolean;
+  row_order: number;
+};
+
+// Format full PKR integer with commas; negatives in parentheses
+const fmtPKR = (n: number | null | undefined): string => {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  const abs = Math.round(Math.abs(n)).toLocaleString();
+  return n < 0 ? `(${abs})` : abs;
+};
+
+// % change string with arrow
+const chgLabel = (cur: number, prev: number | null | undefined): { text: string; up: boolean } | null => {
+  if (prev === null || prev === undefined || prev === 0) return null;
+  const pct = ((cur - prev) / Math.abs(prev)) * 100;
+  if (!Number.isFinite(pct)) return null;
+  const rounded = Math.round(pct * 10) / 10;
+  return { text: `${rounded > 0 ? "▲" : rounded < 0 ? "▼" : ""} ${Math.abs(rounded)}%`, up: rounded >= 0 };
+};
+
+function BsSectionHeader({ label }: { label: string }) {
+  return (
+    <tr>
+      <td colSpan={5} style={{ padding: "8px 10px 4px", fontSize: "10px", fontWeight: 700, color: COLOURS.SLATE, letterSpacing: ".08em", textTransform: "uppercase", background: COLOURS.TRACK }}>{label}</td>
+    </tr>
+  );
+}
+function BsSubHeader({ label }: { label: string }) {
+  return (
+    <tr>
+      <td colSpan={5} style={{ padding: "8px 10px 3px 10px", fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, letterSpacing: ".05em", textTransform: "uppercase" }}>{label}</td>
+    </tr>
+  );
+}
+function BsItem({ label, note, cur, prev, onNoteClick }: { label: string; note?: string; cur: number; prev?: number | null; onNoteClick?: (n: string) => void }) {
+  const chg = prev != null ? chgLabel(cur, prev) : null;
+  const isNeg = cur < 0;
+  const prevNeg = prev != null && prev < 0;
+  return (
+    <tr style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+      <td style={{ padding: "5px 10px 5px 22px", fontSize: "12px", color: COLOURS.INK_700 }}>{label}</td>
+      <td style={{ padding: "5px 10px", fontSize: "10px", textAlign: "right", whiteSpace: "nowrap" }}>
+        {note && onNoteClick
+          ? <button onClick={() => onNoteClick(note)} style={{ background: "none", border: "none", cursor: "pointer", color: COLOURS.BLUE, fontSize: "10px", fontWeight: 700, textDecoration: "underline", padding: 0, fontFamily: "inherit" }}>{note}</button>
+          : <span style={{ color: COLOURS.INK_400 }}>{note}</span>}
+      </td>
+      <td style={{ padding: "5px 10px", fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: isNeg ? COLOURS.RED : COLOURS.INK_700 }}>{fmtPKR(cur)}</td>
+      <td style={{ padding: "5px 10px", fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: prevNeg ? COLOURS.RED : COLOURS.INK_400 }}>{prev != null ? fmtPKR(prev) : "—"}</td>
+      <td style={{ padding: "5px 10px", fontSize: "10.5px", textAlign: "right", color: chg ? (chg.up ? COLOURS.GREEN : COLOURS.RED) : COLOURS.INK_400 }}>{chg ? chg.text : "—"}</td>
+    </tr>
+  );
+}
+function BsSubtotal({ label, cur, prev }: { label: string; cur: number; prev?: number | null }) {
+  const chg = prev != null ? chgLabel(cur, prev) : null;
+  return (
+    <tr style={{ borderTop: `1px solid ${COLOURS.SLATE}`, borderBottom: `2px solid ${COLOURS.SLATE}` }}>
+      <td style={{ padding: "6px 10px", fontWeight: 600, fontSize: "12px", color: COLOURS.NAVY }}>{label}</td>
+      <td></td>
+      <td style={{ padding: "6px 10px", fontWeight: 600, fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: COLOURS.BLUE }}>{fmtPKR(cur)}</td>
+      <td style={{ padding: "6px 10px", fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: COLOURS.INK_400 }}>{prev != null ? fmtPKR(prev) : "—"}</td>
+      <td style={{ padding: "6px 10px", fontSize: "10.5px", textAlign: "right", color: chg ? (chg.up ? COLOURS.GREEN : COLOURS.RED) : COLOURS.INK_400 }}>{chg ? chg.text : ""}</td>
+    </tr>
+  );
+}
+function BsGrandTotal({ label, cur, prev }: { label: string; cur: number; prev?: number | null }) {
+  const chg = prev != null ? chgLabel(cur, prev) : null;
+  return (
+    <tr>
+      <td style={{ padding: "8px 10px", fontWeight: 700, fontSize: "12.5px", background: COLOURS.NAVY, color: "white", borderRadius: "5px 0 0 5px" }}>{label}</td>
+      <td style={{ background: COLOURS.NAVY }}></td>
+      <td style={{ padding: "8px 10px", fontWeight: 700, fontSize: "12.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", background: COLOURS.NAVY, color: "white" }}>{fmtPKR(cur)}</td>
+      <td style={{ padding: "8px 10px", fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", background: COLOURS.NAVY, color: COLOURS.INK_400 }}>{prev != null ? fmtPKR(prev) : "—"}</td>
+      <td style={{ padding: "8px 10px", fontSize: "10.5px", textAlign: "right", background: COLOURS.NAVY, color: COLOURS.INK_400, borderRadius: "0 5px 5px 0" }}>{chg ? chg.text : ""}</td>
+    </tr>
+  );
+}
+function BsSpacer() {
+  return <tr><td colSpan={5} style={{ height: "8px" }}></td></tr>;
+}
+function RatioRow({ label, value, colour }: { label: string; value: string; colour: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+      <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{label}</span>
+      <span style={{ fontSize: "12.5px", fontWeight: 700, fontFamily: "monospace", color: colour }}>{value}</span>
+    </div>
+  );
+}
+
+// Note summaries shown above the account-level breakdown in the note panel.
+const IFL_BS_NOTES: Record<string, { title: string; description: string }> = {
+  "1": { title: "Partner Investments", description: "Capital invested by the partners — Waqas Saleem, Remon Ahmed and Samira Waqas. Movements reflect new investment, transfers to related ventures and dividends." },
+  "2": { title: "Retained Earnings", description: "Accumulated profit kept in the business: opening balance plus the period's profit, less dividends and charity." },
+  "3": { title: "Supplier Deposits", description: "Security deposits held against rental properties and advances paid to suppliers (local and China)." },
+  "4": { title: "Long Term Investments", description: "Investments outside day-to-day retail — Jhang Phase 2 shop fit-out and the KKBJ investment account." },
+  "5": { title: "Stock", description: "Inventory across warehouse and shops: retail stock, packing material and office supplies. The single largest asset on the balance sheet." },
+  "6": { title: "Prepayments", description: "Expenses paid ahead of use — prepaid expenses, store prepayments, China shipment costs, insurance and the customs PD account." },
+  "7": { title: "Employee Loans & Advances", description: "Advances against salary and loans to head-office staff." },
+  "8": { title: "Cash & Bank", description: "Cash in hand and every bank account, plus credit-card balances. The note lists each account with its balance." },
+  "9": { title: "Advance Income Tax", description: "Withholding and advance income tax already paid — on imports, services, utilities, bank profit and customer collections — recoverable against the final tax bill." },
+};
+
+// Plain-English CEO insights — every sentence computed from the selected
+// period's numbers.
+function IflInsightsCard({ monthLabel, data, prev }: { monthLabel: string; data: IflBsRow; prev: IflBsRow | null }) {
+  const t = (d: IflBsRow) => {
+    const equity = d.partner_waqas + d.partner_remon + d.partner_samira + d.retained_earnings;
+    const ltLiab = d.lt_payable_khurram + d.lt_provident_fund;
+    const stLiab = d.trade_creditors + d.security_deposits + d.charity_uk + d.payable_related_parties + d.intercompany_payables + d.other_payables + d.accrued_expenses;
+    const ltAssets = d.fixed_assets + d.receivables_kamran + d.long_term_investments + d.provident_fund_asset;
+    const curAssets = d.stock + d.intercompany_receivables + d.receivables_directors + d.trade_debtors + d.supplier_deposits + d.prepayments + d.employee_loans + d.advance_income_tax + d.cash_bank;
+    return { equity, ltLiab, stLiab, ltAssets, curAssets, assets: ltAssets + curAssets };
+  };
+  const c = t(data);
+  const p = prev ? t(prev) : null;
+  const currentRatio = c.stLiab > 0 ? c.curAssets / c.stLiab : null;
+  const quickRatio = c.stLiab > 0 ? (c.curAssets - data.stock) / c.stLiab : null;
+  const cashRatio = c.stLiab > 0 ? data.cash_bank / c.stLiab : null;
+  const debtToEquity = c.equity > 0 ? (c.ltLiab + c.stLiab) / c.equity : null;
+  const equityRatio = c.assets > 0 ? (c.equity / c.assets) * 100 : null;
+  const workingCapital = c.curAssets - c.stLiab;
+  const cashPct = cashRatio !== null ? Math.round(cashRatio * 100) : null;
+  const rs = (n: number) => `₨${fmtM(n)}`;
+
+  const liqVerdict = currentRatio === null ? null
+    : currentRatio >= 2 ? { word: "comfortable", colour: COLOURS.GREEN }
+    : currentRatio >= 1 ? { word: "adequate but worth watching", colour: COLOURS.AMBER }
+    : { word: "strained — bills due exceed liquid assets", colour: COLOURS.RED };
+  const levVerdict = debtToEquity === null ? null
+    : debtToEquity < 0.5 ? { word: "very low reliance on borrowed money", colour: COLOURS.GREEN }
+    : debtToEquity < 1 ? { word: "moderate reliance on outside money", colour: COLOURS.AMBER }
+    : { word: "heavy reliance on outside money — mostly supplier credit", colour: COLOURS.RED };
+
+  const overall = liqVerdict && levVerdict
+    ? currentRatio! >= 2 && debtToEquity! < 0.5
+      ? "Overall this is a strong position: the business owns far more than it owes, carries little debt, and can cover its short-term bills several times over."
+      : currentRatio! >= 1 && debtToEquity! < 1.5
+      ? "Overall the position is workable, but the balance sheet leans on supplier credit and stock — the items below deserve regular attention."
+      : "Overall the position needs attention: short-term obligations are large relative to the resources available to pay them."
+    : "";
+
+  const watch: string[] = [];
+  if (cashRatio !== null && cashRatio < 0.5) {
+    watch.push(`Actual cash covers only ${cashPct}% of short-term bills (${rs(data.cash_bank)} against ${rs(c.stLiab)}). Everything else depends on selling stock and collecting receivables on time — if sales slow, cash gets tight quickly.`);
+  }
+  if (c.curAssets > 0 && data.stock / c.curAssets > 0.5) {
+    watch.push(`Stock is ${Math.round((data.stock / c.curAssets) * 100)}% of current assets (${rs(data.stock)}). Stock only becomes money when it sells — slow-moving lines quietly tie up working capital and risk end-of-season markdowns.`);
+  }
+  if (c.stLiab > 0 && data.trade_creditors / c.stLiab > 0.7) {
+    watch.push(`Trade creditors are ${Math.round((data.trade_creditors / c.stLiab) * 100)}% of what the business owes short-term (${rs(data.trade_creditors)}). Growth financed by supplier credit is cheap, but it means suppliers effectively fund the shelves — keep relationships and payment terms healthy.`);
+  }
+  if (p && prev && prev.cash_bank > 0 && Math.abs(data.cash_bank - prev.cash_bank) / prev.cash_bank > 0.3) {
+    const dir = data.cash_bank > prev.cash_bank ? "rose" : "fell";
+    watch.push(`Cash ${dir} sharply vs the prior period (${rs(prev.cash_bank)} → ${rs(data.cash_bank)}). One-off movements are fine; a repeating slide is the earliest warning a CEO gets.`);
+  }
+  const watchShown = watch.slice(0, 3);
+  const wcChange = p ? workingCapital - (p.curAssets - p.stLiab) : null;
+
+  const para: React.CSSProperties = { fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7, marginBottom: "10px" };
+  const h: React.CSSProperties = { fontSize: "11px", fontWeight: 700, color: COLOURS.NAVY, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px", marginTop: "12px" };
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: "20px" }}>
+      <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "2px" }}>What these numbers mean — {monthLabel}</div>
+      <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "10px" }}>A plain-English read of the ratios above. Every figure updates with the period you select.</div>
+
+      {overall && <div style={{ ...para, fontWeight: 600, color: COLOURS.NAVY }}>{overall}</div>}
+
+      <div style={h}>Can the business pay its bills? (Liquidity)</div>
+      <div style={para}>
+        {currentRatio !== null && <>For every ₨1 of bills due within the year, the business holds <b>₨{currentRatio.toFixed(2)}</b> in assets that are cash or will soon become cash — {liqVerdict && <span style={{ color: liqVerdict.colour, fontWeight: 600 }}>{liqVerdict.word}</span>}. (Above 2 is comfortable; below 1 means bills exceed liquid resources.) </>}
+        {quickRatio !== null && <>Strip out stock — which must sell first — and that drops to <b>₨{quickRatio.toFixed(2)}</b> per ₨1 owed. </>}
+        {cashRatio !== null && <>In actual cash at the bank today, there is <b>₨{cashRatio.toFixed(2)}</b> per ₨1 owed — roughly <b>{cashPct}%</b> of short-term dues could be settled immediately.</>}
+      </div>
+
+      <div style={h}>Whose money runs the business? (Solvency)</div>
+      <div style={para}>
+        {equityRatio !== null && <><b>{equityRatio.toFixed(0)}%</b> of everything the company owns is funded by the partners&apos; own money and retained profits; <b>{(100 - equityRatio).toFixed(0)}%</b> comes from suppliers and other creditors. </>}
+        {debtToEquity !== null && <>Put differently, the business owes <b>₨{debtToEquity.toFixed(2)}</b> for every ₨1 of the partners&apos; capital — {levVerdict && <span style={{ color: levVerdict.colour, fontWeight: 600 }}>{levVerdict.word}</span>}.</>}
+      </div>
+
+      <div style={h}>The cushion (Working Capital)</div>
+      <div style={para}>
+        <>If every short-term bill were paid tomorrow, <b>{rs(workingCapital)}</b> would remain working inside the business — the shock absorber for late seasons, slow lines and surprises. </>
+        {wcChange !== null && Math.abs(wcChange) > 1_000_000 && <>The cushion {wcChange > 0 ? "grew" : "shrank"} by <b>{rs(Math.abs(wcChange))}</b> versus the prior period{wcChange < 0 ? " — worth understanding why before it becomes a trend" : ""}.</>}
+      </div>
+
+      {watchShown.length > 0 && (
+        <>
+          <div style={h}>What to watch</div>
+          {watchShown.map((w, i) => (
+            <div key={i} style={{ ...para, marginBottom: "6px", paddingLeft: "10px", borderLeft: `2.5px solid ${COLOURS.AMBER}` }}>{w}</div>
+          ))}
+        </>
+      )}
+
+      <div style={{ fontSize: "10px", color: COLOURS.INK_400, marginTop: "8px", fontStyle: "italic" }}>
+        Rule of thumb: liquidity ratios answer &ldquo;can I pay this year&apos;s bills?&rdquo;, solvency ratios answer &ldquo;who really owns this business?&rdquo;, and working capital is the shock absorber between the two.
+      </div>
+    </div>
+  );
+}
+
 export default function ImperialPnlPage() {
   const { checking } = useRequireCapability("ifpl_pnl");
   const { ctx } = useUserCtx();
@@ -114,6 +348,26 @@ export default function ImperialPnlPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
 
+  // ── Tabs: P&L | Balance Sheet ────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<"pnl" | "bs">("pnl");
+
+  // ── Balance Sheet state ──────────────────────────────────────────────
+  const [bsMonths, setBsMonths] = useState<string[]>([]);
+  const [bsMonth, setBsMonth] = useState<string>("");
+  const [bsData, setBsData] = useState<IflBsRow | null>(null);
+  const [bsPrev, setBsPrev] = useState<IflBsRow | null>(null);
+  const [bsLoading, setBsLoading] = useState(false);
+  const [bsNoteLines, setBsNoteLines] = useState<BsNoteLine[]>([]);
+  const [selectedNote, setSelectedNote] = useState<string | null>(null);
+  const [showBsUpload, setShowBsUpload] = useState(false);
+  const [bsUploadFile, setBsUploadFile] = useState<File | null>(null);
+  const [bsUploading, setBsUploading] = useState(false);
+  const [bsUploadResult, setBsUploadResult] = useState<{
+    accepted?: boolean; month?: string; sheetUsed?: string; error?: string; summary?: string;
+    checks?: { name: string; expected: number; reported: number; diff: number; passed: boolean; note?: string }[];
+    auditWarnings?: string[];
+  } | null>(null);
+
   const { monthFrom, monthTo } = useMemo(() => {
     if (allMonths.length === 0) return { monthFrom: "", monthTo: "" };
     const last = allMonths[allMonths.length - 1];
@@ -134,6 +388,60 @@ export default function ImperialPnlPage() {
     loadAll();
     return () => { active = false; };
   }, []);
+
+  // ── BS: load available months ────────────────────────────────────────
+  useEffect(() => {
+    let active = true;
+    async function loadBsMonths() {
+      const { data } = await supabase.rpc("get_balance_sheet_ifl_months", { p_company_id: IFPL_COMPANY_ID });
+      if (!active) return;
+      const months = ((data || []) as { month: string }[]).map((r) => r.month);
+      setBsMonths(months);
+      if (months.length > 0) setBsMonth(months[months.length - 1]);
+    }
+    loadBsMonths();
+    return () => { active = false; };
+  }, []);
+
+  // ── BS: load data + note lines for selected month ───────────────────
+  useEffect(() => {
+    if (!bsMonth) return;
+    let active = true;
+    async function loadBs() {
+      setBsLoading(true);
+      const [bsRes, notesRes] = await Promise.all([
+        supabase.rpc("get_balance_sheet_ifl", { p_company_id: IFPL_COMPANY_ID, p_month: bsMonth }),
+        supabase.rpc("get_balance_sheet_notes", { p_company_id: IFPL_COMPANY_ID, p_month: bsMonth }),
+      ]);
+      if (!active) return;
+      const rows = (bsRes.data || []) as IflBsRow[];
+      setBsData(rows[0] || null);
+      setBsPrev(rows[1] || null);
+      setBsNoteLines((notesRes.data || []) as BsNoteLine[]);
+      setBsLoading(false);
+    }
+    loadBs();
+    return () => { active = false; };
+  }, [bsMonth]);
+
+  async function handleBsUpload() {
+    if (!bsUploadFile) return;
+    setBsUploading(true);
+    setBsUploadResult(null);
+    const form = new FormData();
+    form.append("file", bsUploadFile);
+    // Month is auto-detected server-side from the filename
+    const res = await authFetch("/api/finance/ifl-bs-upload", { method: "POST", body: form });
+    const body = await res.json();
+    setBsUploadResult(body);
+    setBsUploading(false);
+    if (body.accepted) {
+      const { data } = await supabase.rpc("get_balance_sheet_ifl_months", { p_company_id: IFPL_COMPANY_ID });
+      const months = ((data || []) as { month: string }[]).map((r) => r.month);
+      setBsMonths(months);
+      if (body.month) setBsMonth(body.month);
+    }
+  }
 
   // Main load on any filter change.
   useEffect(() => {
@@ -410,17 +718,62 @@ export default function ImperialPnlPage() {
     </select>
   );
 
+  // ── BS derived totals & ratios ───────────────────────────────────────
+  const bsT = bsData ? {
+    equity: bsData.partner_waqas + bsData.partner_remon + bsData.partner_samira + bsData.retained_earnings,
+    ltLiab: bsData.lt_payable_khurram + bsData.lt_provident_fund,
+    stLiab: bsData.trade_creditors + bsData.security_deposits + bsData.charity_uk + bsData.payable_related_parties + bsData.intercompany_payables + bsData.other_payables + bsData.accrued_expenses,
+    ltAssets: bsData.fixed_assets + bsData.receivables_kamran + bsData.long_term_investments + bsData.provident_fund_asset,
+    curAssets: bsData.stock + bsData.intercompany_receivables + bsData.receivables_directors + bsData.trade_debtors + bsData.supplier_deposits + bsData.prepayments + bsData.employee_loans + bsData.advance_income_tax + bsData.cash_bank,
+  } : null;
+  const bsPrevT = bsPrev ? {
+    equity: bsPrev.partner_waqas + bsPrev.partner_remon + bsPrev.partner_samira + bsPrev.retained_earnings,
+    ltLiab: bsPrev.lt_payable_khurram + bsPrev.lt_provident_fund,
+    stLiab: bsPrev.trade_creditors + bsPrev.security_deposits + bsPrev.charity_uk + bsPrev.payable_related_parties + bsPrev.intercompany_payables + bsPrev.other_payables + bsPrev.accrued_expenses,
+    ltAssets: bsPrev.fixed_assets + bsPrev.receivables_kamran + bsPrev.long_term_investments + bsPrev.provident_fund_asset,
+    curAssets: bsPrev.stock + bsPrev.intercompany_receivables + bsPrev.receivables_directors + bsPrev.trade_debtors + bsPrev.supplier_deposits + bsPrev.prepayments + bsPrev.employee_loans + bsPrev.advance_income_tax + bsPrev.cash_bank,
+  } : null;
+  const bsCurrentRatio = bsT && bsT.stLiab > 0 ? bsT.curAssets / bsT.stLiab : null;
+  const bsQuickRatio   = bsT && bsData && bsT.stLiab > 0 ? (bsT.curAssets - bsData.stock) / bsT.stLiab : null;
+  const bsCashRatio    = bsT && bsData && bsT.stLiab > 0 ? bsData.cash_bank / bsT.stLiab : null;
+  const bsDebtToEquity = bsT && bsT.equity > 0 ? (bsT.ltLiab + bsT.stLiab) / bsT.equity : null;
+  const bsEquityRatio  = bsT ? (bsT.equity / (bsT.ltAssets + bsT.curAssets)) * 100 : null;
+  const bsDebtRatio    = bsEquityRatio !== null ? 100 - bsEquityRatio : null;
+  const bsWorkingCapital = bsT ? bsT.curAssets - bsT.stLiab : null;
+  const ratioColour = (v: number | null, good: number, warn: number, higherIsBetter = true) => {
+    if (v === null) return COLOURS.INK_400;
+    if (higherIsBetter) return v >= good ? COLOURS.GREEN : v >= warn ? COLOURS.AMBER : COLOURS.RED;
+    return v <= good ? COLOURS.GREEN : v <= warn ? COLOURS.AMBER : COLOURS.RED;
+  };
+
   return (
     <AuthWrapper>
       <main style={{ padding: "14px 18px", maxWidth: "1100px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
           <PageHeader />
-          <button onClick={() => { setShowUpload(!showUpload); setUploadResults([]); }} style={chipBtn(showUpload)}>
-            {showUpload ? "Close upload" : "Upload workbook"}
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {activeTab === "pnl" && (
+              <button onClick={() => { setShowUpload(!showUpload); setUploadResults([]); }} style={chipBtn(showUpload)}>
+                {showUpload ? "Close upload" : "Upload workbook"}
+              </button>
+            )}
+            {activeTab === "bs" && (
+              <button onClick={() => { setShowBsUpload(!showBsUpload); setBsUploadResult(null); }} style={chipBtn(showBsUpload)}>
+                {showBsUpload ? "Close upload" : "Upload period"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Tabs ── */}
+        <div style={{ display: "flex", gap: "8px", marginBottom: "14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, paddingBottom: "10px" }}>
+          <button style={chipBtn(activeTab === "pnl")} onClick={() => setActiveTab("pnl")}>PNL</button>
+          <button style={chipBtn(activeTab === "bs")} onClick={() => setActiveTab("bs")}>
+            BS{bsMonths.length > 0 ? ` · ${MONTH_LABEL(bsMonths[bsMonths.length - 1])}` : ""}
           </button>
         </div>
 
-        {showUpload && (
+        {activeTab === "pnl" && showUpload && (
           <div style={{ ...cardStyle, marginBottom: "12px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <input type="file" accept=".xlsx" onChange={(e) => setUploadFile((e.target.files || [])[0] || null)} style={{ fontSize: "13px" }} />
@@ -467,7 +820,7 @@ export default function ImperialPnlPage() {
           </div>
         )}
 
-        {loading ? (
+        {activeTab === "pnl" && (loading ? (
           <SkeletonRows count={4} />
         ) : allMonths.length === 0 ? (
           <div style={cardStyle}>
@@ -937,6 +1290,254 @@ export default function ImperialPnlPage() {
                 </div>
               )}
             </div>
+            )}
+          </>
+        ))}
+
+        {/* ═══════════════ BALANCE SHEET TAB ═══════════════ */}
+        {activeTab === "bs" && (
+          <>
+            {showBsUpload && (
+              <div style={{ ...cardStyle, marginBottom: "12px" }}>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>Upload Balance Sheet</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <input type="file" accept=".xlsx" onChange={(e) => setBsUploadFile((e.target.files || [])[0] || null)} style={{ fontSize: "13px" }} />
+                  <button
+                    onClick={handleBsUpload}
+                    disabled={!bsUploadFile || bsUploading}
+                    style={{ ...chipBtn(true), opacity: !bsUploadFile || bsUploading ? 0.5 : 1, cursor: !bsUploadFile || bsUploading ? "not-allowed" : "pointer" }}
+                  >
+                    {bsUploading ? "Checking…" : "Upload"}
+                  </button>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                    Period is detected automatically from the filename (e.g. &quot;Balance Sheet June 2026.xlsx&quot;). The parser reads the &quot;BS&quot; sheet and the &quot;Notes&quot; sheet.
+                  </span>
+                </div>
+                {bsUploadResult && (
+                  <div style={{ marginTop: "10px" }}>
+                    {bsUploadResult.error ? (
+                      <div style={{ padding: "8px 12px", borderRadius: RADII.SM, background: COLOURS.DANGER_SOFT, fontSize: "12px", fontWeight: 600, color: COLOURS.RED }}>
+                        ✗ {bsUploadResult.error}
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ padding: "8px 12px", borderRadius: RADII.SM, background: bsUploadResult.accepted ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, fontSize: "12px", fontWeight: 600, color: bsUploadResult.accepted ? COLOURS.GREEN : COLOURS.RED }}>
+                          {bsUploadResult.accepted ? "✓ " : "✗ "}{bsUploadResult.summary}
+                          {bsUploadResult.sheetUsed && <span style={{ fontWeight: 400, color: COLOURS.SLATE }}> — sheet &quot;{bsUploadResult.sheetUsed}&quot;{bsUploadResult.month ? ` · ${bsUploadResult.month.slice(0, 7)}` : ""}</span>}
+                        </div>
+                        {(bsUploadResult.checks || []).length > 0 && (
+                          <div style={{ marginTop: "6px", fontSize: "12px", lineHeight: 1.7 }}>
+                            {(bsUploadResult.checks || []).map((c, i) => (
+                              <div key={i} style={{ color: c.passed ? COLOURS.GREEN : COLOURS.RED }}>
+                                {c.passed ? "✓" : "✗"} {c.name}{!c.passed && c.note ? <span style={{ color: COLOURS.SLATE }}> — {c.note}</span> : null}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {(bsUploadResult.auditWarnings || []).length > 0 && (
+                          <div style={{ marginTop: "6px", padding: "8px 12px", borderRadius: RADII.SM, background: COLOURS.WARNING_SOFT, fontSize: "12px", color: COLOURS.AMBER, lineHeight: 1.7 }}>
+                            {(bsUploadResult.auditWarnings || []).map((w, i) => <div key={i}>⚠ {w}</div>)}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {bsLoading ? (
+              <SkeletonRows count={4} />
+            ) : !bsData || !bsT ? (
+              <div style={cardStyle}>
+                <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>
+                  No Balance Sheet data yet — press &quot;Upload period&quot; and select the Balance Sheet workbook.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* ── Period selector ── */}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600 }}>Period:</span>
+                  {bsMonths.map((m) => (
+                    <button key={m} style={chipBtn(m === bsMonth)} onClick={() => { setBsMonth(m); setSelectedNote(null); }}>{MONTH_LABEL(m)}</button>
+                  ))}
+                </div>
+
+                {/* ── Statement ── */}
+                <div style={{ ...cardStyle, marginBottom: "16px", overflowX: "auto" }}>
+                  <div style={sectionTitle}>Balance Sheet — Imperial Footwear</div>
+                  <div style={sectionCaption}>As at {MONTH_LABEL(bsMonth)}{bsPrev ? ` · compared with ${MONTH_LABEL(bsPrev.month)}` : ""} · amounts in ₨</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "640px" }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${COLOURS.NAVY}` }}>
+                        <th style={{ padding: "6px 10px", fontSize: "10px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em" }}>Line</th>
+                        <th style={{ padding: "6px 10px", fontSize: "10px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "right" }}>NOTE</th>
+                        <th style={{ padding: "6px 10px", fontSize: "10px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "right", textTransform: "uppercase" }}>{MONTH_LABEL(bsMonth)}</th>
+                        <th style={{ padding: "6px 10px", fontSize: "10px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "right", textTransform: "uppercase" }}>{bsPrev ? MONTH_LABEL(bsPrev.month) : "Prior"}</th>
+                        <th style={{ padding: "6px 10px", fontSize: "10px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "right" }}>Δ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* EQUITY */}
+                      <BsSectionHeader label="Equity" />
+                      <BsSubHeader label="Partner Investments & Reserves" />
+                      <BsItem label="Waqas Saleem Investment"   note="1" cur={bsData.partner_waqas}  prev={bsPrev?.partner_waqas}  onNoteClick={setSelectedNote} />
+                      <BsItem label="Remon Ahmed Investment"    note="1" cur={bsData.partner_remon}  prev={bsPrev?.partner_remon}  onNoteClick={setSelectedNote} />
+                      <BsItem label="Samira Waqas Investment"   note="1" cur={bsData.partner_samira} prev={bsPrev?.partner_samira} onNoteClick={setSelectedNote} />
+                      <BsItem label="Retained Earnings"         note="2" cur={bsData.retained_earnings} prev={bsPrev?.retained_earnings} onNoteClick={setSelectedNote} />
+                      <BsSubtotal label="Total Owner's Equity" cur={bsT.equity} prev={bsPrevT?.equity} />
+
+                      <BsSpacer />
+                      <BsSubHeader label="Long Term Liabilities" />
+                      <BsItem label="Payable — Mr. Khurram Saleem" cur={bsData.lt_payable_khurram} prev={bsPrev?.lt_payable_khurram} />
+                      <BsItem label="Provident Fund"                cur={bsData.lt_provident_fund}  prev={bsPrev?.lt_provident_fund} />
+                      <BsSubtotal label="Total Long Term Liabilities" cur={bsT.ltLiab} prev={bsPrevT?.ltLiab} />
+
+                      <BsSpacer />
+                      <BsSubHeader label="Short Term Liabilities" />
+                      <BsItem label="Trade Creditors"             cur={bsData.trade_creditors}         prev={bsPrev?.trade_creditors} />
+                      <BsItem label="Security Deposits"           cur={bsData.security_deposits}       prev={bsPrev?.security_deposits} />
+                      <BsItem label="Charity UK"                  cur={bsData.charity_uk}              prev={bsPrev?.charity_uk} />
+                      <BsItem label="Payable to Related Parties"  cur={bsData.payable_related_parties} prev={bsPrev?.payable_related_parties} />
+                      <BsItem label="Intercompany Balances"       cur={bsData.intercompany_payables}   prev={bsPrev?.intercompany_payables} />
+                      <BsItem label="Other Payables"              cur={bsData.other_payables}          prev={bsPrev?.other_payables} />
+                      <BsItem label="Accrued Expenses"            cur={bsData.accrued_expenses}        prev={bsPrev?.accrued_expenses} />
+                      <BsSubtotal label="Total Short Term Liabilities" cur={bsT.stLiab} prev={bsPrevT?.stLiab} />
+
+                      <BsSpacer />
+                      <BsGrandTotal label="TOTAL EQUITY & LIABILITIES" cur={bsT.equity + bsT.ltLiab + bsT.stLiab} prev={bsPrevT ? bsPrevT.equity + bsPrevT.ltLiab + bsPrevT.stLiab : null} />
+
+                      {/* ASSETS */}
+                      <BsSpacer />
+                      <BsSectionHeader label="Assets" />
+                      <BsSubHeader label="Long Term Assets" />
+                      <BsItem label="Fixed Assets"                       cur={bsData.fixed_assets}          prev={bsPrev?.fixed_assets} />
+                      <BsItem label="Receivables — Mr. Kamran Saleem"   cur={bsData.receivables_kamran}    prev={bsPrev?.receivables_kamran} />
+                      <BsItem label="Long Term Investments"    note="4" cur={bsData.long_term_investments} prev={bsPrev?.long_term_investments} onNoteClick={setSelectedNote} />
+                      <BsItem label="Provident Fund (Asset)"            cur={bsData.provident_fund_asset}  prev={bsPrev?.provident_fund_asset} />
+                      <BsSubtotal label="Total Long Term Assets" cur={bsT.ltAssets} prev={bsPrevT?.ltAssets} />
+
+                      <BsSpacer />
+                      <BsSubHeader label="Current Assets" />
+                      <BsItem label="Stock"                       note="5" cur={bsData.stock}                    prev={bsPrev?.stock}                    onNoteClick={setSelectedNote} />
+                      <BsItem label="Intercompany Receivables"             cur={bsData.intercompany_receivables} prev={bsPrev?.intercompany_receivables} />
+                      <BsItem label="Receivables from Directors"           cur={bsData.receivables_directors}    prev={bsPrev?.receivables_directors} />
+                      <BsItem label="Trade Debtors"                        cur={bsData.trade_debtors}            prev={bsPrev?.trade_debtors} />
+                      <BsItem label="Supplier Deposits"           note="3" cur={bsData.supplier_deposits}        prev={bsPrev?.supplier_deposits}        onNoteClick={setSelectedNote} />
+                      <BsItem label="Prepayments"                 note="6" cur={bsData.prepayments}              prev={bsPrev?.prepayments}              onNoteClick={setSelectedNote} />
+                      <BsItem label="Employee Loans & Advances"   note="7" cur={bsData.employee_loans}           prev={bsPrev?.employee_loans}           onNoteClick={setSelectedNote} />
+                      <BsItem label="Advance Income Tax"          note="9" cur={bsData.advance_income_tax}       prev={bsPrev?.advance_income_tax}       onNoteClick={setSelectedNote} />
+                      <BsItem label="Cash & Bank"                 note="8" cur={bsData.cash_bank}                prev={bsPrev?.cash_bank}                onNoteClick={setSelectedNote} />
+                      <BsSubtotal label="Total Current Assets" cur={bsT.curAssets} prev={bsPrevT?.curAssets} />
+
+                      <BsSpacer />
+                      <BsGrandTotal label="TOTAL ASSETS" cur={bsT.ltAssets + bsT.curAssets} prev={bsPrevT ? bsPrevT.ltAssets + bsPrevT.curAssets : null} />
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* ── Note Detail Panel ── */}
+                {selectedNote && IFL_BS_NOTES[selectedNote] && (
+                  <div style={{ marginBottom: "16px", border: `1.5px solid ${COLOURS.BLUE}`, borderRadius: RADII.SM, background: COLOURS.INFO_SOFT, padding: "16px 20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span style={{ background: COLOURS.BLUE, color: "#fff", borderRadius: RADII.PILL, fontWeight: 700, fontSize: "11px", padding: "2px 9px", letterSpacing: "0.02em" }}>
+                          Note {selectedNote}
+                        </span>
+                        <span style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY }}>
+                          {IFL_BS_NOTES[selectedNote].title}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setSelectedNote(null)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: COLOURS.SLATE, fontSize: "16px", lineHeight: 1, padding: "2px 4px", fontFamily: "inherit" }}
+                        aria-label="Close note"
+                      >×</button>
+                    </div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, lineHeight: 1.6, marginBottom: "10px" }}>
+                      {IFL_BS_NOTES[selectedNote].description}
+                    </div>
+                    {(() => {
+                      const wanted = parseInt(selectedNote, 10);
+                      const lines = bsNoteLines.filter((l) => l.note_no === wanted);
+                      if (lines.length === 0) {
+                        return (
+                          <div style={{ fontSize: "11px", color: COLOURS.INK_400, fontStyle: "italic" }}>
+                            No account-level detail available for this period — re-upload the period&apos;s file to load it.
+                          </div>
+                        );
+                      }
+                      return (
+                        <div style={{ overflowX: "auto", background: COLOURS.CARD, borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                            <thead>
+                              <tr style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                                <th style={{ padding: "6px 12px", fontSize: "9px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em" }}>Description</th>
+                                <th style={{ padding: "6px 12px", fontSize: "9px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "right", textTransform: "uppercase", letterSpacing: "0.05em" }}>{MONTH_LABEL(bsMonth)} (₨)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {lines.map((l) => l.is_header ? (
+                                <tr key={l.row_order} style={{ background: COLOURS.TRACK }}>
+                                  <td style={{ padding: "6px 12px", fontSize: "10px", fontWeight: 700, color: COLOURS.NAVY }}>{l.account_name}</td>
+                                  <td style={{ padding: "6px 12px", fontSize: "10px", fontWeight: 700, color: COLOURS.NAVY, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{l.amount !== null ? fmtPKR(l.amount) : ""}</td>
+                                </tr>
+                              ) : l.is_total ? (
+                                <tr key={l.row_order} style={{ borderTop: `1.5px solid ${COLOURS.NAVY}` }}>
+                                  <td style={{ padding: "5px 12px", fontSize: "10px", fontWeight: 700, color: COLOURS.NAVY }}>{l.account_name}</td>
+                                  <td style={{ padding: "5px 12px", fontSize: "10px", fontWeight: 700, color: l.amount !== null && l.amount < 0 ? COLOURS.RED : COLOURS.NAVY, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtPKR(l.amount)}</td>
+                                </tr>
+                              ) : (
+                                <tr key={l.row_order} style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
+                                  <td style={{ padding: "5px 12px", fontSize: "10px", color: COLOURS.INK_700 }}>{l.account_name}</td>
+                                  <td style={{ padding: "5px 12px", fontSize: "10px", color: l.amount !== null && l.amount < 0 ? COLOURS.RED : COLOURS.INK_700, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtPKR(l.amount)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* ── Key Ratios ── */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px", marginBottom: "20px" }}>
+                  <div style={cardStyle}>
+                    <div style={sectionTitle}>Liquidity</div>
+                    <div style={sectionCaption}>Ability to meet short-term obligations</div>
+                    <RatioRow label="Current Ratio"  value={bsCurrentRatio !== null ? bsCurrentRatio.toFixed(1) + "×" : "—"} colour={ratioColour(bsCurrentRatio, 2, 1)} />
+                    <RatioRow label="Quick Ratio"    value={bsQuickRatio   !== null ? bsQuickRatio.toFixed(1)   + "×" : "—"} colour={ratioColour(bsQuickRatio, 1, 0.5)} />
+                    <RatioRow label="Cash Ratio"     value={bsCashRatio    !== null ? bsCashRatio.toFixed(2)    + "×" : "—"} colour={ratioColour(bsCashRatio, 0.5, 0.2)} />
+                  </div>
+                  <div style={cardStyle}>
+                    <div style={sectionTitle}>Solvency</div>
+                    <div style={sectionCaption}>Long-term financial stability</div>
+                    <RatioRow label="Debt-to-Equity" value={bsDebtToEquity !== null ? bsDebtToEquity.toFixed(2) + "×" : "—"} colour={ratioColour(bsDebtToEquity, 1, 2, false)} />
+                    <RatioRow label="Equity Ratio"   value={bsEquityRatio  !== null ? bsEquityRatio.toFixed(1)  + "%" : "—"} colour={ratioColour(bsEquityRatio, 50, 30)} />
+                    <RatioRow label="Debt Ratio"     value={bsDebtRatio    !== null ? bsDebtRatio.toFixed(1)    + "%" : "—"} colour={ratioColour(bsDebtRatio, 50, 70, false)} />
+                  </div>
+                  <div style={cardStyle}>
+                    <div style={sectionTitle}>Key Balances</div>
+                    <div style={sectionCaption}>Snapshot values for {MONTH_LABEL(bsMonth)}</div>
+                    <RatioRow label="Working Capital"    value={fmtM(bsWorkingCapital ?? 0)}    colour={COLOURS.NAVY} />
+                    <RatioRow label="Stock"              value={fmtM(bsData.stock)}             colour={COLOURS.NAVY} />
+                    <RatioRow label="Cash & Equivalents" value={fmtM(bsData.cash_bank)}         colour={COLOURS.NAVY} />
+                  </div>
+                </div>
+
+                {/* ── Plain-English CEO insights ── */}
+                <IflInsightsCard monthLabel={MONTH_LABEL(bsMonth)} data={bsData} prev={bsPrev} />
+
+                {/* ── Audit warnings stored with this period ── */}
+                {(bsData.audit_warnings || []).length > 0 && (
+                  <div style={{ marginBottom: "20px", padding: "12px 16px", borderRadius: RADII.SM, background: COLOURS.WARNING_SOFT, fontSize: "12px", color: COLOURS.AMBER, lineHeight: 1.7 }}>
+                    <div style={{ fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", fontSize: "10px", letterSpacing: "0.05em" }}>Audit warnings</div>
+                    {(bsData.audit_warnings || []).map((w, i) => <div key={i}>⚠ {w}</div>)}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
