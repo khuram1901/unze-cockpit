@@ -336,6 +336,17 @@ export default function ProfitAndLossPage() {
   const [bsPrev, setBsPrev] = useState<BsRow | null>(null);
   const [bsLoading, setBsLoading] = useState(false);
 
+  // ── BS upload state ──────────────────────────────────────────────────
+  const [showBsUpload, setShowBsUpload] = useState(false);
+  const [bsUploadMonth, setBsUploadMonth] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [bsUploadFile, setBsUploadFile] = useState<File | null>(null);
+  const [bsUploading, setBsUploading] = useState(false);
+  const [bsUploadResult, setBsUploadResult] = useState<{ ok: boolean; month?: string; sheetUsed?: string; parsed?: Record<string, number>; error?: string } | null>(null);
+
   // ── PNL: load month list ─────────────────────────────────────────────
   const { monthFrom, monthTo } = useMemo(() => {
     if (allMonths.length === 0) return { monthFrom: "", monthTo: "" };
@@ -436,6 +447,27 @@ export default function ProfitAndLossPage() {
     loadBs();
     return () => { active = false; };
   }, [companyId, hasUnze, bsMonth]);
+
+  async function handleBsUpload() {
+    if (!bsUploadFile) return;
+    setBsUploading(true);
+    setBsUploadResult(null);
+    const form = new FormData();
+    form.append("file", bsUploadFile);
+    form.append("month", bsUploadMonth);
+    const res = await authFetch("/api/finance/bs-upload", { method: "POST", body: form });
+    const body = await res.json();
+    setBsUploadResult(body);
+    setBsUploading(false);
+    if (body.ok) {
+      setBsUploadFile(null);
+      // Refresh months list
+      const { data } = await supabase.rpc("get_balance_sheet_months", { p_company_id: companyId });
+      const months = ((data || []) as { month: string }[]).map((r) => r.month);
+      setBsMonths(months);
+      setBsMonth(months[months.length - 1] || bsMonth);
+    }
+  }
 
   async function handleUpload() {
     if (uploadFiles.length === 0) return;
@@ -1111,6 +1143,76 @@ export default function ProfitAndLossPage() {
               </div>
             ) : (
               <>
+                {/* ── BS Upload section ── */}
+                {canUploadUnze && (
+                  <div style={{ marginBottom: "14px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => { setShowBsUpload(!showBsUpload); setBsUploadResult(null); }}
+                        style={chipBtn(showBsUpload)}
+                      >
+                        {showBsUpload ? "Close upload" : "Upload month"}
+                      </button>
+                    </div>
+                    {showBsUpload && (
+                      <div style={{ ...cardStyle, marginTop: "10px" }}>
+                        <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY, marginBottom: "10px" }}>Upload Balance Sheet</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "flex-end" }}>
+                          <div>
+                            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "4px", fontWeight: 600 }}>MONTH</div>
+                            <input
+                              type="month"
+                              value={bsUploadMonth}
+                              onChange={(e) => setBsUploadMonth(e.target.value)}
+                              style={{ padding: "6px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px", fontFamily: "inherit" }}
+                            />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "4px", fontWeight: 600 }}>FILE (.xlsx)</div>
+                            <input
+                              type="file"
+                              accept=".xlsx"
+                              onChange={(e) => { setBsUploadFile(e.target.files?.[0] || null); setBsUploadResult(null); }}
+                              style={{ fontSize: "13px" }}
+                            />
+                          </div>
+                          <button
+                            onClick={handleBsUpload}
+                            disabled={!bsUploadFile || bsUploading}
+                            style={{ ...chipBtn(true), opacity: !bsUploadFile || bsUploading ? 0.5 : 1, cursor: !bsUploadFile || bsUploading ? "not-allowed" : "pointer" }}
+                          >
+                            {bsUploading ? "Uploading…" : "Upload"}
+                          </button>
+                        </div>
+                        <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "7px" }}>
+                          The parser looks for the &ldquo;BS (R)&rdquo; sheet and matches rows by label. Accepts the same Excel format as the June file.
+                        </div>
+                        {bsUploadResult && (
+                          <div style={{ marginTop: "12px", padding: "10px 14px", borderRadius: RADII.SM, background: bsUploadResult.ok ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT }}>
+                            {bsUploadResult.ok ? (
+                              <>
+                                <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.GREEN, marginBottom: "6px" }}>
+                                  ✓ Saved — {bsUploadResult.month?.slice(0, 7)} from sheet &ldquo;{bsUploadResult.sheetUsed}&rdquo;
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "3px 14px" }}>
+                                  {bsUploadResult.parsed && Object.entries(bsUploadResult.parsed).map(([k, v]) => (
+                                    <div key={k} style={{ fontSize: "11px", color: COLOURS.INK_700 }}>
+                                      <span style={{ color: COLOURS.SLATE }}>{k.replace(/_/g, " ")}:</span>{" "}
+                                      <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{Math.round(v).toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            ) : (
+                              <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.RED }}>{bsUploadResult.error}</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* ── Period chips ── */}
                 <div style={{ display: "flex", gap: "5px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px" }}>
                   <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginRight: "2px" }}>Month:</span>
