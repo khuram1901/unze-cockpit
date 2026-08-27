@@ -34,6 +34,7 @@ type MyTask = {
 type RecentFuel = {
   date: string; quantity_litres: number; price_per_litre: number;
   amount_pkr: number | null; current_odometer: number | null; km_per_litre: number | null;
+  slip_image_url: string | null;
 };
 type RecentMaint = {
   date: string; work_type: string; description: string | null;
@@ -373,6 +374,9 @@ export default function DailyEntryPage() {
         return;
       }
     }
+    if (!slipFile) {
+      showToast("Please attach a photo of the fuel slip before saving", "error"); return;
+    }
     setSubmittingFuel(true);
     // Upload slip image first (if provided)
     let slip_image_url: string | null = null;
@@ -690,6 +694,9 @@ export default function DailyEntryPage() {
                     <div style={{ textAlign: "right" as const }}>
                       <div style={{ fontSize: "12px", fontWeight: 600, color: r.km_per_litre ? COLOURS.GREEN : COLOURS.SLATE }}>{r.km_per_litre ? `${r.km_per_litre.toFixed(1)} km/L` : "—"}</div>
                       <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>Efficiency</div>
+                      {r.slip_image_url && (
+                        <a href={r.slip_image_url} target="_blank" rel="noreferrer" style={{ fontSize: "11px", color: COLOURS.SLATE, textDecoration: "none" }} title="View slip">📷 Slip</a>
+                      )}
                     </div>
                   </div>
                 ))}

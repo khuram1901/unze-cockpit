@@ -78,7 +78,7 @@ export async function PATCH(request: NextRequest) {
   if (!allowed) return Response.json({ error: "Insufficient permissions" }, { status: 403 });
 
   const body = await request.json();
-  const { id, date, price_per_litre, quantity_litres, previous_odometer, current_odometer, notes } = body;
+  const { id, date, price_per_litre, quantity_litres, previous_odometer, current_odometer, notes, slip_image_url } = body;
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });
 
   const updates: Record<string, unknown> = {};
@@ -88,6 +88,7 @@ export async function PATCH(request: NextRequest) {
   updates.previous_odometer = previous_odometer != null ? parseInt(previous_odometer) : null;
   updates.current_odometer  = current_odometer  != null ? parseInt(current_odometer)  : null;
   updates.notes = notes ?? null;
+  if (slip_image_url !== undefined) updates.slip_image_url = slip_image_url || null;
 
   const supabase = createServiceClient();
   const { error } = await supabase.from("admin_fuel_log").update(updates).eq("id", id);

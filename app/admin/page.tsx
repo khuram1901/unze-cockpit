@@ -277,6 +277,8 @@ export default function AdminDataPage() {
   // ── Fuel amendment state ───────────────────────────────────────────
   const [editingFuel, setEditingFuel] = useState<FuelFill | null>(null);
   const [savingFuelEdit, setSavingFuelEdit] = useState(false);
+  const [editSlipFile, setEditSlipFile] = useState<File | null>(null);
+  const [editSlipPreviewUrl, setEditSlipPreviewUrl] = useState<string | null>(null);
 
   // ── Fuel add-entry state ───────────────────────────────────────────
   const [addingFuel, setAddingFuel] = useState<{
@@ -3268,7 +3270,7 @@ export default function AdminDataPage() {
       {editingFuel && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => !savingFuelEdit && setEditingFuel(null)}
+          onClick={() => { if (!savingFuelEdit) { if (editSlipPreviewUrl) URL.revokeObjectURL(editSlipPreviewUrl); setEditSlipFile(null); setEditSlipPreviewUrl(null); setEditingFuel(null); } }}
         >
           <div
             style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "440px", maxWidth: "92vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}
@@ -3313,26 +3315,46 @@ export default function AdminDataPage() {
                   rows={2}
                   style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", resize: "vertical", boxSizing: "border-box" as const }} />
               </label>
-              {/* Slip image — view attached photo for this record */}
-              {editingFuel.slip_image_url && (
-                <div style={{ gridColumn: "1/-1" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Fuel Slip Photo</span>
-                  <div style={{ position: "relative", display: "inline-block", borderRadius: "8px", overflow: "hidden", border: `1px solid ${COLOURS.HAIRLINE}` }}>
-                    <img
-                      src={editingFuel.slip_image_url}
-                      alt="Fuel slip"
-                      style={{ display: "block", maxWidth: "100%", maxHeight: "220px", objectFit: "contain", backgroundColor: "#F8F9FA" }}
-                    />
-                    <a
-                      href={editingFuel.slip_image_url}
-                      target="_blank"
-                      rel="noreferrer"
+              {/* Slip image — view existing or upload new */}
+              <div style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Fuel Slip Photo</span>
+                {/* Existing image (if no new one selected) */}
+                {(editingFuel.slip_image_url && !editSlipPreviewUrl) && (
+                  <div style={{ position: "relative", display: "inline-block", borderRadius: "8px", overflow: "hidden", border: `1px solid ${COLOURS.HAIRLINE}`, marginBottom: "8px" }}>
+                    <img src={editingFuel.slip_image_url} alt="Fuel slip"
+                      style={{ display: "block", maxWidth: "100%", maxHeight: "160px", objectFit: "contain", backgroundColor: "#F8F9FA" }} />
+                    <a href={editingFuel.slip_image_url} target="_blank" rel="noreferrer"
                       style={{ position: "absolute", top: "6px", right: "6px", background: "rgba(0,0,0,0.55)", color: "white", fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: "6px", textDecoration: "none" }}>
                       View full ↗
                     </a>
                   </div>
-                </div>
-              )}
+                )}
+                {/* New image preview */}
+                {editSlipPreviewUrl && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                    <img src={editSlipPreviewUrl} alt="new slip"
+                      style={{ height: "64px", borderRadius: "6px", objectFit: "cover", border: `1px solid ${COLOURS.HAIRLINE}` }} />
+                    <button type="button" onClick={() => { if (editSlipPreviewUrl) URL.revokeObjectURL(editSlipPreviewUrl); setEditSlipFile(null); setEditSlipPreviewUrl(null); }}
+                      style={{ fontSize: "12px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Remove</button>
+                  </div>
+                )}
+                {/* Upload / replace button */}
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", border: `1.5px dashed ${editSlipPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`, borderRadius: "8px", cursor: "pointer", backgroundColor: editSlipPreviewUrl ? "#F0FDF4" : "#FAFBFC" }}>
+                  <span style={{ fontSize: "16px" }}>📷</span>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{editSlipFile ? `${editSlipFile.name} (${(editSlipFile.size/1024).toFixed(0)} KB)` : editingFuel.slip_image_url ? "Replace photo" : "Attach slip photo"}</span>
+                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const compressed = await compressImage(file);
+                      const previewUrl = URL.createObjectURL(compressed);
+                      if (editSlipPreviewUrl) URL.revokeObjectURL(editSlipPreviewUrl);
+                      setEditSlipFile(compressed);
+                      setEditSlipPreviewUrl(previewUrl);
+                      e.target.value = "";
+                    }} />
+                </label>
+              </div>
             </div>
             {editingFuel.entered_by && (
               <p style={{ fontSize: "11px", color: COLOURS.SLATE, margin: "10px 0 0" }}>Originally entered by {editingFuel.entered_by}</p>
@@ -3342,6 +3364,15 @@ export default function AdminDataPage() {
                 disabled={savingFuelEdit}
                 onClick={async () => {
                   setSavingFuelEdit(true);
+                  // Upload new slip image if selected
+                  let slip_image_url: string | undefined = undefined;
+                  if (editSlipFile) {
+                    const fd = new FormData();
+                    fd.append("file", editSlipFile);
+                    const upRes = await authFetch("/api/admin/fuel/upload", { method: "POST", body: fd });
+                    const upJson = await upRes.json();
+                    if (upRes.ok) slip_image_url = upJson.url;
+                  }
                   await authFetch("/api/admin/fuel", {
                     method: "PATCH",
                     body: JSON.stringify({
@@ -3352,8 +3383,12 @@ export default function AdminDataPage() {
                       previous_odometer: editingFuel.previous_odometer,
                       current_odometer: editingFuel.current_odometer,
                       notes: editingFuel.notes || null,
+                      ...(slip_image_url !== undefined ? { slip_image_url } : {}),
                     }),
                   });
+                  if (editSlipPreviewUrl) URL.revokeObjectURL(editSlipPreviewUrl);
+                  setEditSlipFile(null);
+                  setEditSlipPreviewUrl(null);
                   vehicleDetailCache.current.clear();
                   if (vehiclePanel) loadVehicleDetail(vehiclePanel.vehicleId, vehicleDetailYear);
                   setEditingFuel(null);

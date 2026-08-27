@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const { data } = await supabase
       .from("admin_fuel_log")
-      .select("date, quantity_litres, price_per_litre, amount_pkr, current_odometer, km_per_litre")
+      .select("date, quantity_litres, price_per_litre, amount_pkr, current_odometer, km_per_litre, slip_image_url")
       .eq("vehicle_id", vehicleId)
       .order("date", { ascending: false })
       .order("created_at", { ascending: false })
