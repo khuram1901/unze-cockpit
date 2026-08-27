@@ -79,6 +79,18 @@ type BsRow = {
   total_equity_liabilities: number;
 };
 
+// Account-level note line returned by get_balance_sheet_notes RPC
+type BsNoteLine = {
+  note_no: number;
+  section: string | null;
+  account_code: string | null;
+  account_name: string;
+  amount: number | null;
+  is_total: boolean;
+  is_header: boolean;
+  row_order: number;
+};
+
 const MONTH_LABEL = (m: string) => {
   const d = new Date(m + "T00:00:00Z");
   return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit", timeZone: "UTC" });
@@ -366,6 +378,8 @@ export default function ProfitAndLossPage() {
   const [bsUploadFile, setBsUploadFile] = useState<File | null>(null);
   // Which note number is expanded in the BS table notes panel
   const [selectedNote, setSelectedNote] = useState<string | null>(null);
+  // Account-level note lines for the selected month (from balance_sheet_notes)
+  const [bsNoteLines, setBsNoteLines] = useState<BsNoteLine[]>([]);
   const [bsUploading, setBsUploading] = useState(false);
   const [bsUploadResult, setBsUploadResult] = useState<{
     accepted?: boolean; ok?: boolean; month?: string; sheetUsed?: string;
@@ -465,11 +479,15 @@ export default function ProfitAndLossPage() {
     let active = true;
     async function loadBs() {
       setBsLoading(true);
-      const { data } = await supabase.rpc("get_balance_sheet", { p_company_id: companyId, p_month: bsMonth });
+      const [bsRes, notesRes] = await Promise.all([
+        supabase.rpc("get_balance_sheet", { p_company_id: companyId, p_month: bsMonth }),
+        supabase.rpc("get_balance_sheet_notes", { p_company_id: companyId, p_month: bsMonth }),
+      ]);
       if (!active) return;
-      const rows = (data || []) as BsRow[];
+      const rows = (bsRes.data || []) as BsRow[];
       setBsData(rows[0] || null);
       setBsPrev(rows[1] || null);
+      setBsNoteLines((notesRes.data || []) as BsNoteLine[]);
       setBsLoading(false);
     }
     loadBs();
@@ -1503,9 +1521,54 @@ export default function ProfitAndLossPage() {
                         aria-label="Close note"
                       >×</button>
                     </div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, lineHeight: 1.6 }}>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, lineHeight: 1.6, marginBottom: "10px" }}>
                       {BS_NOTES[selectedNote].description}
                     </div>
+                    {(() => {
+                      // "4–5" spans two note numbers; everything else is a single note
+                      const wanted = selectedNote === "4–5" ? [4, 5] : [parseInt(selectedNote, 10)];
+                      const lines = bsNoteLines.filter((l) => wanted.includes(l.note_no));
+                      if (lines.length === 0) {
+                        return (
+                          <div style={{ fontSize: "11px", color: COLOURS.INK_400, fontStyle: "italic" }}>
+                            No account-level detail available for this month — re-upload the month's file to load it.
+                          </div>
+                        );
+                      }
+                      return (
+                        <div style={{ overflowX: "auto", background: COLOURS.CARD, borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                            <thead>
+                              <tr style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                                <th style={{ padding: "6px 12px", fontSize: "9px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em" }}>Account</th>
+                                <th style={{ padding: "6px 12px", fontSize: "9px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em" }}>Description</th>
+                                <th style={{ padding: "6px 12px", fontSize: "9px", fontWeight: 700, color: COLOURS.INK_400, textAlign: "right", textTransform: "uppercase", letterSpacing: "0.05em" }}>{MONTH_LABEL(bsMonth)} (₨)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {lines.map((l) => l.is_header ? (
+                                <tr key={l.row_order} style={{ background: COLOURS.TRACK }}>
+                                  <td colSpan={2} style={{ padding: "6px 12px", fontSize: "10px", fontWeight: 700, color: COLOURS.NAVY }}>{l.account_name}</td>
+                                  <td style={{ padding: "6px 12px", fontSize: "10px", fontWeight: 700, color: COLOURS.NAVY, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{l.amount !== null ? fmtPKR(l.amount) : ""}</td>
+                                </tr>
+                              ) : l.is_total ? (
+                                <tr key={l.row_order} style={{ borderTop: `1.5px solid ${COLOURS.NAVY}` }}>
+                                  <td style={{ padding: "5px 12px" }} />
+                                  <td style={{ padding: "5px 12px", fontSize: "10px", fontWeight: 700, color: COLOURS.NAVY }}>{l.account_name}</td>
+                                  <td style={{ padding: "5px 12px", fontSize: "10px", fontWeight: 700, color: l.amount !== null && l.amount < 0 ? COLOURS.RED : COLOURS.NAVY, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtPKR(l.amount)}</td>
+                                </tr>
+                              ) : (
+                                <tr key={l.row_order} style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
+                                  <td style={{ padding: "5px 12px", fontSize: "10px", color: COLOURS.INK_400, whiteSpace: "nowrap", fontFamily: "ui-monospace, monospace" }}>{l.account_code ?? ""}</td>
+                                  <td style={{ padding: "5px 12px", fontSize: "10px", color: COLOURS.INK_700 }}>{l.account_name}</td>
+                                  <td style={{ padding: "5px 12px", fontSize: "10px", color: l.amount !== null && l.amount < 0 ? COLOURS.RED : COLOURS.INK_700, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtPKR(l.amount)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 

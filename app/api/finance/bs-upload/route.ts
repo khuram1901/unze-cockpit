@@ -203,6 +203,81 @@ function parseSheet(wb: XLSX.WorkBook): { parsed: BsParsed; sheetUsed: string; r
   return { parsed, sheetUsed: found.name, rows };
 }
 
+// ── Note sheet parser ────────────────────────────────────────────────────────
+// The workbook's " BS Note" sheet carries the account-level breakdown behind
+// each balance-sheet note (1–17): individual accounts, bank balances, tax
+// lines, etc. Parsed into balance_sheet_notes so the app can show the data
+// behind every note number. Best-effort: a missing/odd note sheet never
+// blocks the upload.
+type BsNoteLine = {
+  note_no: number; section: string | null; account_code: string | null;
+  account_name: string; amount: number | null; is_total: boolean;
+  is_header: boolean; row_order: number;
+};
+
+function parseNoteSheet(wb: XLSX.WorkBook): BsNoteLine[] {
+  const sheetName = wb.SheetNames.find((n) => /bs\s*note/i.test(n));
+  if (!sheetName) return [];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, defval: null, raw: true });
+  const s = (v: unknown) => (v == null ? "" : String(v).trim());
+
+  // Current-month value column: header cell "TOTAL" or "Rupees"; fallback D.
+  let valueCol = 3;
+  outer:
+  for (const row of rows.slice(0, 10)) {
+    for (let c = 2; c < Math.min(row.length, 10); c++) {
+      const h = s(row[c]).toLowerCase();
+      if (h === "total" || h === "rupees") { valueCol = c; break outer; }
+    }
+  }
+
+  const lines: BsNoteLine[] = [];
+  let curNote: number | null = null;
+  let curSection: string | null = null;
+  let order = 0;
+
+  for (const row of rows) {
+    const code = s(row[0]);
+    const label = s(row[1]);
+    const noteCell = s(row[2]);
+    const v = row[valueCol];
+    const val = typeof v === "number" && !Number.isNaN(v) ? v : null;
+
+    // Numbered section header, incl. sub-notes like "1.2", "8.1", "1.2.A"
+    const noteMatch = noteCell.match(/^(\d{1,2})(?:\.\d+)*(?:\.?[A-Za-z])?$/);
+    if (label && noteMatch) {
+      const n = parseInt(noteMatch[1], 10);
+      if (n >= 1 && n <= 17) {
+        curNote = n;
+        curSection = label;
+        lines.push({ note_no: n, section: label, account_code: code || null, account_name: label, amount: val, is_total: false, is_header: true, row_order: order++ });
+        continue;
+      }
+    }
+    if (curNote === null) continue;
+
+    // Unnumbered rollups / ALL-CAPS section rows end the current note.
+    const ROLLUP = /^(total\s|non current liabilit|current liabilit|inter company payable|assets$|liabilities$|capital\s*&)/i;
+    const isAllCaps = label.length > 3 && label === label.toUpperCase() && /[A-Z]/.test(label);
+    if (label && !code && !noteMatch && (ROLLUP.test(label) || isAllCaps)) { curNote = null; curSection = null; continue; }
+    if (label.startsWith("*")) continue; // annotation
+
+    if ((code || label) && val !== null) {
+      lines.push({ note_no: curNote, section: curSection, account_code: code || null, account_name: label || code, amount: val, is_total: false, is_header: false, row_order: order++ });
+      continue;
+    }
+    if (!code && !label && val !== null) {
+      lines.push({ note_no: curNote, section: curSection, account_code: null, account_name: "Total", amount: val, is_total: true, is_header: false, row_order: order++ });
+      continue;
+    }
+    // Label-only row with no value inside a note — keep as a zero line.
+    if (label && !code && val === null) {
+      lines.push({ note_no: curNote, section: curSection, account_code: null, account_name: label, amount: 0, is_total: false, is_header: false, row_order: order++ });
+    }
+  }
+  return lines;
+}
+
 // ── Audit checks ─────────────────────────────────────────────────────────────
 function runChecks(p: BsParsed, totalAssets: number): BsCheck[] {
   const checks: BsCheck[] = [];
@@ -417,6 +492,7 @@ export async function POST(request: NextRequest) {
 
   // ── Parse xlsx ────────────────────────────────────────────────────────────
   let parsed: BsParsed, sheetUsed: string, month: string;
+  let noteLines: BsNoteLine[] = [];
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
@@ -436,6 +512,9 @@ export async function POST(request: NextRequest) {
       }, { status: 422 });
     }
     month = detected;
+
+    // Account-level note breakdown (best-effort — never blocks the upload)
+    try { noteLines = parseNoteSheet(wb); } catch { noteLines = []; }
   } catch (e) {
     return NextResponse.json({ error: "Could not read this file: " + (e instanceof Error ? e.message : String(e)) }, { status: 400 });
   }
@@ -545,6 +624,22 @@ export async function POST(request: NextRequest) {
     if (dbErr2) return NextResponse.json({ error: dbErr2.message }, { status: 500 });
   }
 
+  // ── Save account-level note lines (best-effort) ──────────────────────────
+  let notesSaved = 0;
+  if (noteLines.length > 0) {
+    const { error: delErr } = await supabase
+      .from("balance_sheet_notes")
+      .delete()
+      .eq("company_id", UTPL_COMPANY_ID)
+      .eq("month", month);
+    if (!delErr) {
+      const { error: notesErr } = await supabase.from("balance_sheet_notes").insert(
+        noteLines.map((l) => ({ company_id: UTPL_COMPANY_ID, month, ...l }))
+      );
+      if (!notesErr) notesSaved = noteLines.length;
+    }
+  }
+
   const checksFailed = checks.filter((c) => !c.passed);
 
   return NextResponse.json({
@@ -555,6 +650,7 @@ export async function POST(request: NextRequest) {
     auditWarnings: warnings,
     restated: restated.length > 0 ? restated : undefined,
     parsed: lineItems,
+    notesSaved,
     summary: checksFailed.length > 0
       ? `Saved — ${checks.length - checksFailed.length}/${checks.length} checks passed (${checksFailed.length} issue${checksFailed.length > 1 ? "s" : ""} to review below).`
       : warnings.length > 0
