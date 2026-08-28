@@ -70,7 +70,10 @@ export async function POST(request: NextRequest) {
     const warnings = checks.filter((c) => !c.passed && !c.blocking).length;
     const failed = checks.filter((c) => !c.passed && c.blocking).length;
     const passed = checks.filter((c) => c.passed).length;
-    const accepted = failed === 0; // server decides from the checks
+    // Server decides from the checks; a month with NO checks at all is never
+    // accepted (a parser regression or hand-crafted payload must not bypass
+    // validation).
+    const accepted = checks.length > 0 && failed === 0;
 
     // ── Restatement detection (transparency log) ──────────────────
     // If this month already exists, compare stored net sales / net profit
@@ -104,14 +107,12 @@ export async function POST(request: NextRequest) {
             restated.push({ scope, line, old_value: oldV, new_value: newV });
           }
         }
-        if (restated.length > 0) {
-          await supabase.from("pnl_restatements").insert(
-            restated.map((r) => ({ company, month: m.month, scope: r.scope, line: r.line, old_value: r.old_value, new_value: r.new_value, changed_by: auth.email })),
-          );
-          allRestated.push(...restated.map((r) => ({ ...r, month: m.month })));
-        }
+        // NOTE: the pnl_restatements insert + CEO alert happen only AFTER the
+        // new month's lines are fully stored (below).
       }
-      await supabase.from("rest_pnl_uploads").delete().eq("company", company).eq("month", m.month).eq("status", "accepted");
+      // Delete-last: the previously accepted upload is removed only after
+      // the replacement has fully landed, so a mid-write failure can never
+      // destroy an already-accepted month.
     }
     const { data: upload, error: upErr } = await supabase
       .from("rest_pnl_uploads")
@@ -161,13 +162,39 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < rows.length; i += CHUNK) {
         const { error: lineErr } = await supabase.from("rest_pnl_lines").insert(rows.slice(i, i + CHUNK));
         if (lineErr) {
-          results.push({ month: m.month, accepted: false, summary: "Database error while saving lines: " + lineErr.message });
+          // Roll back only the NEW upload — the previously accepted month is
+          // untouched (deleted below, only after everything has landed).
+          results.push({ month: m.month, accepted: false, summary: "Database error while saving lines: " + lineErr.message + " — previously stored figures for this month are unchanged." });
           await supabase.from("rest_pnl_uploads").delete().eq("id", upload.id);
           lineError = true;
           break;
         }
       }
       if (lineError) continue;
+
+      // Delete-LAST: remove the previously accepted upload(s) now that the
+      // replacement is fully stored; on failure roll back the new upload so
+      // the month never shows doubled figures.
+      const { error: oldDelErr } = await supabase
+        .from("rest_pnl_uploads")
+        .delete()
+        .eq("company", company)
+        .eq("month", m.month)
+        .eq("status", "accepted")
+        .neq("id", upload.id);
+      if (oldDelErr) {
+        await supabase.from("rest_pnl_uploads").delete().eq("id", upload.id);
+        results.push({ month: m.month, accepted: false, summary: "Could not replace the previously stored month (" + oldDelErr.message + ") — previous figures kept, new upload rolled back. Try again." });
+        continue;
+      }
+
+      // Restatement log — only now that the new figures actually landed.
+      if (restated.length > 0) {
+        await supabase.from("pnl_restatements").insert(
+          restated.map((r) => ({ company, month: m.month, scope: r.scope, line: r.line, old_value: r.old_value, new_value: r.new_value, changed_by: auth.email })),
+        );
+        allRestated.push(...restated.map((r) => ({ ...r, month: m.month })));
+      }
     }
     results.push({ month: m.month, accepted, summary: String(m.summary || "").slice(0, 300), restated: restated.length > 0 ? restated : undefined });
   }

@@ -121,6 +121,15 @@ export function parseRestaurantPnl(data: ArrayBuffer | Uint8Array, company: Rest
     const hit = config.sheetToBranch.find((s) => s.match.test(name.trim()));
     if (hit) branchSheets.push({ sheet: name, branch: hit.branch });
   }
+  // Sheets that LOOK like this company's branch sheets but match no
+  // configured pattern (new branch opened, or a rename) — surfaced as a
+  // warning check on every month so a branch can never vanish silently.
+  const companyWord = company === "BARANH" ? /baranh/i : /dolc/i;
+  const unmatchedSheets = wb.SheetNames
+    .filter((n) => companyWord.test(n) && !config.sheetToBranch.some((sh) => sh.match.test(n.trim())))
+    .filter((n) => !/summary|analysis|note|cash|total/i.test(n));
+  const skippedSheets: string[] = [];
+
   if (branchSheets.length === 0) {
     const otherKey = company === "BARANH" ? "HD" : "BARANH";
     const looksLikeOther = wb.SheetNames.some((n) => COMPANY_CONFIG[otherKey].sheetToBranch.some((s) => s.match.test(n.trim())));
@@ -136,7 +145,7 @@ export function parseRestaurantPnl(data: ArrayBuffer | Uint8Array, company: Rest
 
   for (const { sheet, branch } of branchSheets) {
     const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheet], { header: 1, raw: true });
-    if (rows.length < 10) continue;
+    if (rows.length < 10) { skippedSheets.push(sheet); continue; }
     const title = cleanLabel(str(rows.find((r) => str(r?.[0]).trim())?.[0] || ""));
     if (!config.titleMatch.test(title)) {
       throw new Error(`Sheet "${sheet}" doesn't look like a ${company === "BARANH" ? "Baranh" : "Haute Dolci"} branch sheet.`);
@@ -145,7 +154,7 @@ export function parseRestaurantPnl(data: ArrayBuffer | Uint8Array, company: Rest
     // a single month column. Only configured branch sheets reach this code,
     // so the loose threshold can't misfire on other sheets.
     const headerIdx = rows.findIndex((r) => (r || []).filter((c) => c instanceof Date).length >= 1);
-    if (headerIdx < 0) continue;
+    if (headerIdx < 0) { skippedSheets.push(sheet); continue; }
     const hdr = rows[headerIdx] || [];
     const monthCols: { col: number; month: string }[] = [];
     for (let c = 0; c < hdr.length; c++) {
@@ -255,6 +264,13 @@ export function parseRestaurantPnl(data: ArrayBuffer | Uint8Array, company: Rest
     const belowNet = sumCat("below_add") - sumCat("below_less");
     addCheck("Net profit = op profit ± below-the-line", sum("Profit after Operations") + belowNet, sum("Net Profit"), true);
     addCheck("Gross profit = total sales − COGS", sum("Total Sales") - sum("Total Cost of Goods Sold"), sum("Gross Profit"), false);
+    // Silent-omission guards — non-blocking, but visible on every month.
+    for (const n of unmatchedSheets) {
+      checks.push({ name: `Sheet "${n}" looks like a branch sheet but matched no known branch — its figures were NOT included. Update the branch list if this is a new or renamed branch.`, expected: 0, reported: 0, diff: 0, passed: false, blocking: false });
+    }
+    for (const n of skippedSheets) {
+      checks.push({ name: `Branch sheet "${n}" was skipped (too short or no date header row) — its figures were NOT included.`, expected: 0, reported: 0, diff: 0, passed: false, blocking: false });
+    }
 
     const blockingFailed = checks.filter((c) => !c.passed && c.blocking);
     const warnings = checks.filter((c) => !c.passed && !c.blocking);

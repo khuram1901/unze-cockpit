@@ -350,6 +350,9 @@ export default function ImperialPnlPage() {
 
   // ── Tabs: P&L | Balance Sheet ────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"pnl" | "bs">("pnl");
+  // Bumped after an accepted P&L upload so detail data reloads even when the
+  // month range is unchanged (re-upload of existing months).
+  const [pnlRefresh, setPnlRefresh] = useState(0);
 
   // ── Balance Sheet state ──────────────────────────────────────────────
   const [bsMonths, setBsMonths] = useState<string[]>([]);
@@ -378,18 +381,42 @@ export default function ImperialPnlPage() {
     return { monthFrom: allMonths[Math.max(0, allMonths.length - n)], monthTo: last };
   }, [allMonths, preset, customFrom, customTo]);
 
-  // Full month list once, to size the presets.
+  // Defensive numeric coercion — Postgres numeric can serialise as strings.
+  const numKpi = (r: Record<string, unknown>): KpiRow => {
+    const out = { ...r } as Record<string, unknown>;
+    for (const [k, v] of Object.entries(out)) {
+      if (k !== "month" && typeof v === "string" && v !== "" && !Number.isNaN(Number(v))) out[k] = Number(v);
+    }
+    return out as unknown as KpiRow;
+  };
+  const numRow = <T,>(r: Record<string, unknown>, skip: string[] = []): T => {
+    const out = { ...r } as Record<string, unknown>;
+    for (const [k, v] of Object.entries(out)) {
+      if (!skip.includes(k) && typeof v === "string" && v !== "" && !Number.isNaN(Number(v))) out[k] = Number(v);
+    }
+    return out as unknown as T;
+  };
+
+  // Full-range rows (filter-independent) — month list for the presets, and
+  // the FY 25-26 total for the growth story so it doesn't collapse when a
+  // narrow preset is selected.
+  const [fyRows, setFyRows] = useState<KpiRow[]>([]);
   useEffect(() => {
     let active = true;
     async function loadAll() {
       const { data, error } = await supabase.rpc("ifpl_kpi_by_month", { p_from: "2000-01-01", p_to: "2100-01-01", p_channel: "All", p_branch: "All" });
       if (!active) return;
-      if (!error) setAllMonths(((data || []) as KpiRow[]).map((r) => r.month));
+      if (!error) {
+        const rows = ((data || []) as Record<string, unknown>[]).map(numKpi);
+        setAllMonths(rows.map((r) => r.month));
+        setFyRows(rows);
+      }
       setLoading(false);
     }
     loadAll();
     return () => { active = false; };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pnlRefresh]);
 
   // ── BS: load available months ────────────────────────────────────────
   useEffect(() => {
@@ -477,14 +504,15 @@ export default function ImperialPnlPage() {
         supabase.rpc("ifpl_validation_summary"),
       ]);
       if (!active) return;
-      setKpiRows((kpiRes.data || []) as KpiRow[]);
-      setLeague((leagueRes.data || []) as LeagueRow[]);
-      setLineTotals((lineRes.data || []) as LineTotal[]);
-      setValidationRows((valRes.data || []) as ValidationRow[]);
+      setKpiRows(((kpiRes.data || []) as Record<string, unknown>[]).map(numKpi));
+      setLeague(((leagueRes.data || []) as Record<string, unknown>[]).map((r) => numRow<LeagueRow>(r, ["branch", "channel"])));
+      setLineTotals(((lineRes.data || []) as Record<string, unknown>[]).map((r) => numRow<LineTotal>(r, ["line", "category"])));
+      setValidationRows(((valRes.data || []) as Record<string, unknown>[]).map((r) => numRow<ValidationRow>(r, ["month", "file_name", "status", "uploaded_at"])));
     }
     load();
     return () => { active = false; };
-  }, [monthFrom, monthTo, channelFilter, branchFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthFrom, monthTo, channelFilter, branchFilter, pnlRefresh]);
 
   // Saved AI commentary for this exact period + scope — shown as-is on
   // every visit; only Regenerate replaces it.
@@ -552,7 +580,12 @@ export default function ImperialPnlPage() {
       }
       setUploadResults(mapped);
       const { data } = await supabase.rpc("ifpl_kpi_by_month", { p_from: "2000-01-01", p_to: "2100-01-01", p_channel: "All", p_branch: "All" });
-      setAllMonths(((data || []) as KpiRow[]).map((r) => r.month));
+      const fresh = ((data || []) as Record<string, unknown>[]).map(numKpi);
+      setAllMonths(fresh.map((r) => r.month));
+      setFyRows(fresh);
+      // Reload the detail data even when the month list is unchanged
+      // (re-upload of existing months).
+      if (mapped.some((m) => m.accepted)) setPnlRefresh((n) => n + 1);
     } catch (err) {
       setUploadResults([{ month: "", accepted: false, summary: err instanceof Error ? err.message : "Could not read this file" }]);
     } finally {
@@ -645,7 +678,9 @@ export default function ImperialPnlPage() {
   }));
   const growthData = [
     ...FY_HISTORY.map((h) => ({ fy: h.fy, sales: toM(h.sales), current: false })),
-    { fy: "25-26*", sales: toM(4_282_500_000 > 0 ? league.reduce((s, l) => s + l.act_sales, 0) : 0), current: true },
+    // Filter-independent: FY 25-26 total from the full-range fetch, so a
+    // Month/Quarter preset can't make the current-year bar collapse.
+    { fy: "25-26*", sales: toM(fyRows.reduce((s, r) => s + r.act_sales, 0)), current: true },
   ];
 
   // League rows with computed columns; the table shows Top 10 by default,
@@ -979,7 +1014,7 @@ export default function ImperialPnlPage() {
               </div>
               <div style={cardStyle}>
                 <div style={sectionTitle}>Growth story</div>
-                <div style={sectionCaption}>Net sales by financial year · 25-26* is the live database total for the loaded months</div>
+                <div style={sectionCaption}>Net sales by financial year · 25-26* is the live database total for the fiscal year to date</div>
                 <div style={{ height: "200px" }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={growthData}>

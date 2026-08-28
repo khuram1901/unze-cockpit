@@ -241,8 +241,9 @@ function BsSubHeader({ label }: { label: string }) {
   );
 }
 
-function BsItem({ label, note, cur, prev, onNoteClick }: { label: string; note?: string; cur: number; prev?: number | null; onNoteClick?: (n: string) => void }) {
+function BsItem({ label, note, cur, prev, onNoteClick, goodWhenUp = true }: { label: string; note?: string; cur: number; prev?: number | null; onNoteClick?: (n: string) => void; goodWhenUp?: boolean }) {
   const chg = prev != null ? chgLabel(cur, prev) : null;
+  const chgGood = chg ? chg.up === goodWhenUp : false;
   const isNeg = cur < 0;
   const prevNeg = prev != null && prev < 0;
   return (
@@ -255,20 +256,21 @@ function BsItem({ label, note, cur, prev, onNoteClick }: { label: string; note?:
       </td>
       <td style={{ padding: "5px 10px", fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: isNeg ? COLOURS.RED : COLOURS.INK_700 }}>{fmtPKR(cur)}</td>
       <td style={{ padding: "5px 10px", fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: prevNeg ? COLOURS.RED : COLOURS.INK_400 }}>{prev != null ? fmtPKR(prev) : "—"}</td>
-      <td style={{ padding: "5px 10px", fontSize: "10.5px", textAlign: "right", color: chg ? (chg.up ? COLOURS.GREEN : COLOURS.RED) : COLOURS.INK_400 }}>{chg ? chg.text : "—"}</td>
+      <td style={{ padding: "5px 10px", fontSize: "10.5px", textAlign: "right", color: chg ? (chgGood ? COLOURS.GREEN : COLOURS.RED) : COLOURS.INK_400 }}>{chg ? chg.text : "—"}</td>
     </tr>
   );
 }
 
-function BsSubtotal({ label, cur, prev }: { label: string; cur: number; prev?: number | null }) {
+function BsSubtotal({ label, cur, prev, goodWhenUp = true }: { label: string; cur: number; prev?: number | null; goodWhenUp?: boolean }) {
   const chg = prev != null ? chgLabel(cur, prev) : null;
+  const chgGood = chg ? chg.up === goodWhenUp : false;
   return (
     <tr style={{ borderTop: `1px solid ${COLOURS.SLATE}`, borderBottom: `2px solid ${COLOURS.SLATE}` }}>
       <td style={{ padding: "6px 10px", fontWeight: 600, fontSize: "12px", color: COLOURS.NAVY }}>{label}</td>
       <td></td>
       <td style={{ padding: "6px 10px", fontWeight: 600, fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: COLOURS.BLUE }}>{fmtPKR(cur)}</td>
       <td style={{ padding: "6px 10px", fontSize: "11.5px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", color: COLOURS.INK_400 }}>{prev != null ? fmtPKR(prev) : "—"}</td>
-      <td style={{ padding: "6px 10px", fontSize: "10.5px", textAlign: "right", color: chg ? (chg.up ? COLOURS.GREEN : COLOURS.RED) : COLOURS.INK_400 }}>{chg ? chg.text : ""}</td>
+      <td style={{ padding: "6px 10px", fontSize: "10.5px", textAlign: "right", color: chg ? (chgGood ? COLOURS.GREEN : COLOURS.RED) : COLOURS.INK_400 }}>{chg ? chg.text : ""}</td>
     </tr>
   );
 }
@@ -467,6 +469,9 @@ export default function ProfitAndLossPage() {
   const [restatements, setRestatements] = useState<(RestatedItem & { month: string; changed_by: string; changed_at: string })[] | null>(null);
 
   const [showUpload, setShowUpload] = useState(false);
+  // Bumped after an accepted P&L upload so KPI/chart data reloads even when
+  // the month range is unchanged (re-upload of an existing month).
+  const [pnlRefresh, setPnlRefresh] = useState(0);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadResults, setUploadResults] = useState<{ fileName: string; accepted: boolean; summary: string; checks: CheckRow[]; auditIssues: string[]; restated: RestatedItem[] }[]>([]);
@@ -548,7 +553,7 @@ export default function ProfitAndLossPage() {
     }
     load();
     return () => { active = false; };
-  }, [companyId, hasUnze, monthFrom, monthTo, plantFilter]);
+  }, [companyId, hasUnze, monthFrom, monthTo, plantFilter, pnlRefresh]);
 
   useEffect(() => {
     if (!hasUnze || !monthFrom || !monthTo) return;
@@ -665,6 +670,10 @@ export default function ProfitAndLossPage() {
         const { data } = await supabase.rpc("pnl_kpi_summary", { p_company_id: companyId, p_from: "2000-01-01", p_to: "2100-01-01" });
         const rows = (data || []) as KpiRow[];
         setAllMonths(rows.map((r) => r.month));
+        // Reload detail data + stale caches even when the month list is
+        // unchanged (re-upload of an existing month).
+        setPnlRefresh((n) => n + 1);
+        setRestatements(null);
       }
     } finally {
       setUploading(false);
@@ -1638,19 +1647,19 @@ export default function ProfitAndLossPage() {
 
                         <BsSpacer />
                         <BsSubHeader label="Non-Current Liabilities" />
-                        <BsItem label="HBL Short Term Facility"   note="10" cur={bsData.hbl_stf}           prev={bsPrev?.hbl_stf}           onNoteClick={setSelectedNote} />
-                        <BsItem label="Loan from Family"           note="11" cur={bsData.loan_family}       prev={bsPrev?.loan_family}        onNoteClick={setSelectedNote} />
-                        <BsItem label="Mazhar Sb A/c"              note="12" cur={bsData.mazhar_sb_ac}      prev={bsPrev?.mazhar_sb_ac}       onNoteClick={setSelectedNote} />
-                        <BsItem label="Loan from Associates"       note="13" cur={bsData.loan_associates}   prev={bsPrev?.loan_associates}    onNoteClick={setSelectedNote} />
-                        <BsItem label="Lease Liabilities"          note="14" cur={bsData.lease_liabilities} prev={bsPrev?.lease_liabilities}  onNoteClick={setSelectedNote} />
-                        <BsSubtotal label="Total Non-Current Liabilities" cur={bsData.total_ncl} prev={bsPrev?.total_ncl} />
+                        <BsItem label="HBL Short Term Facility"   note="10" cur={bsData.hbl_stf}           prev={bsPrev?.hbl_stf}           onNoteClick={setSelectedNote} goodWhenUp={false} />
+                        <BsItem label="Loan from Family"           note="11" cur={bsData.loan_family}       prev={bsPrev?.loan_family}        onNoteClick={setSelectedNote} goodWhenUp={false} />
+                        <BsItem label="Mazhar Sb A/c"              note="12" cur={bsData.mazhar_sb_ac}      prev={bsPrev?.mazhar_sb_ac}       onNoteClick={setSelectedNote} goodWhenUp={false} />
+                        <BsItem label="Loan from Associates"       note="13" cur={bsData.loan_associates}   prev={bsPrev?.loan_associates}    onNoteClick={setSelectedNote} goodWhenUp={false} />
+                        <BsItem label="Lease Liabilities"          note="14" cur={bsData.lease_liabilities} prev={bsPrev?.lease_liabilities}  onNoteClick={setSelectedNote} goodWhenUp={false} />
+                        <BsSubtotal label="Total Non-Current Liabilities" cur={bsData.total_ncl} prev={bsPrev?.total_ncl} goodWhenUp={false} />
 
                         <BsSpacer />
                         <BsSubHeader label="Current Liabilities" />
-                        <BsItem label="Accrued Liabilities" note="15" cur={bsData.accrued_liabilities} prev={bsPrev?.accrued_liabilities} onNoteClick={setSelectedNote} />
-                        <BsItem label="Payable Controls"    note="16" cur={bsData.payable_controls}     prev={bsPrev?.payable_controls}    onNoteClick={setSelectedNote} />
-                        <BsItem label="Taxation"            note="17" cur={bsData.taxation}              prev={bsPrev?.taxation}            onNoteClick={setSelectedNote} />
-                        <BsSubtotal label="Total Current Liabilities"  cur={bsData.total_cl}            prev={bsPrev?.total_cl} />
+                        <BsItem label="Accrued Liabilities" note="15" cur={bsData.accrued_liabilities} prev={bsPrev?.accrued_liabilities} onNoteClick={setSelectedNote} goodWhenUp={false} />
+                        <BsItem label="Payable Controls"    note="16" cur={bsData.payable_controls}     prev={bsPrev?.payable_controls}    onNoteClick={setSelectedNote} goodWhenUp={false} />
+                        <BsItem label="Taxation"            note="17" cur={bsData.taxation}              prev={bsPrev?.taxation}            onNoteClick={setSelectedNote} goodWhenUp={false} />
+                        <BsSubtotal label="Total Current Liabilities"  cur={bsData.total_cl}            prev={bsPrev?.total_cl} goodWhenUp={false} />
 
                         <BsSpacer />
                         <BsGrandTotal label="TOTAL EQUITY & LIABILITIES" cur={bsData.total_equity_liabilities} prev={bsPrev?.total_equity_liabilities} />

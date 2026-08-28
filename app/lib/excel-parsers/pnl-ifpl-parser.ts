@@ -79,7 +79,14 @@ const MONTH_SHEET_RE = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*
 const MONTH_NUM: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 
 function num(v: unknown): number {
-  return typeof v === "number" && !Number.isNaN(v) ? v : 0;
+  if (typeof v === "number" && !Number.isNaN(v)) return v;
+  // A cell an accountant re-typed as text ("1,234,567") must not silently
+  // become 0 — strip separators and try again.
+  if (typeof v === "string") {
+    const n = Number(v.replace(/,/g, "").trim());
+    if (v.trim() !== "" && Number.isFinite(n)) return n;
+  }
+  return 0;
 }
 function str(v: unknown): string {
   return typeof v === "string" ? v : v == null ? "" : String(v);
@@ -249,7 +256,9 @@ function readMonthWiseNetSales(wb: XLSX.WorkBook): Record<string, number> {
   for (let c = 0; c < dateRow.length; c++) {
     const v = dateRow[c];
     if (v instanceof Date) {
-      const month = `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-01`;
+      // UTC accessors — SheetJS materialises date cells against a UTC epoch,
+      // so local getFullYear/getMonth shifts the month for users west of UTC.
+      const month = `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, "0")}-01`;
       // Layout per month block: Projection | (pct) | Actual — the actual
       // sits two columns right of the header date column.
       out[month] = num(nsRow[c + 2]);
@@ -302,8 +311,9 @@ function parseMonthSheet(wb: XLSX.WorkBook, sheetName: string, month: string, mo
     const rawLabel = str(row[0]).trim();
     if (!rawLabel) continue;
     const label = cleanLabel(rawLabel);
-    if (SKIP_LINES.has(label) || label.startsWith("Operating Expenses")) {
-      if (label.startsWith("Operating Expenses")) inOverheads = true;
+    const isOpexHeader = /^operating expenses/i.test(label);
+    if (SKIP_LINES.has(label) || isOpexHeader) {
+      if (isOpexHeader) inOverheads = true;
       continue;
     }
 

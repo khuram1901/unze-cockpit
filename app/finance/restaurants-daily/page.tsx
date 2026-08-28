@@ -94,21 +94,31 @@ function shortPkr(n: number | null | undefined): string {
   return sign + "PKR " + Math.round(abs).toLocaleString();
 }
 
+// "Now" in the business timezone (Asia/Karachi) — cash sheets are keyed by
+// PKT dates, so a director browsing from the UK/US late in the evening must
+// not default to the previous month around PKT month boundaries.
+function pktNowParts(): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Karachi", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value || 0);
+  return { year: get("year"), month: get("month") };
+}
+
 function getMonthOptions(): { value: string; label: string }[] {
   const opts: { value: string; label: string }[] = [];
-  const now = new Date();
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const label = d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const { year, month } = pktNowParts();
+  // 18 months back — older sheets stay reachable long after the fact.
+  for (let i = 0; i < 18; i++) {
+    const d = new Date(Date.UTC(year, month - 1 - i, 1));
+    const value = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
     opts.push({ value, label });
   }
   return opts;
 }
 
 function currentMonthISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const { year, month } = pktNowParts();
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -194,13 +204,13 @@ export default function RestaurantsFinancePage() {
   const periodReceipts = sheets.reduce((sum, s) => {
     const fromSheet = s.receipts_pkr;
     if (fromSheet != null) return sum + fromSheet;
-    return sum + s.cash_sheet_transactions.filter((t) => t.txn_type === "receipt").reduce((s2, t) => s2 + t.amount_pkr, 0);
+    return sum + s.cash_sheet_transactions.filter((t) => t.txn_type === "receipt").reduce((s2, t) => s2 + Number(t.amount_pkr), 0);
   }, 0);
 
   const periodPayments = sheets.reduce((sum, s) => {
     const fromSheet = s.payments_pkr;
     if (fromSheet != null) return sum + fromSheet;
-    return sum + s.cash_sheet_transactions.filter((t) => t.txn_type === "payment").reduce((s2, t) => s2 + t.amount_pkr, 0);
+    return sum + s.cash_sheet_transactions.filter((t) => t.txn_type === "payment").reduce((s2, t) => s2 + Number(t.amount_pkr), 0);
   }, 0);
 
   // Chart data
@@ -489,10 +499,10 @@ export default function RestaurantsFinancePage() {
                       // Prefer sheet-level totals (from PDF parse); fall back to summing transactions
                       const receipts = s.receipts_pkr ?? s.cash_sheet_transactions
                         .filter((t) => t.txn_type === "receipt")
-                        .reduce((sum, t) => sum + t.amount_pkr, 0);
+                        .reduce((sum, t) => sum + Number(t.amount_pkr), 0);
                       const payments = s.payments_pkr ?? s.cash_sheet_transactions
                         .filter((t) => t.txn_type === "payment")
-                        .reduce((sum, t) => sum + t.amount_pkr, 0);
+                        .reduce((sum, t) => sum + Number(t.amount_pkr), 0);
                       const net = (s.closing_balance_pkr ?? 0) - (s.opening_balance_pkr ?? 0);
 
                       return (

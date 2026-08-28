@@ -55,7 +55,12 @@ export function findErrorCells(wb: XLSX.WorkBook, sheetNames: string[]): AuditIs
       if (!isErrorType && !isErrorText) continue;
       const m = addr.match(/^([A-Z]+)(\d+)$/);
       if (!m) continue;
-      const err = String(cell.w || cell.v || "#ERROR").trim();
+      // For true error cells (t === "e") cell.v is the NUMERIC error code —
+      // map it to the Excel literal so warnings never show a bare number.
+      const ERR_CODES: Record<number, string> = { 0x00: "#NULL!", 0x07: "#DIV/0!", 0x0f: "#VALUE!", 0x17: "#REF!", 0x1d: "#NAME?", 0x24: "#NUM!", 0x2a: "#N/A" };
+      const err = (cell.t === "e" && typeof cell.v === "number" && ERR_CODES[cell.v])
+        ? ERR_CODES[cell.v]
+        : String(cell.w || cell.v || "#ERROR").trim();
       if (!byCol.has(m[1])) byCol.set(m[1], []);
       byCol.get(m[1])!.push({ row: parseInt(m[2], 10), err });
     }

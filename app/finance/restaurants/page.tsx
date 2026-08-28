@@ -30,7 +30,7 @@ type KpiRow = {
   net_sales: number; total_cogs: number; gross_profit: number;
   admin_expenses: number; op_profit: number; net_profit: number;
 };
-type LeagueRow = { branch: string; net_sales: number; gross_profit: number; net_profit: number };
+type LeagueRow = { branch: string; net_sales: number; gross_profit: number; net_profit: number; total_cogs: number };
 type LineTotal = { line: string; category: string; amount: number };
 type ValidationRow = { month: string; file_name: string; status: string; checks_passed: number; checks_failed: number; warnings: number; uploaded_at: string };
 type CheckIssue = { month: string; check_name: string; expected: number; reported: number; diff: number; blocking: boolean; status: string };
@@ -88,6 +88,9 @@ export default function RestaurantsPnlPage() {
   const [league, setLeague] = useState<LeagueRow[]>([]);
   const [lineTotals, setLineTotals] = useState<LineTotal[]>([]);
   const [validationRows, setValidationRows] = useState<ValidationRow[]>([]);
+  // Bumped after an accepted upload so detail data reloads even when the
+  // month range is unchanged (re-upload of existing months).
+  const [pnlRefresh, setPnlRefresh] = useState(0);
 
   const [branchFilter, setBranchFilter] = useState("All");
   const [preset, setPreset] = useState<Preset>("12M");
@@ -152,14 +155,23 @@ export default function RestaurantsPnlPage() {
         supabase.rpc("rest_validation_summary", { p_company: company }),
       ]);
       if (!active) return;
-      setKpiRows((kpiRes.data || []) as KpiRow[]);
-      setLeague((leagueRes.data || []) as LeagueRow[]);
-      setLineTotals((lineRes.data || []) as LineTotal[]);
-      setValidationRows((valRes.data || []) as ValidationRow[]);
+      // Postgres numeric can serialise as strings — coerce every numeric
+      // field so reduce() adds instead of concatenating and >=/sorts work.
+      const co = <T,>(r: Record<string, unknown>, skip: string[]): T => {
+        const out = { ...r } as Record<string, unknown>;
+        for (const [k, v] of Object.entries(out)) {
+          if (!skip.includes(k) && typeof v === "string" && v !== "" && !Number.isNaN(Number(v))) out[k] = Number(v);
+        }
+        return out as unknown as T;
+      };
+      setKpiRows(((kpiRes.data || []) as Record<string, unknown>[]).map((r) => co<KpiRow>(r, ["month"])));
+      setLeague(((leagueRes.data || []) as Record<string, unknown>[]).map((r) => co<LeagueRow>(r, ["branch"])));
+      setLineTotals(((lineRes.data || []) as Record<string, unknown>[]).map((r) => co<LineTotal>(r, ["line", "category"])));
+      setValidationRows(((valRes.data || []) as Record<string, unknown>[]).map((r) => co<ValidationRow>(r, ["month", "file_name", "status", "uploaded_at"])));
     }
     load();
     return () => { active = false; };
-  }, [company, monthFrom, monthTo, branchFilter]);
+  }, [company, monthFrom, monthTo, branchFilter, pnlRefresh]);
 
   // Saved AI commentary for this exact company + branch + period.
   useEffect(() => {
@@ -233,6 +245,9 @@ export default function RestaurantsPnlPage() {
       setCheckIssues(null);
       const { data } = await supabase.rpc("rest_kpi_by_month", { p_company: company, p_from: "2000-01-01", p_to: "2100-01-01", p_branch: "All" });
       setAllMonths(((data || []) as KpiRow[]).map((r) => r.month));
+      // Reload detail data even when the month list is unchanged
+      // (re-upload of existing months).
+      if (((body.results || []) as UploadResult[]).some((r) => r.accepted)) setPnlRefresh((n) => n + 1);
     } catch (err) {
       setUploadResults([{ month: "", accepted: false, summary: err instanceof Error ? err.message : "Could not read this file" }]);
     } finally {
@@ -539,7 +554,9 @@ export default function RestaurantsPnlPage() {
                     </thead>
                     <tbody>
                       {league.map((r) => {
-                        const food = r.net_sales ? ((r.net_sales - r.gross_profit) / r.net_sales) * 100 : null;
+                        // Same definition as the KPI card: total COGS over net sales (the old
+                        // net_sales − GP formula was understated by bank discount claims).
+                        const food = r.net_sales ? ((r.total_cogs ?? (r.net_sales - r.gross_profit)) / r.net_sales) * 100 : null;
                         const chip = foodChip(food);
                         const gp = r.net_sales ? (r.gross_profit / r.net_sales) * 100 : null;
                         const selected = branchFilter === r.branch;
@@ -563,7 +580,7 @@ export default function RestaurantsPnlPage() {
                       <tr style={{ borderTop: `2px solid ${COLOURS.NAVY}`, background: COLOURS.CARD_ALT }}>
                         <td style={{ padding: "8px 0", fontWeight: 700 }}>Whole company</td>
                         <td style={{ fontWeight: 700 }}>{fmtM(league.reduce((s, l) => s + l.net_sales, 0))}</td>
-                        <td style={{ fontWeight: 700 }}>{(() => { const ns = league.reduce((s, l) => s + l.net_sales, 0); const gp = league.reduce((s, l) => s + l.gross_profit, 0); return ns ? fmtPct(((ns - gp) / ns) * 100) : "—"; })()}</td>
+                        <td style={{ fontWeight: 700 }}>{(() => { const ns = league.reduce((s, l) => s + l.net_sales, 0); const cogs = league.reduce((s, l) => s + (l.total_cogs ?? (l.net_sales - l.gross_profit)), 0); return ns ? fmtPct((cogs / ns) * 100) : "—"; })()}</td>
                         <td style={{ fontWeight: 700 }}>{(() => { const ns = league.reduce((s, l) => s + l.net_sales, 0); const gp = league.reduce((s, l) => s + l.gross_profit, 0); return ns ? fmtPct((gp / ns) * 100) : "—"; })()}</td>
                         <td style={{ color: league.reduce((s, l) => s + l.net_profit, 0) >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 700 }}>
                           {(() => { const np = league.reduce((s, l) => s + l.net_profit, 0); return `${np >= 0 ? "+" : ""}${fmtM(np)}`; })()}

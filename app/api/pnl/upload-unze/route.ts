@@ -98,25 +98,24 @@ export async function POST(request: NextRequest) {
           restated.push({ scope, line: line === "Net Profit Final" ? "Net Profit" : "Gross Sales", old_value: oldV, new_value: newV });
         }
       }
-      if (restated.length > 0) {
-        await supabase.from("pnl_restatements").insert(
-          restated.map((r) => ({ company: "UTPL", month: parsed.month, scope: r.scope, line: r.line, old_value: r.old_value, new_value: r.new_value, changed_by: auth.email })),
-        );
-      }
+      // NOTE: the pnl_restatements insert happens AFTER the new data is
+      // successfully stored (below) — a restatement must never be logged
+      // for figures that failed to land.
     }
   }
 
-  // Reuploading a corrected file for a month that was already accepted
-  // replaces it outright — cascades to delete the old line items, ledger
-  // lines, allocation %, and validation checks tied to that upload.
-  if (parsed.accepted) {
-    await supabase
-      .from("pnl_uploads")
-      .delete()
-      .eq("company_id", UTPL_COMPANY_ID)
-      .eq("month", parsed.month)
-      .eq("status", "accepted");
-  }
+  // pnl_uploads has UNIQUE (company_id, month, status). To replace an
+  // accepted month WITHOUT deleting the old data first (a mid-write failure
+  // must never destroy an accepted month), the new upload is inserted as
+  // 'pending', its data written, the old accepted upload deleted, and only
+  // then is the new row flipped to 'accepted'. Stale leftovers from any
+  // earlier crashed attempt are cleared up front.
+  await supabase
+    .from("pnl_uploads")
+    .delete()
+    .eq("company_id", UTPL_COMPANY_ID)
+    .eq("month", parsed.month)
+    .eq("status", parsed.accepted ? "pending" : "rejected");
 
   const { data: upload, error: uploadError } = await supabase
     .from("pnl_uploads")
@@ -124,7 +123,7 @@ export async function POST(request: NextRequest) {
       company_id: UTPL_COMPANY_ID,
       month: parsed.month,
       file_name: file.name,
-      status,
+      status: parsed.accepted ? "pending" : status,
       uploaded_by: auth.email,
       checks_passed: parsed.checks.length - checksFailed.length,
       checks_failed: checksFailed.length,
@@ -139,7 +138,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Could not log this upload: " + (uploadError?.message ?? "unknown error") }, { status: 500 });
   }
 
-  await supabase.from("pnl_validation_checks").insert(
+  const { error: checksLogErr } = await supabase.from("pnl_validation_checks").insert(
     parsed.checks.map((c) => ({
       upload_id: upload.id,
       check_name: c.name,
@@ -149,6 +148,11 @@ export async function POST(request: NextRequest) {
       passed: c.passed,
     })),
   );
+  // Non-fatal, but never silent — the check drill-down is part of the
+  // integrity story, so a failure to store it is surfaced to the uploader.
+  const checksLogWarning = checksLogErr
+    ? `Check results could not be stored for the audit trail (${checksLogErr.message}) — figures unaffected.`
+    : null;
 
   if (!parsed.accepted) {
     // Nothing else gets written — the whole file is rejected, exactly as
@@ -176,14 +180,48 @@ export async function POST(request: NextRequest) {
 
   const writeError = lineErr || ledgerErr || allocErr;
   if (writeError) {
-    // Roll back the whole upload rather than leave a half-written month —
-    // "accepted" must mean everything is actually there.
+    // Roll back the NEW upload rather than leave a half-written month.
+    // The previously accepted month (if any) is still intact — it is only
+    // deleted below, after everything new has landed.
     await supabase.from("pnl_uploads").delete().eq("id", upload.id);
-    return Response.json({ error: "Checks passed but saving failed: " + writeError.message }, { status: 500 });
+    return Response.json({ error: "Checks passed but saving failed: " + writeError.message + " — the previously stored month is unchanged." }, { status: 500 });
   }
 
-  // Restatements → email the CEO immediately (also permanently logged above;
-  // email failure never affects the upload).
+  // ── Replace-old-with-new, delete-LAST ────────────────────────────────
+  // Only now that the new upload's data is fully stored do we remove the
+  // previously accepted upload(s) for this month (cascades to their line
+  // items, ledger lines, allocation % and checks). If this delete fails we
+  // roll back the NEW upload so the month never shows doubled figures.
+  const { error: oldDelErr } = await supabase
+    .from("pnl_uploads")
+    .delete()
+    .eq("company_id", UTPL_COMPANY_ID)
+    .eq("month", parsed.month)
+    .eq("status", "accepted")
+    .neq("id", upload.id);
+  if (oldDelErr) {
+    await supabase.from("pnl_uploads").delete().eq("id", upload.id);
+    return Response.json({ error: "Could not replace the previously stored month (" + oldDelErr.message + ") — the previously stored figures were kept and the new upload was rolled back. Try again." }, { status: 500 });
+  }
+
+  // Flip the fully-written new upload from 'pending' to 'accepted'. Retried
+  // once; a persistent failure leaves the new data stored but invisible
+  // (dashboards only read accepted uploads) and says so explicitly.
+  let { error: acceptErr } = await supabase.from("pnl_uploads").update({ status: "accepted" }).eq("id", upload.id);
+  if (acceptErr) {
+    ({ error: acceptErr } = await supabase.from("pnl_uploads").update({ status: "accepted" }).eq("id", upload.id));
+  }
+  if (acceptErr) {
+    return Response.json({ error: "The month's data was written but could not be activated (" + acceptErr.message + "). Re-upload the same file to complete the replacement." }, { status: 500 });
+  }
+
+  // ── Restatement log + CEO alert — only after the data actually landed ──
+  if (restated.length > 0) {
+    await supabase.from("pnl_restatements").insert(
+      restated.map((r) => ({ company: "UTPL", month: parsed.month, scope: r.scope, line: r.line, old_value: r.old_value, new_value: r.new_value, changed_by: auth.email })),
+    );
+  }
+  // (email failure never affects the upload)
   await sendRestatementAlert({
     companyLabel: "Unze Trading",
     pagePath: "/finance/profit-and-loss",
@@ -200,8 +238,8 @@ export async function POST(request: NextRequest) {
     restated: restated.length > 0 ? restated : undefined,
     lineItems: parsed.lineItems.length,
     ledgerLines: parsed.ledgerLines.length,
-    summary: parsed.auditIssues.length > 0
+    summary: (parsed.auditIssues.length > 0
       ? `All ${parsed.checks.length} checks passed (${parsed.auditIssues.length} Excel audit warning${parsed.auditIssues.length > 1 ? "s" : ""} below).`
-      : `All ${parsed.checks.length} checks passed.`,
+      : `All ${parsed.checks.length} checks passed.`) + (checksLogWarning ? ` ⚠ ${checksLogWarning}` : ""),
   });
 }
