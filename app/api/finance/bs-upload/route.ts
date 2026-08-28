@@ -136,7 +136,12 @@ function detectMonth(filename: string, wb: XLSX.WorkBook, bsRows: unknown[][] | 
     const named = s.match(new RegExp(`\\b(${MONTH_RE})[- _]?(\\d{1,4})(?:[- _,]+(\\d{2,4}))?\\b`));
     if (named) {
       const mn = MONTH_SHORT[named[1].slice(0, 3)];
-      let yr = named[3] || named[2];
+      // If the number right after the month is already a valid 4-digit year
+      // ("Jan 2026 12.xlsx" — trailing "12" is a version, not the year),
+      // keep it; only treat the second number as the year for the
+      // day-then-year shape ("February 28 26").
+      const g2 = named[2];
+      let yr = (g2.length === 4 && +g2 >= 2000 && +g2 <= 2099) ? g2 : (named[3] || g2);
       if (yr.length === 1) continue; // single digit — ambiguous, keep looking
       if (yr.length === 2) yr = `20${yr}`;
       if (mn && yr.length === 4 && +yr >= 2000 && +yr <= 2099) return `${yr}-${mn}-01`;
@@ -616,15 +621,20 @@ export async function POST(request: NextRequest) {
   );
 
   if (dbErr) {
-    // audit_warnings column may not exist yet — retry without it
+    // Retry without the audit columns ONLY when the error is a missing
+    // column (42703 / "column ... does not exist") — any other error must
+    // surface rather than silently stripping the audit trail.
+    const missingCol = dbErr.code === "42703" || /column .* does not exist/i.test(dbErr.message || "");
+    if (!missingCol) return NextResponse.json({ error: dbErr.message }, { status: 500 });
     const { error: dbErr2 } = await supabase.from("balance_sheet").upsert(
       { company_id: UTPL_COMPANY_ID, month, ...lineItems, uploaded_by: auth.email },
       { onConflict: "company_id,month" }
     );
     if (dbErr2) return NextResponse.json({ error: dbErr2.message }, { status: 500 });
+    warnings.push("Audit columns (checks_passed / audit_warnings) are missing from the balance_sheet table — figures saved, audit trail not stored. Run migration 183.");
   }
 
-  // ── Save account-level note lines (best-effort) ──────────────────────────
+  // ── Save account-level note lines (best-effort, but never silently) ──────
   let notesSaved = 0;
   if (noteLines.length > 0) {
     const { error: delErr } = await supabase
@@ -632,11 +642,17 @@ export async function POST(request: NextRequest) {
       .delete()
       .eq("company_id", UTPL_COMPANY_ID)
       .eq("month", month);
-    if (!delErr) {
+    if (delErr) {
+      warnings.push(`Note breakdowns could not be refreshed (${delErr.message}) — the note panel may show stale data for this month.`);
+    } else {
       const { error: notesErr } = await supabase.from("balance_sheet_notes").insert(
         noteLines.map((l) => ({ company_id: UTPL_COMPANY_ID, month, ...l }))
       );
-      if (!notesErr) notesSaved = noteLines.length;
+      if (notesErr) {
+        warnings.push(`Note breakdowns failed to save (${notesErr.message}) — the note panel will show no detail for this month until a successful re-upload.`);
+      } else {
+        notesSaved = noteLines.length;
+      }
     }
   }
 

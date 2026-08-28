@@ -477,6 +477,9 @@ export default function ProfitAndLossPage() {
   const [bsData, setBsData] = useState<BsRow | null>(null);
   const [bsPrev, setBsPrev] = useState<BsRow | null>(null);
   const [bsLoading, setBsLoading] = useState(false);
+  // Bumped after an accepted upload so the data reloads even when the
+  // selected month string is unchanged (re-upload of the same month).
+  const [bsRefresh, setBsRefresh] = useState(0);
 
   // ── BS upload state ──────────────────────────────────────────────────
   const [showBsUpload, setShowBsUpload] = useState(false);
@@ -589,34 +592,52 @@ export default function ProfitAndLossPage() {
         supabase.rpc("get_balance_sheet_notes", { p_company_id: companyId, p_month: bsMonth }),
       ]);
       if (!active) return;
-      const rows = (bsRes.data || []) as BsRow[];
+      // Postgres `numeric` can serialise as a string — coerce monetary fields
+      // so arithmetic adds instead of concatenating.
+      const coerce = (r: Record<string, unknown>): BsRow => {
+        const out = { ...r } as Record<string, unknown>;
+        for (const [k, v] of Object.entries(out)) {
+          if (k !== "month" && typeof v === "string" && v !== "" && !Number.isNaN(Number(v))) out[k] = Number(v);
+        }
+        return out as unknown as BsRow;
+      };
+      const rows = ((bsRes.data || []) as Record<string, unknown>[]).map(coerce);
       setBsData(rows[0] || null);
       setBsPrev(rows[1] || null);
-      setBsNoteLines((notesRes.data || []) as BsNoteLine[]);
+      const notes = ((notesRes.data || []) as BsNoteLine[]).map((l) => ({ ...l, amount: l.amount === null ? null : Number(l.amount) }));
+      setBsNoteLines(notes);
       setBsLoading(false);
     }
     loadBs();
     return () => { active = false; };
-  }, [companyId, hasUnze, bsMonth]);
+  }, [companyId, hasUnze, bsMonth, bsRefresh]);
 
   async function handleBsUpload() {
     if (!bsUploadFile) return;
     setBsUploading(true);
     setBsUploadResult(null);
-    const form = new FormData();
-    form.append("file", bsUploadFile);
-    // Month is auto-detected server-side from filename + sheet names
-    const res = await authFetch("/api/finance/bs-upload", { method: "POST", body: form });
-    const body = await res.json();
-    setBsUploadResult(body);
-    setBsUploading(false);
-    if (body.accepted) {
-      setBsUploadFile(null);
-      // Refresh months list
-      const { data } = await supabase.rpc("get_balance_sheet_months", { p_company_id: companyId });
-      const months = ((data || []) as { month: string }[]).map((r) => r.month);
-      setBsMonths(months);
-      setBsMonth(months[months.length - 1] || bsMonth);
+    try {
+      const form = new FormData();
+      form.append("file", bsUploadFile);
+      // Month is auto-detected server-side from the sheet title + filename
+      const res = await authFetch("/api/finance/bs-upload", { method: "POST", body: form });
+      let body: typeof bsUploadResult;
+      try { body = await res.json(); } catch { body = { accepted: false, error: `Upload failed (HTTP ${res.status}) — the server did not return a readable response.` }; }
+      setBsUploadResult(body);
+      if (body?.accepted) {
+        setBsUploadFile(null);
+        // Refresh months list, then force a data reload even if the selected
+        // month is unchanged (the common re-upload-same-month case).
+        const { data } = await supabase.rpc("get_balance_sheet_months", { p_company_id: companyId });
+        const months = ((data || []) as { month: string }[]).map((r) => r.month);
+        setBsMonths(months);
+        setBsMonth(body.month || months[months.length - 1] || bsMonth);
+        setBsRefresh((n) => n + 1);
+      }
+    } catch (e) {
+      setBsUploadResult({ accepted: false, error: "Upload failed: " + (e instanceof Error ? e.message : "network error") });
+    } finally {
+      setBsUploading(false);
     }
   }
 
@@ -625,20 +646,28 @@ export default function ProfitAndLossPage() {
     setUploading(true);
     setUploadResults([]);
     let anyAccepted = false;
-    for (const file of uploadFiles) {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await authFetch("/api/pnl/upload-unze", { method: "POST", body: formData });
-      const body = await res.json();
-      if (body.accepted) anyAccepted = true;
-      setUploadResults((prev) => [...prev, { fileName: file.name, accepted: !!body.accepted, summary: body.summary || body.error || "Unknown error", checks: body.checks || [], auditIssues: body.auditIssues || [], restated: body.restated || [] }]);
-    }
-    setUploading(false);
-    setUploadFiles([]);
-    if (anyAccepted) {
-      const { data } = await supabase.rpc("pnl_kpi_summary", { p_company_id: companyId, p_from: "2000-01-01", p_to: "2100-01-01" });
-      const rows = (data || []) as KpiRow[];
-      setAllMonths(rows.map((r) => r.month));
+    try {
+      for (const file of uploadFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+          const res = await authFetch("/api/pnl/upload-unze", { method: "POST", body: formData });
+          let body: { accepted?: boolean; summary?: string; error?: string; checks?: CheckRow[]; auditIssues?: string[]; restated?: RestatedItem[] };
+          try { body = await res.json(); } catch { body = { accepted: false, error: `Upload failed (HTTP ${res.status})` }; }
+          if (body.accepted) anyAccepted = true;
+          setUploadResults((prev) => [...prev, { fileName: file.name, accepted: !!body.accepted, summary: body.summary || body.error || "Unknown error", checks: body.checks || [], auditIssues: body.auditIssues || [], restated: body.restated || [] }]);
+        } catch (e) {
+          setUploadResults((prev) => [...prev, { fileName: file.name, accepted: false, summary: "Upload failed: " + (e instanceof Error ? e.message : "network error"), checks: [], auditIssues: [], restated: [] }]);
+        }
+      }
+      setUploadFiles([]);
+      if (anyAccepted) {
+        const { data } = await supabase.rpc("pnl_kpi_summary", { p_company_id: companyId, p_from: "2000-01-01", p_to: "2100-01-01" });
+        const rows = (data || []) as KpiRow[];
+        setAllMonths(rows.map((r) => r.month));
+      }
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -807,6 +836,104 @@ export default function ProfitAndLossPage() {
     if (higherIsBetter) return v >= good ? COLOURS.GREEN : v >= warn ? COLOURS.AMBER : COLOURS.RED;
     return v <= good ? COLOURS.GREEN : v <= warn ? COLOURS.AMBER : COLOURS.RED;
   };
+
+  // BS upload panel — rendered in every BS-tab branch (including the empty
+  // states, so the very first month can be uploaded through the UI).
+  const bsUploadPanel = canUploadUnze && showBsUpload ? (
+    <div style={{ marginBottom: "14px" }}>
+      <div style={{ ...cardStyle }}>
+        <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY, marginBottom: "10px" }}>Upload Balance Sheet</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "flex-end" }}>
+          <div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "4px", fontWeight: 600 }}>FILE (.xlsx)</div>
+            <input
+              type="file"
+              accept=".xlsx"
+              onChange={(e) => { setBsUploadFile(e.target.files?.[0] || null); setBsUploadResult(null); }}
+              style={{ fontSize: "13px" }}
+            />
+          </div>
+          <button
+            onClick={handleBsUpload}
+            disabled={!bsUploadFile || bsUploading}
+            style={{ ...chipBtn(true), opacity: !bsUploadFile || bsUploading ? 0.5 : 1, cursor: !bsUploadFile || bsUploading ? "not-allowed" : "pointer" }}
+          >
+            {bsUploading ? "Uploading…" : "Upload"}
+          </button>
+        </div>
+        <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "7px" }}>
+          Month is detected automatically from the sheet&apos;s &ldquo;AS AT&rdquo; title or the filename (e.g. &ldquo;Balance Sheet Jun-26.xlsx&rdquo;). The parser looks for the &ldquo;BS (R)&rdquo; sheet and matches rows by label.
+        </div>
+        {bsUploadResult && (
+          <div style={{ marginTop: "12px" }}>
+            {/* Summary banner */}
+            <div style={{ padding: "10px 14px", borderRadius: RADII.SM, background: (bsUploadResult.accepted ?? bsUploadResult.ok) ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, marginBottom: "10px" }}>
+              <div style={{ fontWeight: 700, fontSize: "13px", color: (bsUploadResult.accepted ?? bsUploadResult.ok) ? COLOURS.GREEN : COLOURS.RED }}>
+                {(bsUploadResult.accepted ?? bsUploadResult.ok) ? "✓ " : "✗ "}{bsUploadResult.summary || bsUploadResult.error}
+              </div>
+              {bsUploadResult.sheetUsed && (
+                <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px" }}>Sheet used: &ldquo;{bsUploadResult.sheetUsed}&rdquo; · {bsUploadResult.month?.slice(0, 7)}</div>
+              )}
+            </div>
+            {/* Checks */}
+            {bsUploadResult.checks && bsUploadResult.checks.length > 0 && (
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "5px", letterSpacing: ".05em" }}>INTEGRITY CHECKS</div>
+                {bsUploadResult.checks.map((c, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, gap: "10px" }}>
+                    <div>
+                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: c.passed ? COLOURS.GREEN : COLOURS.RED }}>{c.passed ? "✓" : "✗"} </span>
+                      <span style={{ fontSize: "11.5px", color: COLOURS.INK_700 }}>{c.name}</span>
+                      {c.note && <div style={{ fontSize: "10.5px", color: COLOURS.RED, marginTop: "2px" }}>{c.note}</div>}
+                    </div>
+                    {!c.passed && (
+                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, textAlign: "right", flexShrink: 0, fontFamily: "monospace" }}>
+                        diff: {Math.round(c.diff).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Audit warnings */}
+            {bsUploadResult.auditWarnings && bsUploadResult.auditWarnings.length > 0 && (
+              <div style={{ padding: "10px 12px", borderRadius: RADII.SM, background: COLOURS.WARNING_SOFT, marginBottom: "10px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.AMBER, marginBottom: "5px" }}>AUDIT WARNINGS</div>
+                {bsUploadResult.auditWarnings.map((w, i) => (
+                  <div key={i} style={{ fontSize: "11.5px", color: COLOURS.INK_700, padding: "2px 0" }}>⚠ {w}</div>
+                ))}
+              </div>
+            )}
+            {/* Restatements */}
+            {bsUploadResult.restated && bsUploadResult.restated.length > 0 && (
+              <div style={{ padding: "10px 12px", borderRadius: RADII.SM, background: COLOURS.INFO_SOFT, marginBottom: "10px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.BLUE, marginBottom: "5px" }}>CHANGES TO PREVIOUSLY REPORTED FIGURES</div>
+                {bsUploadResult.restated.map((r, i) => (
+                  <div key={i} style={{ fontSize: "11.5px", color: COLOURS.INK_700, padding: "2px 0", fontFamily: "monospace" }}>
+                    ↺ {r.field}: {Math.round(r.old_value).toLocaleString()} → {Math.round(r.new_value).toLocaleString()}
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Parsed values (if accepted) */}
+            {(bsUploadResult.accepted ?? bsUploadResult.ok) && bsUploadResult.parsed && (
+              <details style={{ fontSize: "11px" }}>
+                <summary style={{ cursor: "pointer", color: COLOURS.SLATE, marginBottom: "6px" }}>View parsed line items</summary>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "3px 14px", paddingTop: "6px" }}>
+                  {Object.entries(bsUploadResult.parsed).map(([k, v]) => (
+                    <div key={k} style={{ color: COLOURS.INK_700 }}>
+                      <span style={{ color: COLOURS.SLATE }}>{k.replace(/_/g, " ")}: </span>
+                      <span style={{ fontFamily: "monospace", fontWeight: 600, color: v < 0 ? COLOURS.RED : COLOURS.NAVY }}>{Math.round(v).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
 
   return (
     <AuthWrapper>
@@ -1216,7 +1343,7 @@ export default function ProfitAndLossPage() {
                         <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>DATA QUALITY</span>
                         {allValidated ? (
                           <span style={{ background: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
-                            ✓ {validationRows.length}/{validationRows.length} months validated, 16/16 checks each
+                            ✓ {validationRows.length}/{validationRows.length} months validated, all integrity checks passed
                           </span>
                         ) : (
                           badMonths.map((v) => (
@@ -1290,111 +1417,23 @@ export default function ProfitAndLossPage() {
             ) : bsLoading ? (
               <SkeletonRows count={4} />
             ) : bsMonths.length === 0 ? (
-              <div style={cardStyle}>
-                <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No balance sheets uploaded yet. Upload a month to get started.</p>
-              </div>
+              <>
+                {bsUploadPanel}
+                <div style={cardStyle}>
+                  <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No balance sheets uploaded yet. Upload a month to get started.</p>
+                </div>
+              </>
             ) : !bsData ? (
-              <div style={cardStyle}>
-                <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No data for the selected month.</p>
-              </div>
+              <>
+                {bsUploadPanel}
+                <div style={cardStyle}>
+                  <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No data for the selected month.</p>
+                </div>
+              </>
             ) : (
               <>
-                {/* ── BS Upload panel (button lives in the page header) ── */}
-                {canUploadUnze && showBsUpload && (
-                  <div style={{ marginBottom: "14px" }}>
-                    <div style={{ ...cardStyle }}>
-                      <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY, marginBottom: "10px" }}>Upload Balance Sheet</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "flex-end" }}>
-                        <div>
-                          <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "4px", fontWeight: 600 }}>FILE (.xlsx)</div>
-                          <input
-                            type="file"
-                            accept=".xlsx"
-                            onChange={(e) => { setBsUploadFile(e.target.files?.[0] || null); setBsUploadResult(null); }}
-                            style={{ fontSize: "13px" }}
-                          />
-                        </div>
-                        <button
-                          onClick={handleBsUpload}
-                          disabled={!bsUploadFile || bsUploading}
-                          style={{ ...chipBtn(true), opacity: !bsUploadFile || bsUploading ? 0.5 : 1, cursor: !bsUploadFile || bsUploading ? "not-allowed" : "pointer" }}
-                        >
-                          {bsUploading ? "Uploading…" : "Upload"}
-                        </button>
-                      </div>
-                      <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "7px" }}>
-                        Month is detected automatically from the filename (e.g. &ldquo;Balance Sheet Jun-26.xlsx&rdquo;). The parser looks for the &ldquo;BS (R)&rdquo; sheet and matches rows by label.
-                      </div>
-                        {bsUploadResult && (
-                          <div style={{ marginTop: "12px" }}>
-                            {/* Summary banner */}
-                            <div style={{ padding: "10px 14px", borderRadius: RADII.SM, background: (bsUploadResult.accepted ?? bsUploadResult.ok) ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, marginBottom: "10px" }}>
-                              <div style={{ fontWeight: 700, fontSize: "13px", color: (bsUploadResult.accepted ?? bsUploadResult.ok) ? COLOURS.GREEN : COLOURS.RED }}>
-                                {(bsUploadResult.accepted ?? bsUploadResult.ok) ? "✓ " : "✗ "}{bsUploadResult.summary || bsUploadResult.error}
-                              </div>
-                              {bsUploadResult.sheetUsed && (
-                                <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px" }}>Sheet used: &ldquo;{bsUploadResult.sheetUsed}&rdquo; · {bsUploadResult.month?.slice(0, 7)}</div>
-                              )}
-                            </div>
-                            {/* Checks */}
-                            {bsUploadResult.checks && bsUploadResult.checks.length > 0 && (
-                              <div style={{ marginBottom: "10px" }}>
-                                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "5px", letterSpacing: ".05em" }}>INTEGRITY CHECKS</div>
-                                {bsUploadResult.checks.map((c, i) => (
-                                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, gap: "10px" }}>
-                                    <div>
-                                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: c.passed ? COLOURS.GREEN : COLOURS.RED }}>{c.passed ? "✓" : "✗"} </span>
-                                      <span style={{ fontSize: "11.5px", color: COLOURS.INK_700 }}>{c.name}</span>
-                                      {c.note && <div style={{ fontSize: "10.5px", color: COLOURS.RED, marginTop: "2px" }}>{c.note}</div>}
-                                    </div>
-                                    {!c.passed && (
-                                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, textAlign: "right", flexShrink: 0, fontFamily: "monospace" }}>
-                                        diff: {Math.round(c.diff).toLocaleString()}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {/* Audit warnings */}
-                            {bsUploadResult.auditWarnings && bsUploadResult.auditWarnings.length > 0 && (
-                              <div style={{ padding: "10px 12px", borderRadius: RADII.SM, background: COLOURS.WARNING_SOFT, marginBottom: "10px" }}>
-                                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.AMBER, marginBottom: "5px" }}>AUDIT WARNINGS</div>
-                                {bsUploadResult.auditWarnings.map((w, i) => (
-                                  <div key={i} style={{ fontSize: "11.5px", color: COLOURS.INK_700, padding: "2px 0" }}>⚠ {w}</div>
-                                ))}
-                              </div>
-                            )}
-                            {/* Restatements */}
-                            {bsUploadResult.restated && bsUploadResult.restated.length > 0 && (
-                              <div style={{ padding: "10px 12px", borderRadius: RADII.SM, background: COLOURS.INFO_SOFT, marginBottom: "10px" }}>
-                                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.BLUE, marginBottom: "5px" }}>CHANGES TO PREVIOUSLY REPORTED FIGURES</div>
-                                {bsUploadResult.restated.map((r, i) => (
-                                  <div key={i} style={{ fontSize: "11.5px", color: COLOURS.INK_700, padding: "2px 0", fontFamily: "monospace" }}>
-                                    ↺ {r.field}: {Math.round(r.old_value).toLocaleString()} → {Math.round(r.new_value).toLocaleString()}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {/* Parsed values (if accepted) */}
-                            {(bsUploadResult.accepted ?? bsUploadResult.ok) && bsUploadResult.parsed && (
-                              <details style={{ fontSize: "11px" }}>
-                                <summary style={{ cursor: "pointer", color: COLOURS.SLATE, marginBottom: "6px" }}>View parsed line items</summary>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "3px 14px", paddingTop: "6px" }}>
-                                  {Object.entries(bsUploadResult.parsed).map(([k, v]) => (
-                                    <div key={k} style={{ color: COLOURS.INK_700 }}>
-                                      <span style={{ color: COLOURS.SLATE }}>{k.replace(/_/g, " ")}: </span>
-                                      <span style={{ fontFamily: "monospace", fontWeight: 600, color: v < 0 ? COLOURS.RED : COLOURS.NAVY }}>{Math.round(v).toLocaleString()}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </details>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                {/* ── BS Upload panel (button lives in the page header; defined above return) ── */}
+                {bsUploadPanel}
 
                 {/* ── Period chips ── */}
                 <div style={{ display: "flex", gap: "5px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px" }}>
@@ -1453,8 +1492,20 @@ export default function ProfitAndLossPage() {
                   <div style={{ ...cardStyle, padding: "12px 14px" }}>
                     <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, fontWeight: 500, letterSpacing: ".02em", textTransform: "uppercase", marginBottom: "6px" }}>Debt-to-Equity</div>
                     <div style={{ fontSize: "21px", fontWeight: 700, color: COLOURS.NAVY }}>{bsDebtToEquity !== null ? bsDebtToEquity.toFixed(2) + "×" : "—"}</div>
-                    <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "4px" }}>Low leverage position</div>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "10px", marginTop: "6px", background: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }}>▲ Healthy</span>
+                    {(() => {
+                      if (bsDebtToEquity === null) return <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "4px" }}>—</div>;
+                      const v = bsDebtToEquity < 0.5
+                        ? { label: "Low leverage position", badge: "▲ Healthy", bg: COLOURS.SUCCESS_SOFT, fg: COLOURS.GREEN }
+                        : bsDebtToEquity < 1
+                        ? { label: "Moderate leverage", badge: "● Watch", bg: COLOURS.WARNING_SOFT, fg: COLOURS.AMBER }
+                        : { label: "High leverage position", badge: "▼ High", bg: COLOURS.DANGER_SOFT, fg: COLOURS.RED };
+                      return (
+                        <>
+                          <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "4px" }}>{v.label}</div>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "10px", marginTop: "6px", background: v.bg, color: v.fg }}>{v.badge}</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 

@@ -357,6 +357,8 @@ export default function ImperialPnlPage() {
   const [bsData, setBsData] = useState<IflBsRow | null>(null);
   const [bsPrev, setBsPrev] = useState<IflBsRow | null>(null);
   const [bsLoading, setBsLoading] = useState(false);
+  // Bumped after an accepted upload so data reloads even for the same period.
+  const [bsRefresh, setBsRefresh] = useState(0);
   const [bsNoteLines, setBsNoteLines] = useState<BsNoteLine[]>([]);
   const [selectedNote, setSelectedNote] = useState<string | null>(null);
   const [showBsUpload, setShowBsUpload] = useState(false);
@@ -414,32 +416,52 @@ export default function ImperialPnlPage() {
         supabase.rpc("get_balance_sheet_notes", { p_company_id: IFPL_COMPANY_ID, p_month: bsMonth }),
       ]);
       if (!active) return;
-      const rows = (bsRes.data || []) as IflBsRow[];
+      // The RPC returns raw table rows; Postgres `numeric` can arrive as a
+      // string depending on the serialisation path — coerce every monetary
+      // field so totals add instead of concatenating.
+      const coerce = (r: Record<string, unknown>): IflBsRow => {
+        const out = { ...r } as Record<string, unknown>;
+        for (const [k, v] of Object.entries(out)) {
+          if (k !== "month" && k !== "audit_warnings" && typeof v === "string" && v !== "" && !Number.isNaN(Number(v))) out[k] = Number(v);
+        }
+        return out as unknown as IflBsRow;
+      };
+      const rows = ((bsRes.data || []) as Record<string, unknown>[]).map(coerce);
       setBsData(rows[0] || null);
       setBsPrev(rows[1] || null);
-      setBsNoteLines((notesRes.data || []) as BsNoteLine[]);
+      const notes = ((notesRes.data || []) as BsNoteLine[]).map((l) => ({ ...l, amount: l.amount === null ? null : Number(l.amount) }));
+      setBsNoteLines(notes);
       setBsLoading(false);
     }
     loadBs();
     return () => { active = false; };
-  }, [bsMonth]);
+  }, [bsMonth, bsRefresh]);
 
   async function handleBsUpload() {
     if (!bsUploadFile) return;
     setBsUploading(true);
     setBsUploadResult(null);
-    const form = new FormData();
-    form.append("file", bsUploadFile);
-    // Month is auto-detected server-side from the filename
-    const res = await authFetch("/api/finance/ifl-bs-upload", { method: "POST", body: form });
-    const body = await res.json();
-    setBsUploadResult(body);
-    setBsUploading(false);
-    if (body.accepted) {
-      const { data } = await supabase.rpc("get_balance_sheet_ifl_months", { p_company_id: IFPL_COMPANY_ID });
-      const months = ((data || []) as { month: string }[]).map((r) => r.month);
-      setBsMonths(months);
-      if (body.month) setBsMonth(body.month);
+    try {
+      const form = new FormData();
+      form.append("file", bsUploadFile);
+      // Month is auto-detected server-side from the filename
+      const res = await authFetch("/api/finance/ifl-bs-upload", { method: "POST", body: form });
+      let body: typeof bsUploadResult;
+      try { body = await res.json(); } catch { body = { accepted: false, error: `Upload failed (HTTP ${res.status}) — the server did not return a readable response.` }; }
+      setBsUploadResult(body);
+      if (body?.accepted) {
+        setBsUploadFile(null);
+        const { data } = await supabase.rpc("get_balance_sheet_ifl_months", { p_company_id: IFPL_COMPANY_ID });
+        const months = ((data || []) as { month: string }[]).map((r) => r.month);
+        setBsMonths(months);
+        if (body.month) setBsMonth(body.month);
+        // Force reload even when re-uploading the already-selected period.
+        setBsRefresh((n) => n + 1);
+      }
+    } catch (e) {
+      setBsUploadResult({ accepted: false, error: "Upload failed: " + (e instanceof Error ? e.message : "network error") });
+    } finally {
+      setBsUploading(false);
     }
   }
 

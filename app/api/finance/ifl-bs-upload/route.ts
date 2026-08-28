@@ -74,7 +74,12 @@ function detectMonth(filename: string): string | null {
   const named = f.match(new RegExp(`(${MONTH_RE})[- _]?(\\d{1,4})(?:[- _,]+(\\d{2,4}))?`));
   if (named) {
     const mn = MONTH_SHORT[named[1].slice(0, 3)];
-    let yr = named[3] || named[2];
+    // If the number right after the month is already a valid 4-digit year,
+    // keep it — a trailing "12"/"02" is a version suffix ("Jan 2026 2.xlsx"),
+    // not the year. The second number only wins for the day-then-year shape
+    // ("June 30 26").
+    const g2 = named[2];
+    let yr = (g2 && g2.length === 4 && +g2 >= 2000 && +g2 <= 2099) ? g2 : (named[3] || g2);
     if (yr && yr.length === 2) yr = `20${yr}`;
     if (mn && yr && yr.length === 4 && +yr >= 2000 && +yr <= 2099) return `${yr}-${mn}-01`;
   }
@@ -235,11 +240,35 @@ function runChecks(p: IflParsed, subtotals: number[]): BsCheck[] {
     ["Current assets subtotal matches file", t.totalCurAssets],
     ["Total Assets matches file", t.totalAssets],
   ];
-  if (sheetSubs.length >= expectedSeq.length) {
+  if (sheetSubs.length === expectedSeq.length) {
     expectedSeq.forEach(([name, computed], i) => {
       const fileVal = sheetSubs[i];
       const d = Math.abs(computed - fileVal);
       checks.push({ name, expected: fileVal, reported: computed, diff: d, passed: d < 100 });
+    });
+  } else {
+    // Positional pairing would mis-align — instead of pairing wrong values
+    // (spurious failures) or skipping silently, try to verify the two grand
+    // totals by finding them anywhere in the subtotal list, and say what
+    // happened.
+    const findClose = (v: number) => sheetSubs.some((sv) => Math.abs(sv - v) < 100);
+    checks.push({
+      name: "Total Assets appears in the file's subtotals",
+      expected: t.totalAssets, reported: t.totalAssets, diff: 0,
+      passed: findClose(t.totalAssets),
+      note: findClose(t.totalAssets) ? undefined : `Computed Total Assets ${fmt(t.totalAssets)} not found among the sheet's subtotal rows — check for missed or extra line items.`,
+    });
+    checks.push({
+      name: "Total Equity & Liabilities appears in the file's subtotals",
+      expected: t.totalEqLiab, reported: t.totalEqLiab, diff: 0,
+      passed: findClose(t.totalEqLiab),
+      note: findClose(t.totalEqLiab) ? undefined : `Computed Total Equity & Liabilities ${fmt(t.totalEqLiab)} not found among the sheet's subtotal rows.`,
+    });
+    checks.push({
+      name: `Subtotal layout matches expected format (found ${sheetSubs.length} subtotal rows, expected ${expectedSeq.length})`,
+      expected: expectedSeq.length, reported: sheetSubs.length, diff: sheetSubs.length - expectedSeq.length,
+      passed: true, // advisory — the hard balance-equation check still governs acceptance
+      note: "The sheet's unlabeled subtotal rows don't match the expected layout, so line-by-line subtotal reconciliation was replaced by grand-total lookups.",
     });
   }
 
@@ -342,7 +371,14 @@ export async function POST(request: NextRequest) {
     }
     month = detected;
 
-    const targetYear = parseInt(month.slice(0, 4), 10);
+    // The workbook's column headers are FISCAL year labels (Pakistan FY runs
+    // July–June, so Dec-2025 sits in the "2026" column). Convert the
+    // calendar month to its fiscal year before looking up the column —
+    // otherwise July–December uploads would silently read the prior year's
+    // comparative column.
+    const calYear = parseInt(month.slice(0, 4), 10);
+    const calMonth = parseInt(month.slice(5, 7), 10);
+    const targetYear = calMonth >= 7 ? calYear + 1 : calYear;
     const valueCol = findYearCol(rows, targetYear);
     if (valueCol === null) {
       return NextResponse.json({ error: `Could not find a year column (e.g. ${targetYear}) in the "${bsSheetName}" sheet header.` }, { status: 422 });
