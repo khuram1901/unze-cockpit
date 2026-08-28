@@ -67,13 +67,34 @@ export async function POST(request: NextRequest) {
   const allRestated: RestatementItem[] = [];
   for (const m of months) {
     const checks = m.checks.filter((c) => typeof c?.name === "string");
-    const warnings = checks.filter((c) => !c.passed && !c.blocking).length;
     const failed = checks.filter((c) => !c.passed && c.blocking).length;
-    const passed = checks.filter((c) => c.passed).length;
     // Server decides from the checks; a month with NO checks at all is never
     // accepted (a parser regression or hand-crafted payload must not bypass
     // validation).
-    const accepted = checks.length > 0 && failed === 0;
+    let accepted = checks.length > 0 && failed === 0;
+
+    // ── Server-side recomputation of the blocking identities ──────────
+    // Acceptance is re-derived from the posted lines themselves, so a buggy
+    // or hand-crafted client can never store figures that don't add up.
+    // Mirrors the parser: tol = max(2000, |expected| * 0.005); amounts are
+    // posted as positive cost magnitudes (the parser normalises signs).
+    if (accepted) {
+      const sumLine = (line: string) =>
+        m.lines.filter((l) => l?.line === line).reduce((s, l) => s + fin(l.amount), 0);
+      const sumCat = (cat: string) =>
+        m.lines.filter((l) => l?.category === cat).reduce((s, l) => s + fin(l.amount), 0);
+      const tol = (expected: number) => Math.max(2000, Math.abs(expected) * 0.005);
+      const serverChecks: { name: string; expected: number; reported: number }[] = [
+        { name: "Server: operating profit = GP − admin expenses", expected: sumLine("Gross Profit") - sumLine("Total Administrative Expenses"), reported: sumLine("Profit after Operations") },
+        { name: "Server: net profit = op profit ± below-the-line", expected: sumLine("Profit after Operations") + sumCat("below_add") - sumCat("below_less"), reported: sumLine("Net Profit") },
+      ];
+      for (const c of serverChecks) {
+        const diff = c.reported - c.expected;
+        const ok = Math.abs(diff) <= tol(c.expected);
+        checks.push({ name: c.name, expected: c.expected, reported: c.reported, diff, passed: ok, blocking: true });
+        if (!ok) accepted = false;
+      }
+    }
 
     // ── Restatement detection (transparency log) ──────────────────
     // If this month already exists, compare stored net sales / net profit
@@ -121,10 +142,14 @@ export async function POST(request: NextRequest) {
         month: m.month,
         file_name: fileName,
         status: accepted ? "accepted" : "rejected",
-        checks_passed: passed,
-        checks_failed: failed,
-        warnings,
-        rejection_summary: accepted ? null : String(m.summary || "").slice(0, 500),
+        checks_passed: checks.filter((c) => c.passed).length,
+        checks_failed: checks.filter((c) => !c.passed && c.blocking).length,
+        warnings: checks.filter((c) => !c.passed && !c.blocking).length,
+        rejection_summary: accepted
+          ? null
+          : (checks.some((c) => !c.passed && c.blocking && c.name.startsWith("Server:"))
+            ? "Server-side identity check failed: " + checks.filter((c) => !c.passed && c.blocking).map((c) => c.name).join("; ").slice(0, 450)
+            : String(m.summary || "").slice(0, 500)),
         uploaded_by: auth.email,
       })
       .select("id")
@@ -196,7 +221,15 @@ export async function POST(request: NextRequest) {
         allRestated.push(...restated.map((r) => ({ ...r, month: m.month })));
       }
     }
-    results.push({ month: m.month, accepted, summary: String(m.summary || "").slice(0, 300), restated: restated.length > 0 ? restated : undefined });
+    const serverFailed = checks.filter((c) => !c.passed && c.blocking && c.name.startsWith("Server:"));
+    results.push({
+      month: m.month,
+      accepted,
+      summary: !accepted && serverFailed.length > 0
+        ? `Rejected by server-side verification: ${serverFailed.map((c) => c.name.replace("Server: ", "")).join("; ")}`.slice(0, 300)
+        : String(m.summary || "").slice(0, 300),
+      restated: restated.length > 0 ? restated : undefined,
+    });
   }
 
   // Restatements found anywhere in this upload → email the CEO immediately
