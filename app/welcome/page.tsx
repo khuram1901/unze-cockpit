@@ -336,9 +336,158 @@ function QuoteCard() {
 }
 
 /* ─── Quick Links card ───────────────────────────────────────── */
-const BOOKING_URL = "https://calendar.app.google/gR4deTjvGZaHZGyZ6";
+// Khuram's Google booking pages — shown inside the booking modal.
+const BOOKING_OPTIONS = [
+  { label: "In-person meeting", icon: "🤝", url: "https://calendar.app.google/W3egi75KJ78sg9jK9", caption: "Book a face-to-face slot" },
+  { label: "Video call", icon: "🎥", url: "https://calendar.app.google/HKbrgDEYudfnya2k9", caption: "Book a Google Meet call" },
+];
+
+type MyBooking = { id: string; title: string; start: string; end: string; meetLink?: string };
+
+/* Booking modal — book via the Google pages, or see & cancel the meetings
+   you've already booked (1:1 bookings on Khuram's calendar only). */
+function BookingModal({ onClose }: { onClose: () => void }) {
+  const [bookings, setBookings] = useState<MyBooking[] | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+
+  async function loadBookings() {
+    setLoadError("");
+    try {
+      const res = await authFetch("/api/calendar/my-bookings");
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      setBookings(body.bookings || []);
+    } catch (e) {
+      setBookings([]);
+      setLoadError(e instanceof Error ? e.message : "Could not load your meetings.");
+    }
+  }
+  useEffect(() => { loadBookings(); }, []);
+
+  async function cancelBooking(id: string) {
+    setCancelling(id);
+    setNotice("");
+    try {
+      const res = await authFetch("/api/calendar/my-bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId: id }),
+      });
+      let body: { success?: boolean; error?: string } = {};
+      try { body = await res.json(); } catch { body = { error: `HTTP ${res.status}` }; }
+      if (body.success) {
+        setNotice("Meeting cancelled — both sides get a cancellation email.");
+        setBookings((prev) => (prev || []).filter((b) => b.id !== id));
+      } else {
+        setNotice(body.error || "Could not cancel the meeting — try again.");
+      }
+    } catch (e) {
+      setNotice("Could not cancel the meeting: " + (e instanceof Error ? e.message : "network error"));
+    } finally {
+      setCancelling(null);
+      setConfirmId(null);
+    }
+  }
+
+  const fmtWhen = (iso: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) +
+      (iso.includes("T") ? " · " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(15,23,32,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "#fff", borderRadius: RADII.CARD, width: "100%", maxWidth: 440, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(15,23,32,0.25)" }}
+      >
+        <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>Meet Khuram Saleem</div>
+            <div style={{ fontSize: 11.5, color: SLATE, marginTop: 2 }}>Book a slot, or cancel a meeting you booked</div>
+          </div>
+          <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: SLATE, lineHeight: 1, padding: 4 }}>×</button>
+        </div>
+
+        {/* Book */}
+        <div style={{ padding: "14px 20px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: INK_400, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Book a meeting</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {BOOKING_OPTIONS.map((o) => (
+              <a key={o.url} href={o.url} target="_blank" rel="noopener noreferrer"
+                style={{ border: `1px solid ${HAIRLINE}`, borderRadius: 12, padding: "14px 10px", textAlign: "center", textDecoration: "none", background: CARD_ALT }}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{o.icon}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>{o.label}</div>
+                <div style={{ fontSize: 10.5, color: SLATE, marginTop: 2 }}>{o.caption}</div>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {/* Cancel */}
+        <div style={{ padding: "6px 20px 18px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: INK_400, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Your upcoming meetings</div>
+          {notice && (
+            <div style={{ fontSize: 11.5, padding: "8px 12px", borderRadius: 8, marginBottom: 8, background: notice.startsWith("Meeting cancelled") ? SUCCESS_SOFT : DANGER_SOFT, color: notice.startsWith("Meeting cancelled") ? GREEN : RED, fontWeight: 600 }}>
+              {notice}
+            </div>
+          )}
+          {bookings === null ? (
+            <div style={{ fontSize: 12, color: SLATE, padding: "8px 0" }}>Loading…</div>
+          ) : loadError ? (
+            <div style={{ fontSize: 11.5, color: RED, padding: "4px 0" }}>{loadError}</div>
+          ) : bookings.length === 0 ? (
+            <div style={{ fontSize: 12, color: INK_400, padding: "4px 0" }}>No upcoming meetings booked with Khuram.</div>
+          ) : (
+            bookings.map((b) => (
+              <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "9px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: INK_700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.title}</div>
+                  <div style={{ fontSize: 11, color: SLATE, marginTop: 1 }}>
+                    {fmtWhen(b.start)}
+                    {b.meetLink && <> · <a href={b.meetLink} target="_blank" rel="noopener noreferrer" style={{ color: BLUE }}>Meet link</a></>}
+                  </div>
+                </div>
+                {confirmId === b.id ? (
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button
+                      onClick={() => cancelBooking(b.id)}
+                      disabled={cancelling === b.id}
+                      style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: RED, border: "none", borderRadius: 8, padding: "5px 10px", cursor: cancelling === b.id ? "wait" : "pointer" }}
+                    >
+                      {cancelling === b.id ? "Cancelling…" : "Confirm cancel"}
+                    </button>
+                    <button onClick={() => setConfirmId(null)} style={{ fontSize: 11, fontWeight: 600, color: INK_700, background: CANVAS, border: `1px solid ${HAIRLINE}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>Keep</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setConfirmId(b.id); setNotice(""); }}
+                    style={{ fontSize: 11, fontWeight: 600, color: RED, background: DANGER_SOFT, border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+          <div style={{ fontSize: 10.5, color: INK_400, marginTop: 10, lineHeight: 1.5 }}>
+            Cancelling removes the meeting from Khuram&apos;s calendar and emails a cancellation to you both. Only meetings you booked yourself appear here.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; showBookingButton?: boolean }) {
+  const [bookingOpen, setBookingOpen] = useState(false);
   const linkItemStyle: CSSProperties = {
     display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
     padding: "11px 6px", borderRadius: 10, textDecoration: "none", transition: "background .15s",
@@ -363,19 +512,18 @@ function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; show
           </Link>
         ))}
         {showBookingButton && (
-          <a
-            href={BOOKING_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={linkItemStyle}
+          <button
+            onClick={() => setBookingOpen(true)}
+            style={{ ...linkItemStyle, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}
             onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
             <div style={{ ...iconBoxStyle, background: "rgba(15,23,32,0.07)" }}>📅</div>
             <span style={{ fontSize: 10.5, fontWeight: 600, color: INK_700, textAlign: "center", lineHeight: 1.2 }}>Meet Khuram Saleem</span>
-          </a>
+          </button>
         )}
       </div>
+      {bookingOpen && <BookingModal onClose={() => setBookingOpen(false)} />}
     </div>
   );
 }
