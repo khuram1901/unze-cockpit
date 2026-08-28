@@ -95,7 +95,16 @@ const MONTH_LABEL = (m: string) => {
   const d = new Date(m + "T00:00:00Z");
   return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit", timeZone: "UTC" });
 };
+// Full figures with thousands separators, negatives in parentheses — the
+// same reading format as the Balance Sheet (was "240.4m").
 const fmtM = (n: number | null | undefined) => {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  const abs = Math.round(Math.abs(n)).toLocaleString();
+  return n < 0 ? `(${abs})` : abs;
+};
+// Compact millions form — kept for prose (insight sentences) where
+// "₨550m" reads better than a 9-digit figure mid-sentence.
+const fmtMShort = (n: number | null | undefined) => {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   return (Math.round((n / 1_000_000) * 10) / 10).toLocaleString() + "m";
 };
@@ -319,7 +328,7 @@ function BsInsightsCard({ monthLabel, data, prev, currentRatio, quickRatio, cash
   workingCapital: number | null;
   isMobile: boolean;
 }) {
-  const rs = (n: number) => `₨${fmtM(n)}`;
+  const rs = (n: number) => `₨${fmtMShort(n)}`;
 
   // ── Verdicts ──
   const liqVerdict = currentRatio === null ? null

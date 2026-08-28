@@ -48,9 +48,12 @@ const MONTH_LABEL = (m: string) => {
   const d = new Date(m + "T00:00:00Z");
   return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit", timeZone: "UTC" });
 };
+// Full figures with thousands separators, negatives in parentheses — the
+// same reading format as the Balance Sheet (was "240.4m").
 const fmtM = (n: number | null | undefined) => {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  return (Math.round((n / 1_000_000) * 10) / 10).toLocaleString() + "m";
+  const abs = Math.round(Math.abs(n)).toLocaleString();
+  return n < 0 ? `(${abs})` : abs;
 };
 const fmtPct = (n: number) => (Math.round(n * 10) / 10) + "%";
 const toM = (n: number) => Math.round(n / 100_000) / 10;
