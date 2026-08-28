@@ -357,8 +357,9 @@ function BookingModal({ onClose }: { onClose: () => void }) {
     setLoadError("");
     try {
       const res = await authFetch("/api/calendar/my-bookings");
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      let body: { bookings?: MyBooking[]; error?: string } = {};
+      try { body = await res.json(); } catch { body = {}; }
+      if (!res.ok) throw new Error(body.error || `Could not load your meetings (HTTP ${res.status}).`);
       setBookings(body.bookings || []);
     } catch (e) {
       setBookings([]);
@@ -368,6 +369,7 @@ function BookingModal({ onClose }: { onClose: () => void }) {
   useEffect(() => { loadBookings(); }, []);
 
   async function cancelBooking(id: string) {
+    if (cancelling) return; // one cancellation at a time
     setCancelling(id);
     setNotice("");
     try {
@@ -383,6 +385,8 @@ function BookingModal({ onClose }: { onClose: () => void }) {
         setBookings((prev) => (prev || []).filter((b) => b.id !== id));
       } else {
         setNotice(body.error || "Could not cancel the meeting — try again.");
+        // The list may be stale (e.g. already cancelled elsewhere) — refresh.
+        loadBookings();
       }
     } catch (e) {
       setNotice("Could not cancel the meeting: " + (e instanceof Error ? e.message : "network error"));
@@ -401,11 +405,11 @@ function BookingModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      onClick={onClose}
+      onMouseDown={onClose}
       style={{ position: "fixed", inset: 0, background: "rgba(15,23,32,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
         style={{ background: "#fff", borderRadius: RADII.CARD, width: "100%", maxWidth: 440, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(15,23,32,0.25)" }}
       >
         <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -464,7 +468,7 @@ function BookingModal({ onClose }: { onClose: () => void }) {
                     >
                       {cancelling === b.id ? "Cancelling…" : "Confirm cancel"}
                     </button>
-                    <button onClick={() => setConfirmId(null)} style={{ fontSize: 11, fontWeight: 600, color: INK_700, background: CANVAS, border: `1px solid ${HAIRLINE}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>Keep</button>
+                    <button onClick={() => setConfirmId(null)} disabled={cancelling === b.id} style={{ fontSize: 11, fontWeight: 600, color: INK_700, background: CANVAS, border: `1px solid ${HAIRLINE}`, borderRadius: 8, padding: "5px 10px", cursor: cancelling === b.id ? "not-allowed" : "pointer", opacity: cancelling === b.id ? 0.5 : 1 }}>Keep</button>
                   </div>
                 ) : (
                   <button

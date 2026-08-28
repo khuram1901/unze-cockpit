@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { google } from "googleapis";
+import { google, type calendar_v3 } from "googleapis";
 import { getAuthenticatedClient } from "../../../lib/google-client";
 import { requireAuth } from "../../../lib/api-auth";
 
@@ -33,6 +33,24 @@ function soleOtherAttendee(attendees: GAttendee[] | undefined): string | null {
   return (others[0].email || "").toLowerCase();
 }
 
+// A cancellable booking must be: on Khuram's own calendar (organizer.self),
+// a 1:1 with the requester as the SOLE other attendee, AND carry the
+// booking-page fingerprint — Google appointment-schedule events put a
+// "Booked by" block (with the booker's details) in the description, which
+// meetings Khuram schedules manually never have. Without this last check a
+// user could cancel a 1:1 Khuram himself put in the diary.
+type GEvent = {
+  organizer?: { self?: boolean | null } | null;
+  attendees?: GAttendee[] | null;
+  description?: string | null;
+};
+function isMyBooking(ev: GEvent, me: string): boolean {
+  if (!ev.organizer?.self) return false;
+  if (soleOtherAttendee(ev.attendees || undefined) !== me) return false;
+  const desc = (ev.description || "").toLowerCase();
+  return desc.includes("booked by");
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
@@ -43,29 +61,34 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
     const max = new Date(now.getTime() + 90 * 24 * 3600 * 1000);
-    const { data } = await calendar.events.list({
-      calendarId: "primary",
-      timeMin: now.toISOString(),
-      timeMax: max.toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: 250,
-    });
-
     const me = auth.email.toLowerCase();
     const bookings: Booking[] = [];
-    for (const ev of data.items || []) {
-      if (!ev.id || ev.status === "cancelled") continue;
-      if (!ev.organizer?.self) continue; // must live on Khuram's own calendar
-      if (soleOtherAttendee(ev.attendees as GAttendee[]) !== me) continue;
-      bookings.push({
-        id: ev.id,
-        title: ev.summary || "Meeting with Khuram Saleem",
-        start: ev.start?.dateTime || ev.start?.date || "",
-        end: ev.end?.dateTime || ev.end?.date || "",
-        meetLink: ev.hangoutLink || undefined,
+    // Paginate — with singleEvents:true recurring events expand into
+    // instances, so 90 days can easily exceed one page.
+    let pageToken: string | undefined = undefined;
+    do {
+      const { data }: { data: calendar_v3.Schema$Events } = await calendar.events.list({
+        calendarId: "primary",
+        timeMin: now.toISOString(),
+        timeMax: max.toISOString(),
+        singleEvents: true,
+        orderBy: "startTime",
+        maxResults: 250,
+        pageToken,
       });
-    }
+      for (const ev of data.items || []) {
+        if (!ev.id || ev.status === "cancelled") continue;
+        if (!isMyBooking(ev, me)) continue;
+        bookings.push({
+          id: ev.id,
+          title: ev.summary || "Meeting with Khuram Saleem",
+          start: ev.start?.dateTime || ev.start?.date || "",
+          end: ev.end?.dateTime || ev.end?.date || "",
+          meetLink: ev.hangoutLink || undefined,
+        });
+      }
+      pageToken = data.nextPageToken || undefined;
+    } while (pageToken);
     return Response.json({ bookings });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -93,15 +116,29 @@ export async function POST(request: NextRequest) {
 
     // Re-verify server-side that this event is THIS user's 1:1 booking —
     // never trust the id alone.
-    const { data: ev } = await calendar.events.get({ calendarId: "primary", eventId });
+    let ev;
+    try {
+      ({ data: ev } = await calendar.events.get({ calendarId: "primary", eventId }));
+    } catch (getErr) {
+      const code = (getErr as { code?: number })?.code;
+      if (code === 404 || code === 410) {
+        return Response.json({ error: "This meeting no longer exists — it may already be cancelled." }, { status: 404 });
+      }
+      throw getErr;
+    }
     if (!ev || ev.status === "cancelled") {
       return Response.json({ error: "This meeting no longer exists — it may already be cancelled." }, { status: 404 });
     }
-    if (!ev.organizer?.self || soleOtherAttendee(ev.attendees as GAttendee[]) !== auth.email.toLowerCase()) {
+    if (!isMyBooking(ev, auth.email.toLowerCase())) {
       return Response.json({ error: "This meeting isn't one of your bookings." }, { status: 403 });
     }
+    // Past-event guard — all-day dates are interpreted in Pakistan time,
+    // not UTC, so "today" doesn't flip five hours early.
     const startsAt = ev.start?.dateTime || ev.start?.date;
-    if (startsAt && new Date(startsAt).getTime() < Date.now()) {
+    const startMs = startsAt
+      ? new Date(startsAt.includes("T") ? startsAt : `${startsAt}T00:00:00+05:00`).getTime()
+      : null;
+    if (startMs !== null && startMs < Date.now()) {
       return Response.json({ error: "This meeting has already started or passed." }, { status: 400 });
     }
 
