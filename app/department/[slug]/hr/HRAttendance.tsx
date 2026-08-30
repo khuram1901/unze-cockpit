@@ -12,6 +12,7 @@ import { formatDateUK } from "../../../lib/dateUtils";
 import { COLOURS, RADII } from "../../../lib/SharedUI";
 import DateInput from "../../../lib/DateInput";
 import { useMobile } from "../../../lib/useMobile";
+import { useHRFilterOptions, FilterSelect } from "./HRFilterBar";
 
 type StationRow = { station: string; active: number; absent: number };
 type Overview = {
@@ -27,18 +28,24 @@ const card: React.CSSProperties = {
 export default function HRAttendance() {
   const isMobile = useMobile();
   const [date, setDate]       = useState(() => new Date().toISOString().slice(0, 10));
+  const [company, setCompany] = useState("");
+  const [station, setStation] = useState("");
   const [data, setData]       = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
+  const filterOpts = useHRFilterOptions();
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const res = await authFetch(`/api/hr/overview?section=attendance&date=${date}`);
+        const params = new URLSearchParams({ section: "attendance", date });
+        if (company) params.set("company", company);
+        if (station) params.set("station", station);
+        const res = await authFetch(`/api/hr/overview?${params.toString()}`);
         if (res.ok) setData(await res.json());
       } finally { setLoading(false); }
     })();
-  }, [date]);
+  }, [date, company, station]);
 
   const presentPct = data && data.active > 0 ? Math.round((data.present / data.active) * 100) : 0;
 
@@ -51,6 +58,16 @@ export default function HRAttendance() {
           <DateInput value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
         {data && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>({formatDateUK(data.date)})</span>}
+        <FilterSelect label="All companies" value={company} onChange={setCompany}
+          options={(filterOpts?.companies ?? []).map(co => ({ value: co.id, label: co.name }))} />
+        <FilterSelect label="All stations" value={station} onChange={setStation}
+          options={(filterOpts?.stations ?? []).map(s => ({ value: s, label: s }))} />
+        {(company || station) && (
+          <button onClick={() => { setCompany(""); setStation(""); }} style={{
+            padding: "8px 12px", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE,
+            border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD,
+          }}>Clear</button>
+        )}
       </div>
 
       {/* Summary cards */}

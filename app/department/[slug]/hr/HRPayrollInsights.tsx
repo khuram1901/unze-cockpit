@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { authFetch } from "../../../lib/supabase";
 import { COLOURS, RADII } from "../../../lib/SharedUI";
 import { useMobile } from "../../../lib/useMobile";
+import { useHRFilterOptions, FilterSelect, MONTH_NAMES } from "./HRFilterBar";
 
 type Slice = { name: string; heads: number; gross: number; type?: string };
 type Insights = {
@@ -33,15 +34,39 @@ export default function HRPayrollInsights() {
   const [data, setData]       = useState<Insights | null>(null);
   const [loading, setLoading] = useState(true);
   const [dim, setDim]         = useState<Dim>("by_company");
+  const [ym, setYm]           = useState("");   // "2026-8"; "" = current month
+  const [company, setCompany]       = useState("");
+  const [department, setDepartment] = useState("");
+  const [location, setLocation]     = useState("");
+  const filterOpts = useHRFilterOptions();
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
-        const res = await authFetch("/api/hr/overview?section=payroll");
+        const params = new URLSearchParams({ section: "payroll" });
+        if (ym) {
+          const [y, m] = ym.split("-");
+          params.set("year", y);
+          params.set("month", m);
+        }
+        if (company) params.set("company", company);
+        if (department) params.set("department", department);
+        if (location) params.set("location", location);
+        const res = await authFetch(`/api/hr/overview?${params.toString()}`);
         if (res.ok) setData(await res.json());
       } finally { setLoading(false); }
     })();
-  }, []);
+  }, [ym, company, department, location]);
+
+  const monthLabel = (() => {
+    if (ym) {
+      const [y, m] = ym.split("-").map(Number);
+      return `${MONTH_NAMES[m - 1]} ${y}`;
+    }
+    const now = new Date();
+    return `${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
+  })();
 
   const slices: Slice[] = data ? (data[dim] ?? []) : [];
   const maxGross = slices[0]?.gross ?? 1;
@@ -56,7 +81,28 @@ export default function HRPayrollInsights() {
   return (
     <div>
       <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "14px" }}>
-        Monthly cost of the active workforce (gross salaries from FlowHCM salary setup), with this month's allowances and deductions.
+        Gross salaries are the current FlowHCM salary setup (a live snapshot — FlowHCM keeps no salary history).
+        Allowances, deductions and advances are for the selected month; months appear here as FlowHCM data arrives.
+      </div>
+
+      {/* Month + filters */}
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <FilterSelect label={`Month: ${monthLabel}`} value={ym} onChange={setYm} minWidth={170}
+          options={(filterOpts?.payroll_months ?? []).map(pm => ({
+            value: `${pm.year}-${pm.month}`, label: `${MONTH_NAMES[pm.month - 1]} ${pm.year}`,
+          }))} />
+        <FilterSelect label="All companies" value={company} onChange={setCompany}
+          options={(filterOpts?.companies ?? []).map(co => ({ value: co.id, label: co.name }))} />
+        <FilterSelect label="All departments" value={department} onChange={setDepartment}
+          options={(filterOpts?.departments ?? []).map(d => ({ value: d.id, label: d.name }))} />
+        <FilterSelect label="All locations" value={location} onChange={setLocation}
+          options={(filterOpts?.locations ?? []).map(l => ({ value: l.id, label: l.name }))} />
+        {(ym || company || department || location) && (
+          <button onClick={() => { setYm(""); setCompany(""); setDepartment(""); setLocation(""); }} style={{
+            padding: "8px 12px", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE,
+            border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD,
+          }}>Clear</button>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -77,11 +123,11 @@ export default function HRPayrollInsights() {
           <div style={{ fontSize: "20px", fontWeight: 600, color: COLOURS.NAVY }}>{loading ? "…" : PKR(data?.avg_cost)}</div>
         </div>
         <div style={card}>
-          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "4px" }}>Allowances (this month)</div>
+          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "4px" }}>{`Allowances (${monthLabel})`}</div>
           <div style={{ fontSize: "20px", fontWeight: 600, color: COLOURS.GREEN }}>{loading ? "…" : PKR(data?.month_allowances)}</div>
         </div>
         <div style={card}>
-          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "4px" }}>Deductions (this month)</div>
+          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "4px" }}>{`Deductions (${monthLabel})`}</div>
           <div style={{ fontSize: "20px", fontWeight: 600, color: COLOURS.RED }}>{loading ? "…" : PKR(data?.month_deductions)}</div>
         </div>
         <div style={card}>

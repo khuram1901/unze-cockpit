@@ -11,6 +11,7 @@ import { authFetch } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 import { COLOURS, RADII, SkeletonRows } from "../../../lib/SharedUI";
 import { useMobile } from "../../../lib/useMobile";
+import { useHRFilterOptions, FilterSelect } from "./HRFilterBar";
 
 type Overview = {
   total_active: number; total_leavers: number;
@@ -49,15 +50,24 @@ export default function HRPeople() {
   const [showLeavers, setShowLeavers] = useState(false);
   const [loading, setLoading]   = useState(true);
   const [listLoading, setListLoading] = useState(true);
+  const [company, setCompany]       = useState("");
+  const [department, setDepartment] = useState("");
+  const [station, setStation]       = useState("");
+  const filterOpts = useHRFilterOptions();
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
-        const res = await authFetch("/api/hr/overview?section=people");
+        const params = new URLSearchParams({ section: "people" });
+        if (company) params.set("company", company);
+        if (department) params.set("department", department);
+        if (station) params.set("station", station);
+        const res = await authFetch(`/api/hr/overview?${params.toString()}`);
         if (res.ok) setOverview(await res.json());
       } finally { setLoading(false); }
     })();
-  }, []);
+  }, [company, department, station]);
 
   const loadList = useCallback(async (q: string, leavers: boolean) => {
     setListLoading(true);
@@ -65,6 +75,9 @@ export default function HRPeople() {
       const params = new URLSearchParams({ section: "people_list", limit: "100" });
       if (q) params.set("search", q);
       if (leavers) params.set("active", "0");
+      if (company) params.set("company", company);
+      if (department) params.set("department", department);
+      if (station) params.set("station", station);
       const res = await authFetch(`/api/hr/overview?${params.toString()}`);
       if (res.ok) {
         const j = await res.json();
@@ -72,7 +85,7 @@ export default function HRPeople() {
         setTotal(j.total ?? 0);
       }
     } finally { setListLoading(false); }
-  }, []);
+  }, [company, department, station]);
 
   useEffect(() => {
     const t = setTimeout(() => loadList(search, showLeavers), 350);
@@ -92,6 +105,22 @@ export default function HRPeople() {
 
   return (
     <div>
+      {/* Filters */}
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <FilterSelect label="All companies" value={company} onChange={setCompany}
+          options={(filterOpts?.companies ?? []).map(co => ({ value: co.id, label: co.name }))} />
+        <FilterSelect label="All departments" value={department} onChange={setDepartment}
+          options={(filterOpts?.departments ?? []).map(d => ({ value: d.id, label: d.name }))} />
+        <FilterSelect label="All stations" value={station} onChange={setStation}
+          options={(filterOpts?.stations ?? []).map(s => ({ value: s, label: s }))} />
+        {(company || department || station) && (
+          <button onClick={() => { setCompany(""); setDepartment(""); setStation(""); }} style={{
+            padding: "8px 12px", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE,
+            border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD,
+          }}>Clear</button>
+        )}
+      </div>
+
       {/* Headcount cards */}
       <div style={{
         display: "grid", gap: "10px", marginBottom: "16px",
