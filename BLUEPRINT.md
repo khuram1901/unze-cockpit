@@ -1,6 +1,8 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 16/08/2026 (tax consultant access rule centralised as `TAX_CONSULTANT_EMAIL` in permissions.ts — was hardcoded in four separate client files; the exemption itself moved into `canViewDepartment()` and is now subject to Access Matrix overrides; `useRequireCapability` and `useRequireDepartment` refactored onto a shared `useAuthGuard()`).
+> **This is the source of truth.** Read before touching any code. Last updated: 30/08/2026 (FlowHCM master-data foundation + HR dashboard rebuild — see below).
+>
+> Previous update: 16/08/2026 (tax consultant access rule centralised as `TAX_CONSULTANT_EMAIL` in permissions.ts — was hardcoded in four separate client files; the exemption itself moved into `canViewDepartment()` and is now subject to Access Matrix overrides; `useRequireCapability` and `useRequireDepartment` refactored onto a shared `useAuthGuard()`).
 >
 > Previous update: 28/07/2026 (Restaurants cash sheet support — migration 204 extends cash_sheet_uploads CHECK constraint to BRNH/HD/KKJ; KKJ_COMPANY_ID added to constants; API routes + CashSheetTab extended to all 5 companies; new /finance/restaurants-daily page with 3-company tabs for Baranh/Haute Dolci/K&K Jhang daily cash positions; sidebar entry added).
 >
@@ -9,6 +11,25 @@
 > Previous update: 19/07/2026 (session 2 — mobile responsiveness overhaul across all pages; Admin Operations tab-level widget gating added; manager assignment dropdown added to Members edit panel; JS aggregation audit completed; TypeScript clean).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
+
+
+## 30/08/2026 — FlowHCM master data + HR rebuild (summary)
+
+**Master data foundation (migrations 212–217):**
+- `admin_locations` is now the locations master: 62 locations with `company_id` FK and `flw_station` mapping to FlowHCM station names (whitespace-insensitive matching). New locations added: Mall of Lahore, Centaurus Mall, Avenue Mall, Bashir Mall, Faisalabad HC, HD Gulberg, FESCO, Ilford UK.
+- `departments` seeded with 28 FlowHCM departments, each with `default_company_id` (drives company assignment for Head Office staff).
+- `companies.name` standardised to friendly display names: Unze Group, Imperial Footwear, Unze Trading, Baranh, HD, Unze London, S&M Investment, K&K Jhang, Almahar, Directors. Pages that read `companies.name` show these automatically.
+- `flw_employees` resolves to master IDs (`company_id`, `department_id`, `location_id`) plus `is_active`/`leaving_date`, via `resolve_flw_employee_links()` RPC called after every employee sync. ~1,164 active staff, ~5,755 historic leavers.
+- `members.employee_code` links app users to FlowHCM employees (partial — being filled via Excel round-trip with Khuram).
+
+**FlowHCM sync (all 13 modules live, every 2 min during testing — return to 10 min when stable):**
+- All duplication fixed via `flw_key` deterministic keys (migration 212) — advance_salary was duplicating ~7,400 rows/sync before.
+- Real FlowHCM field mappings confirmed from `raw` payloads (EmployeeRefNo, AccountTitle, AdvanceSalaryDate, EmployeeShare, PunchCode, etc.). `EmployeeName` is FIRST NAME ONLY — awaiting FlowHCM full-name field. Do NOT use `AccountTitle` as name fallback (bank accounts can be titled to family members).
+- Generic response unwrapping in `lib/flowhcm-client.ts` handles all FlowHCM wrapper keys (`employeesGetRequest`, `employeeLeavingGet`, etc.).
+
+**HR dashboard (7 CEO-level tabs, `HRDashboard.tsx`):** People, Payroll, Workforce Movement, Attendance, T&D Calendar, Tasks & Legal (merged), Live HR Data. Powered by 4 RPCs in migration 216 (`get_hr_people_overview`, `get_hr_payroll_insights`, `get_hr_movement`, `get_hr_attendance_overview`) via thin route `/api/hr/overview`. Payroll section is role-gated server-side (Admin/CEO + HR/Finance Managers; PA excluded). Deleted dead tabs (empty tables): Workforce, Insights, Performance, Recruitment, Onboarding, Off-boarding, old Payroll, EOBI — components removed 30/08/2026; their `hr_*` tables still exist in the DB (drop pending Khuram's confirmation).
+
+**Phase 3 (pending):** migrate Finance/Admin/Production pages off hardcoded 'UTPL'/'IFPL' strings (32 files) onto `company_id` + master names, module by module.
 
 ---
 
@@ -257,7 +278,7 @@ app/
 │                                     tabs via PillTabs. company_id column on audit records.
 │                                     CompanyBadge component: UTPL=blue (#EEF1FC/BLUE), IFPL=green
 │                                     (SUCCESS_SOFT/GREEN). 6 entity types including Directors.
-│   ├── HRDashboard.tsx               HR dept — recruitment, evaluations, strategy goals.
+│   ├── HRDashboard.tsx               HR dept — 7 CEO-level tabs on live FlowHCM data (30/08/2026).
 │   │                                 Per-member tab visibility: each HR department member can have
 │   │                                 individual dashboard tabs shown/hidden via MemberDrawer's Widget
 │   │                                 Visibility section (27/07/2026). Uses widgetRegistry.ts for

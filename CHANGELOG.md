@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-08-30 — FlowHCM master data foundation + HR dashboard rebuilt on live data
+
+Full-day session with Khuram. Three phases, all deployed:
+
+**Phase 0 — sync fixes.** All 13 FlowHCM modules now sync cleanly every 2 minutes (testing cadence). Fixed the advance-salary duplication bomb (58,947 rows, only 3,984 unique — NULL dates meant the upsert key never matched; every sync added ~7,400 duplicates). Fix: deterministic `flw_key` per table (migration 212), truncate + resync. Fixed response unwrapping (FlowHCM wraps every endpoint in a named key like `employeesGetRequest` — generic single-array-property unwrap added), real field mappings confirmed from raw payloads, four date formats handled. Employees went from 0 to 6,919 synced. Overtime numeric overflow widened (migration 213). Loans batch dedup.
+
+**Phase 1 — master data (migrations 214, 215, 217).** `admin_locations` = locations master (62 locations, company_id + flw_station mapping, whitespace-insensitive). `departments` seeded (28, each with default_company_id for Head Office staff). `flw_employees` resolves to master IDs via `resolve_flw_employee_links()` RPC on every sync; `is_active`/`leaving_date` captured — 1,164 active, 5,755 leavers, active count independently matches the 1,164 salary-setup records. `members.employee_code` added; 4 users linked by email, remainder via Excel round-trip in progress. Company display names standardised (Imperial Footwear, Unze Trading, HD, S&M Investment; Almahar and Directors unchanged).
+
+**Phase 2 — HR dashboard.** 13 tabs → 7 CEO-level tabs: People (directory + headcount), Payroll (PKR 53.7M gross, sliceable by company/department/location; server-side role gate — PA never sees it), Workforce Movement (joiners/leavers by period), Attendance (any-date, worst stations), T&D Calendar, Tasks & Legal (merged), Live HR Data. Four jsonb RPCs (migration 216) + thin `/api/hr/overview` route. Deleted 8 dead tab components + temp debug route. All tabs verified live in browser.
+
+**Known/pending:** FlowHCM `EmployeeName` is first-name-only (asked FlowHCM for full-name field; AccountTitle rejected as fallback — bank accounts can be family members'). Cron at 2 min — return to `*/10` once stable. Store 038 unmapped (not open). Two junk FlowHCM stations (BAFARZOON, Retail) to fix at source. `hr_*` empty tables still in DB pending drop approval. Phase 3 (Finance/Admin/Production onto master data) not started.
+
+---
+
 ## 2026-08-16 (early) — Tax consultant access centralised; duplicated route guards merged
 
 Khuram asked for two things: delete five duplicate backup files, and decouple the department routing layer from `useToast()` to lift Community 5's cohesion score in the graph. Neither turned out to exist.

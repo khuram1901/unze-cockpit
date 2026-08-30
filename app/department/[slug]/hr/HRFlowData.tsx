@@ -390,7 +390,7 @@ export default function HRFlowData() {
     <div>
       <SectionTitle title="Live HR Data" />
       <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "16px", marginTop: "-4px" }}>
-        Synced automatically every 10 minutes from FlowHCM.
+        Synced automatically from FlowHCM.
       </p>
 
       {/* Module picker */}
