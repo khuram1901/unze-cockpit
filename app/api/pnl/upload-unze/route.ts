@@ -72,18 +72,15 @@ export async function POST(request: NextRequest) {
   // record every change permanently in pnl_restatements.
   const restated: { scope: string; line: string; old_value: number; new_value: number }[] = [];
   if (parsed.accepted) {
-    const { data: existing } = await supabase
-      .from("pnl_line_items")
-      .select("plant, line, amount")
-      .eq("company_id", UTPL_COMPANY_ID)
-      .eq("month", parsed.month)
-      .in("line", ["Gross Sale", "Net Profit Final"]);
-    if (existing && existing.length > 0) {
+    const { data: storedSums } = await supabase.rpc("get_utpl_pnl_line_sums", {
+      p_company_id: UTPL_COMPANY_ID,
+      p_month: parsed.month,
+      p_lines: ["Gross Sale", "Net Profit Final"],
+    });
+    const stored = (storedSums || []) as Array<{ scope: string; line: string; total: number }>;
+    if (stored.length > 0) {
       const oldMap = new Map<string, number>();
-      for (const e of existing) {
-        const k = `${e.plant}|${e.line}`;
-        oldMap.set(k, (oldMap.get(k) || 0) + Number(e.amount));
-      }
+      for (const e of stored) oldMap.set(`${e.scope}|${e.line}`, Number(e.total));
       const newMap = new Map<string, number>();
       for (const l of parsed.lineItems) {
         if (l.line !== "Gross Sale" && l.line !== "Net Profit Final") continue;

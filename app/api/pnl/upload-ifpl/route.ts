@@ -99,17 +99,14 @@ export async function POST(request: NextRequest) {
     // incoming figures BEFORE overwriting; record every change permanently.
     const restated: Restated[] = [];
     if (accepted) {
-      const { data: existing } = await supabase
-        .from("ifpl_pnl_lines")
-        .select("branch, line, actual")
-        .eq("month", m.month)
-        .in("line", ["Net Sales", "Final Profit"]);
-      if (existing && existing.length > 0) {
+      const { data: storedSums } = await supabase.rpc("get_ifpl_pnl_line_sums", {
+        p_month: m.month,
+        p_lines: ["Net Sales", "Final Profit"],
+      });
+      const stored = (storedSums || []) as Array<{ scope: string; line: string; total: number }>;
+      if (stored.length > 0) {
         const oldMap = new Map<string, number>();
-        for (const e of existing) {
-          const k = `${e.branch}|${e.line}`;
-          oldMap.set(k, (oldMap.get(k) || 0) + Number(e.actual));
-        }
+        for (const e of stored) oldMap.set(`${e.scope}|${e.line}`, Number(e.total));
         const newMap = new Map<string, number>();
         for (const l of m.lines) {
           if (l.line !== "Net Sales" && l.line !== "Final Profit") continue;
