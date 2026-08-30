@@ -137,6 +137,16 @@ async function walkTree(accountUid: string): Promise<{ files: WalkedFile[]; trun
 }
 
 export async function listCabinetFiles(accountUid: string): Promise<{ files: WalkedFile[]; truncated: boolean; source: "bulk" | "walk" }> {
+  // Walk the folder tree first — the /folders + /files endpoints are the
+  // proven ones (the inbox sync and health audit already rely on them)
+  // and they give real folder paths. The bulk entities/all endpoint turned
+  // out to paginate at ~20 items with no documented page controls — using
+  // it as the primary source silently indexed only the first page of each
+  // cabinet (7 cabinets × ~18 files). It remains only as a last-ditch
+  // fallback if the walk finds nothing at all.
+  const walked = await walkTree(accountUid);
+  if (walked.files.length > 0) return { ...walked, source: "walk" };
+
   const bulk = await tryEntitiesAll(accountUid);
   if (bulk) {
     return {
@@ -145,6 +155,5 @@ export async function listCabinetFiles(accountUid: string): Promise<{ files: Wal
       source: "bulk",
     };
   }
-  const walked = await walkTree(accountUid);
   return { ...walked, source: "walk" };
 }
