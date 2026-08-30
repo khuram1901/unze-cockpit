@@ -70,6 +70,18 @@ export type FlwLoan              = Record<string, any>;
 export type FlwJobCandidate      = Record<string, any>;
 export type FlwJobRequest        = Record<string, any>;
 
+// New types from extended Postman collection
+export type FlwTransfer         = Record<string, any>;
+export type FlwExemption        = Record<string, any>;
+export type FlwEmployeeExit     = Record<string, any>;
+export type FlwAdvanceSalary    = Record<string, any>;
+export type FlwAllowance        = Record<string, any>;
+export type FlwDeduction        = Record<string, any>;
+export type FlwPFData           = Record<string, any>;
+export type FlwOvertime         = Record<string, any>;
+export type FlwSalarySetup      = Record<string, any>;
+export type FlwTaxAdjustment    = Record<string, any>;
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 /** Convert YYYY-MM-DD → MM/DD/YYYY (FlowHCM's expected date format) */
@@ -229,15 +241,132 @@ export const flowhcm = {
     });
   },
 
-  // ── Stubs for future endpoints ──────────────────────────────────────────────
-  // These will be implemented once FlowHCM provides the remaining API collections.
+  // ── Implemented endpoints from Postman collection ───────────────────────────
 
-  async getEmployees():          Promise<FlwEmployee[]>           { return []; },
+  /** GetEmployeeList — full employee roster */
+  async getEmployees(): Promise<FlwEmployee[]> {
+    const token = await login();
+    return flwPost<FlwEmployee>(token, "IntegrationSettings/GetEmployeeList", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /** GetEmployeeLoan — loan records per employee */
+  async getLoans(): Promise<FlwLoan[]> {
+    const token = await login();
+    return flwPost<FlwLoan>(token, "IntegrationSettings/GetEmployeeLoan", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /** GetEmployeeTransfer — inter-department / inter-company transfers */
+  async getTransfers(): Promise<FlwTransfer[]> {
+    const token = await login();
+    return flwPost<FlwTransfer>(token, "IntegrationSettings/GetEmployeeTransfer", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /** GetAttendanceExemptionAPI — attendance exemption/waiver requests */
+  async getExemptions(): Promise<FlwExemption[]> {
+    const token = await login();
+    return flwPost<FlwExemption>(token, "IntegrationSettings/GetAttendanceExemptionAPI", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /** GetEmployeeLeaving — leavers / exits / offboarding records */
+  async getEmployeeExits(): Promise<FlwEmployeeExit[]> {
+    const token = await login();
+    return flwPost<FlwEmployeeExit>(token, "IntegrationSettings/GetEmployeeLeaving", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /** GetEmployeeAdvanceSalary — salary advance requests */
+  async getAdvanceSalary(): Promise<FlwAdvanceSalary[]> {
+    const token = await login();
+    return flwPost<FlwAdvanceSalary>(token, "IntegrationSettings/GetEmployeeAdvanceSalary", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /**
+   * GetAllowanceRequestData — allowance requests for a given month.
+   * year: four-digit string e.g. "2026"; month: two-digit string e.g. "08"
+   */
+  async getAllowances(year: string, month: string): Promise<FlwAllowance[]> {
+    const token = await login();
+    return flwPost<FlwAllowance>(token, "IntegrationSettings/GetAllowanceRequestData", {
+      employeecode:  "",
+      employeegroup: "",
+      Year:          year,
+      Month:         month,
+    });
+  },
+
+  /**
+   * GetEmployeeDeductionData — salary deductions for a given month.
+   * year: four-digit string e.g. "2026"; month: two-digit string e.g. "08"
+   */
+  async getDeductions(year: string, month: string): Promise<FlwDeduction[]> {
+    const token = await login();
+    return flwPost<FlwDeduction>(token, "IntegrationSettings/GetEmployeeDeductionData", {
+      employeecode:  "",
+      employeegroup: "",
+      Year:          year,
+      Month:         month,
+    });
+  },
+
+  /** GetEmployeePFData — provident fund / pension fund records */
+  async getPFData(): Promise<FlwPFData[]> {
+    const token = await login();
+    return flwPost<FlwPFData>(token, "IntegrationSettings/GetEmployeePFData", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /** GetEmployeeOvertimeRequest — overtime requests */
+  async getOvertime(): Promise<FlwOvertime[]> {
+    const token = await login();
+    return flwPost<FlwOvertime>(token, "IntegrationSettings/GetEmployeeOvertimeRequest", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /** GetEmployeeSalarySetup — salary structure / grading setup */
+  async getSalarySetup(): Promise<FlwSalarySetup[]> {
+    const token = await login();
+    return flwPost<FlwSalarySetup>(token, "IntegrationSettings/GetEmployeeSalarySetup", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /** GetTaxAdjustmentRequest — tax adjustment entries */
+  async getTaxAdjustments(): Promise<FlwTaxAdjustment[]> {
+    const token = await login();
+    return flwPost<FlwTaxAdjustment>(token, "IntegrationSettings/GetTaxAdjustmentRequest", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  // ── Stubs — no confirmed FlowHCM endpoint yet ───────────────────────────────
+
   async getPayroll(_month?: string): Promise<FlwPayrollRecord[]>   { return []; },
-  async getPerformanceReviews(): Promise<FlwPerformanceReview[]>  { return []; },
-  async getTrainingRecords():    Promise<FlwTrainingRecord[]>     { return []; },
-  async getDisciplinary():       Promise<FlwDisciplinaryAction[]> { return []; },
-  async getLoans():              Promise<FlwLoan[]>               { return []; },
-  async getCandidates():         Promise<FlwJobCandidate[]>       { return []; },
-  async getJobRequests():        Promise<FlwJobRequest[]>         { return []; },
+  async getPerformanceReviews(): Promise<FlwPerformanceReview[]>   { return []; },
+  async getTrainingRecords():    Promise<FlwTrainingRecord[]>      { return []; },
+  async getDisciplinary():       Promise<FlwDisciplinaryAction[]>  { return []; },
+  async getCandidates():         Promise<FlwJobCandidate[]>        { return []; },
+  async getJobRequests():        Promise<FlwJobRequest[]>          { return []; },
 };

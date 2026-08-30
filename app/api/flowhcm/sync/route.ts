@@ -19,6 +19,16 @@ import {
   FlwTrainingRecord,
   FlwDisciplinaryAction,
   FlwLoan,
+  FlwTransfer,
+  FlwExemption,
+  FlwEmployeeExit,
+  FlwAdvanceSalary,
+  FlwAllowance,
+  FlwDeduction,
+  FlwPFData,
+  FlwOvertime,
+  FlwSalarySetup,
+  FlwTaxAdjustment,
 } from "../../../../lib/flowhcm-client";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -413,6 +423,275 @@ async function syncLoans(db: ReturnType<typeof createServiceClient>) {
   return rows.length;
 }
 
+// ── New module syncs (from extended Postman collection) ───────────────────────
+
+async function syncTransfers(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const records = await flowhcm.getTransfers();
+  const rows = records.map((r: FlwTransfer) => ({
+    employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
+    employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+    from_department: r.fromDepartment ?? r.FromDepartment ?? null,
+    to_department:  r.toDepartment ?? r.ToDepartment ?? null,
+    from_company:   r.fromCompany ?? r.FromCompany ?? null,
+    to_company:     r.toCompany ?? r.ToCompany ?? null,
+    transfer_date:  parseFlwDate(r.transferDate ?? r.TransferDate),
+    effective_date: parseFlwDate(r.effectiveDate ?? r.EffectiveDate),
+    transfer_type:  r.transferType ?? r.TransferType ?? null,
+    reason:         r.reason ?? r.Reason ?? null,
+    status:         r.status ?? r.Status ?? null,
+    raw:            r,
+    synced_at:      new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_transfers").upsert(rows, {
+      onConflict: "employee_code,transfer_date,to_department",
+    });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "transfers", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncExemptions(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const records = await flowhcm.getExemptions();
+  const rows = records.map((r: FlwExemption) => ({
+    employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
+    employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+    exemption_date: parseFlwDate(r.exemptionDate ?? r.ExemptionDate ?? r.Date),
+    exemption_type: r.exemptionType ?? r.ExemptionType ?? r.Type ?? null,
+    reason:         r.reason ?? r.Reason ?? null,
+    status:         r.status ?? r.Status ?? null,
+    approved_by:    r.approvedBy ?? r.ApprovedBy ?? null,
+    raw:            r,
+    synced_at:      new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_exemptions").upsert(rows, {
+      onConflict: "employee_code,exemption_date,exemption_type",
+    });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "exemptions", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncEmployeeExits(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const records = await flowhcm.getEmployeeExits();
+  const rows = records.map((r: FlwEmployeeExit) => ({
+    employee_code:      r.employeeCode ?? r.EmployeeCode ?? null,
+    employee_name:      r.employeeName ?? r.EmployeeName ?? null,
+    department:         r.department ?? r.Department ?? null,
+    designation:        r.designation ?? r.Designation ?? null,
+    joining_date:       parseFlwDate(r.joiningDate ?? r.JoiningDate),
+    leaving_date:       parseFlwDate(r.leavingDate ?? r.LeavingDate ?? r.ExitDate),
+    exit_type:          r.exitType ?? r.ExitType ?? r.LeavingType ?? null,
+    reason:             r.reason ?? r.Reason ?? null,
+    notice_period_days: r.noticePeriodDays ?? r.NoticePeriodDays ?? null,
+    clearance_status:   r.clearanceStatus ?? r.ClearanceStatus ?? null,
+    raw:                r,
+    synced_at:          new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_employee_exits").upsert(rows, {
+      onConflict: "employee_code",
+    });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "employee_exits", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncAdvanceSalary(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const records = await flowhcm.getAdvanceSalary();
+  const rows = records.map((r: FlwAdvanceSalary) => ({
+    employee_code:   r.employeeCode ?? r.EmployeeCode ?? null,
+    employee_name:   r.employeeName ?? r.EmployeeName ?? null,
+    request_date:    parseFlwDate(r.requestDate ?? r.RequestDate),
+    amount:          r.amount ?? r.Amount ?? 0,
+    approved_amount: r.approvedAmount ?? r.ApprovedAmount ?? 0,
+    repayment_months: r.repaymentMonths ?? r.RepaymentMonths ?? null,
+    status:          r.status ?? r.Status ?? null,
+    approved_by:     r.approvedBy ?? r.ApprovedBy ?? null,
+    remarks:         r.remarks ?? r.Remarks ?? null,
+    raw:             r,
+    synced_at:       new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_advance_salary").upsert(rows, {
+      onConflict: "employee_code,request_date,amount",
+    });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "advance_salary", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncAllowancesAndDeductions(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const now = new Date();
+  // Sync current month + previous 2 months to catch late processing
+  const monthsToSync = [0, 1, 2].map(offset => {
+    const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    return {
+      year:  String(d.getFullYear()),
+      month: String(d.getMonth() + 1).padStart(2, "0"),
+    };
+  });
+
+  let totalAllowances = 0;
+  let totalDeductions = 0;
+
+  for (const { year, month } of monthsToSync) {
+    const [allowances, deductions] = await Promise.all([
+      flowhcm.getAllowances(year, month),
+      flowhcm.getDeductions(year, month),
+    ]);
+
+    const allowanceRows = allowances.map((r: FlwAllowance) => ({
+      employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
+      employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+      year:           parseInt(year),
+      month:          parseInt(month),
+      allowance_type: r.allowanceType ?? r.AllowanceType ?? r.Type ?? null,
+      amount:         r.amount ?? r.Amount ?? 0,
+      status:         r.status ?? r.Status ?? null,
+      raw:            r,
+      synced_at:      new Date().toISOString(),
+    }));
+
+    const deductionRows = deductions.map((r: FlwDeduction) => ({
+      employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
+      employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+      year:           parseInt(year),
+      month:          parseInt(month),
+      deduction_type: r.deductionType ?? r.DeductionType ?? r.Type ?? null,
+      amount:         r.amount ?? r.Amount ?? 0,
+      status:         r.status ?? r.Status ?? null,
+      raw:            r,
+      synced_at:      new Date().toISOString(),
+    }));
+
+    if (allowanceRows.length > 0) {
+      await db.from("flw_allowances").upsert(allowanceRows, {
+        onConflict: "employee_code,year,month,allowance_type",
+      });
+    }
+    if (deductionRows.length > 0) {
+      await db.from("flw_deductions").upsert(deductionRows, {
+        onConflict: "employee_code,year,month,deduction_type",
+      });
+    }
+    totalAllowances += allowanceRows.length;
+    totalDeductions += deductionRows.length;
+  }
+
+  await logSync(db, "allowances", "success", totalAllowances, Date.now() - t0);
+  await logSync(db, "deductions", "success", totalDeductions, Date.now() - t0);
+  return totalAllowances + totalDeductions;
+}
+
+async function syncPFData(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const records = await flowhcm.getPFData();
+  const rows = records.map((r: FlwPFData) => ({
+    employee_code:            r.employeeCode ?? r.EmployeeCode ?? null,
+    employee_name:            r.employeeName ?? r.EmployeeName ?? null,
+    pf_type:                  r.pfType ?? r.PFType ?? r.Type ?? null,
+    employee_contribution:    r.employeeContribution ?? r.EmployeeContribution ?? 0,
+    employer_contribution:    r.employerContribution ?? r.EmployerContribution ?? 0,
+    effective_date:           parseFlwDate(r.effectiveDate ?? r.EffectiveDate),
+    status:                   r.status ?? r.Status ?? null,
+    raw:                      r,
+    synced_at:                new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_pf_data").upsert(rows, {
+      onConflict: "employee_code,pf_type,effective_date",
+    });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "pf_data", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncOvertime(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const records = await flowhcm.getOvertime();
+  const rows = records.map((r: FlwOvertime) => ({
+    employee_code:   r.employeeCode ?? r.EmployeeCode ?? null,
+    employee_name:   r.employeeName ?? r.EmployeeName ?? null,
+    overtime_date:   parseFlwDate(r.overtimeDate ?? r.OvertimeDate ?? r.Date),
+    hours:           r.hours ?? r.Hours ?? 0,
+    rate_multiplier: r.rateMultiplier ?? r.RateMultiplier ?? 1.5,
+    amount:          r.amount ?? r.Amount ?? 0,
+    status:          r.status ?? r.Status ?? null,
+    approved_by:     r.approvedBy ?? r.ApprovedBy ?? null,
+    raw:             r,
+    synced_at:       new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_overtime").upsert(rows, {
+      onConflict: "employee_code,overtime_date",
+    });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "overtime", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncSalarySetup(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const records = await flowhcm.getSalarySetup();
+  const rows = records.map((r: FlwSalarySetup) => ({
+    employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
+    employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+    grade:          r.grade ?? r.Grade ?? null,
+    basic_salary:   r.basicSalary ?? r.BasicSalary ?? 0,
+    gross_salary:   r.grossSalary ?? r.GrossSalary ?? 0,
+    currency:       r.currency ?? r.Currency ?? "PKR",
+    effective_date: parseFlwDate(r.effectiveDate ?? r.EffectiveDate),
+    raw:            r,
+    synced_at:      new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_salary_setup").upsert(rows, {
+      onConflict: "employee_code",
+    });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "salary_setup", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncTaxAdjustments(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const records = await flowhcm.getTaxAdjustments();
+  const now = new Date();
+  const rows = records.map((r: FlwTaxAdjustment) => ({
+    employee_code:    r.employeeCode ?? r.EmployeeCode ?? null,
+    employee_name:    r.employeeName ?? r.EmployeeName ?? null,
+    tax_year:         r.taxYear ?? r.TaxYear ?? now.getFullYear(),
+    adjustment_type:  r.adjustmentType ?? r.AdjustmentType ?? r.Type ?? null,
+    amount:           r.amount ?? r.Amount ?? 0,
+    reason:           r.reason ?? r.Reason ?? null,
+    status:           r.status ?? r.Status ?? null,
+    raw:              r,
+    synced_at:        new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_tax_adjustments").upsert(rows, {
+      onConflict: "employee_code,tax_year,adjustment_type",
+    });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "tax_adjustments", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -442,22 +721,38 @@ export async function POST(request: NextRequest) {
   // Parse which modules to sync (default: all)
   const body = await request.json().catch(() => ({})) as { modules?: string[] };
   const ALL_MODULES = [
-    "employees", "attendance", "leave", "recruitment",
-    "payroll", "performance", "training_records", "disciplinary", "loans",
+    // Core (confirmed implemented)
+    "employees", "attendance", "leave",
+    // New extended modules
+    "transfers", "exemptions", "employee_exits", "advance_salary",
+    "allowances_deductions", "pf_data", "overtime", "salary_setup", "tax_adjustments",
+    // Loans (now confirmed endpoint)
+    "loans",
+    // Stubs — no FlowHCM endpoint yet; kept so manual triggers still work
+    "recruitment", "payroll", "performance", "training_records", "disciplinary",
   ];
   const modules = body.modules ?? ALL_MODULES;
 
   for (const mod of modules) {
     try {
-      if (mod === "employees")        results.employees        = await syncEmployees(db);
-      if (mod === "attendance")       results.attendance       = await syncAttendance(db);
-      if (mod === "leave")            results.leave            = await syncLeave(db);
-      if (mod === "recruitment")      results.recruitment      = await syncRecruitment(db);
-      if (mod === "payroll")          results.payroll          = await syncPayroll(db);
-      if (mod === "performance")      results.performance      = await syncPerformance(db);
-      if (mod === "training_records") results.training_records = await syncTrainingRecords(db);
-      if (mod === "disciplinary")     results.disciplinary     = await syncDisciplinary(db);
-      if (mod === "loans")            results.loans            = await syncLoans(db);
+      if (mod === "employees")             results.employees             = await syncEmployees(db);
+      if (mod === "attendance")            results.attendance            = await syncAttendance(db);
+      if (mod === "leave")                 results.leave                 = await syncLeave(db);
+      if (mod === "transfers")             results.transfers             = await syncTransfers(db);
+      if (mod === "exemptions")            results.exemptions            = await syncExemptions(db);
+      if (mod === "employee_exits")        results.employee_exits        = await syncEmployeeExits(db);
+      if (mod === "advance_salary")        results.advance_salary        = await syncAdvanceSalary(db);
+      if (mod === "allowances_deductions") results.allowances_deductions = await syncAllowancesAndDeductions(db);
+      if (mod === "pf_data")              results.pf_data               = await syncPFData(db);
+      if (mod === "overtime")              results.overtime              = await syncOvertime(db);
+      if (mod === "salary_setup")          results.salary_setup          = await syncSalarySetup(db);
+      if (mod === "tax_adjustments")       results.tax_adjustments       = await syncTaxAdjustments(db);
+      if (mod === "loans")                 results.loans                 = await syncLoans(db);
+      if (mod === "recruitment")           results.recruitment           = await syncRecruitment(db);
+      if (mod === "payroll")               results.payroll               = await syncPayroll(db);
+      if (mod === "performance")           results.performance           = await syncPerformance(db);
+      if (mod === "training_records")      results.training_records      = await syncTrainingRecords(db);
+      if (mod === "disciplinary")          results.disciplinary          = await syncDisciplinary(db);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${mod}: ${msg}`);
