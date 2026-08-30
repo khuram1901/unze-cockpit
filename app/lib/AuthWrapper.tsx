@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase, loadMyPermissions, ensureFreshSession } from "./supabase";
+import { supabase, loadMyPermissions, ensureFreshSession, pendingSessionRefresh } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
 import ChatPanel from "./ChatPanel";
@@ -56,6 +56,61 @@ export default function AuthWrapper({
     meetings: { id: string; title: string; meeting_date: string }[];
   } | null>(null);
 
+  // ── Inactivity auto-logout (security) ──────────────────────────────
+  // 30 minutes without mouse/keyboard/touch activity signs the user out.
+  // At 29 minutes a "Still there?" countdown appears; any activity or the
+  // Stay-signed-in button resets the clock.
+  const IDLE_LIMIT_MS = 30 * 60_000;
+  const IDLE_WARN_MS = 60_000; // warning shown for the final 60 seconds
+  // Activity is tracked ACROSS TABS via localStorage — otherwise a
+  // forgotten background tab would sign out a user actively working in
+  // another tab (signOut clears the shared session for every tab).
+  const ACTIVITY_KEY = "unze:last-activity";
+  const lastActivityRef = useRef<number>(Date.now());
+  function sharedLastActivity(): number {
+    let stored = 0;
+    try { stored = Number(localStorage.getItem(ACTIVITY_KEY)) || 0; } catch { /* private mode */ }
+    return Math.max(lastActivityRef.current, stored);
+  }
+  const [idleCountdown, setIdleCountdown] = useState<number | null>(null);
+  useEffect(() => {
+    try { localStorage.setItem(ACTIVITY_KEY, String(Date.now())); } catch { /* ignore */ }
+    let last = 0;
+    function activity() {
+      const now = Date.now();
+      if (now - last < 1000) return; // throttle bursts
+      last = now;
+      lastActivityRef.current = now;
+      try { localStorage.setItem(ACTIVITY_KEY, String(now)); } catch { /* ignore */ }
+      setIdleCountdown((c) => (c !== null ? null : c));
+    }
+    const events: (keyof WindowEventMap)[] = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "wheel"];
+    for (const ev of events) window.addEventListener(ev, activity, { passive: true });
+
+    const tick = setInterval(async () => {
+      const idleFor = Date.now() - sharedLastActivity();
+      if (idleFor >= IDLE_LIMIT_MS) {
+        clearInterval(tick);
+        // Let any in-flight token refresh settle first, so its response
+        // can't write a new session back after we clear it.
+        await pendingSessionRefresh();
+        await supabase.auth.signOut();
+        router.push("/login?error=You were signed out after 30 minutes of inactivity.");
+      } else if (idleFor >= IDLE_LIMIT_MS - IDLE_WARN_MS) {
+        setIdleCountdown(Math.max(1, Math.ceil((IDLE_LIMIT_MS - idleFor) / 1000)));
+      } else {
+        // Another tab's activity pulled us back under the threshold.
+        setIdleCountdown((c) => (c !== null ? null : c));
+      }
+    }, 1000);
+
+    return () => {
+      for (const ev of events) window.removeEventListener(ev, activity);
+      clearInterval(tick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Session keep-alive: when the tab comes back to the foreground (or the
   // network returns), refresh an expired/near-expiry token BEFORE the user's
   // next click — otherwise every direct Supabase call fires with a stale JWT
@@ -63,6 +118,10 @@ export default function AuthWrapper({
   // is dead, send them to login cleanly instead of a wall of errors.
   useEffect(() => {
     async function revive() {
+      // If the user has been idle past the logout limit, don't refresh —
+      // the idle-logout tick is about to sign them out, and a refresh
+      // response landing after signOut() would resurrect the session.
+      if (Date.now() - sharedLastActivity() >= IDLE_LIMIT_MS) return;
       const session = await ensureFreshSession();
       if (!session) router.push("/login");
     }
@@ -76,44 +135,6 @@ export default function AuthWrapper({
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", revive);
       window.removeEventListener("focus", onVisible);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── Inactivity auto-logout (security) ──────────────────────────────
-  // 30 minutes without mouse/keyboard/touch activity signs the user out.
-  // At 29 minutes a "Still there?" countdown appears; any activity or the
-  // Stay-signed-in button resets the clock.
-  const IDLE_LIMIT_MS = 30 * 60_000;
-  const IDLE_WARN_MS = 60_000; // warning shown for the final 60 seconds
-  const lastActivityRef = useRef<number>(Date.now());
-  const [idleCountdown, setIdleCountdown] = useState<number | null>(null);
-  useEffect(() => {
-    let last = 0;
-    function activity() {
-      const now = Date.now();
-      if (now - last < 1000) return; // throttle bursts
-      last = now;
-      lastActivityRef.current = now;
-      setIdleCountdown((c) => (c !== null ? null : c));
-    }
-    const events: (keyof WindowEventMap)[] = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "wheel"];
-    for (const ev of events) window.addEventListener(ev, activity, { passive: true });
-
-    const tick = setInterval(async () => {
-      const idleFor = Date.now() - lastActivityRef.current;
-      if (idleFor >= IDLE_LIMIT_MS) {
-        clearInterval(tick);
-        await supabase.auth.signOut();
-        router.push("/login?error=You were signed out after 30 minutes of inactivity.");
-      } else if (idleFor >= IDLE_LIMIT_MS - IDLE_WARN_MS) {
-        setIdleCountdown(Math.max(1, Math.ceil((IDLE_LIMIT_MS - idleFor) / 1000)));
-      }
-    }, 1000);
-
-    return () => {
-      for (const ev of events) window.removeEventListener(ev, activity);
-      clearInterval(tick);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -382,7 +403,7 @@ export default function AuthWrapper({
             <b>Still there?</b> You&apos;ll be signed out in <b>{idleCountdown}s</b> for security.
           </span>
           <button
-            onClick={() => { lastActivityRef.current = Date.now(); setIdleCountdown(null); }}
+            onClick={() => { lastActivityRef.current = Date.now(); try { localStorage.setItem(ACTIVITY_KEY, String(Date.now())); } catch { /* ignore */ } setIdleCountdown(null); }}
             style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: "#0F1720", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer" }}
           >
             Stay signed in

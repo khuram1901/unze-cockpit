@@ -35,7 +35,21 @@ export async function ensureFreshSession() {
   }
   await refreshInFlight;
   const { data: { session: fresh } } = await supabase.auth.getSession();
-  return fresh ?? session;
+  // Only hand back a session that is actually usable. If the refresh failed
+  // (dead refresh token, network error) the re-fetched session is either
+  // gone or still expired — returning the stale one here would defeat the
+  // caller's "no session → go to login" handling with a token that 401s.
+  if (!fresh) return null;
+  const freshExpiresMs = (fresh.expires_at ?? 0) * 1000;
+  return freshExpiresMs - Date.now() > 0 ? fresh : null;
+}
+
+// Lets callers that are about to sign out wait for any in-flight token
+// refresh to settle first — otherwise a refresh response landing after
+// signOut() can write a new session back into storage and silently undo a
+// security logout.
+export function pendingSessionRefresh(): Promise<void> {
+  return refreshInFlight ?? Promise.resolve();
 }
 
 export async function authHeaders(): Promise<Record<string, string>> {
