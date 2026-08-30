@@ -136,6 +136,9 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
       division:       e.DivisionName    && e.DivisionName    !== "--" ? e.DivisionName    : null,
       company:        e.EmployeeGroup   && e.EmployeeGroup   !== "--" ? e.EmployeeGroup   : null,
       status:         e.EmployeeStatus ?? (e.IsActive != null ? (e.IsActive ? "Active" : "Inactive") : null),
+      is_active:      e.IsActive === true || e.IsActive === "true" || e.IsActive === 1
+                        || ((e.IsActive == null) && !e.LeavingDate),
+      leaving_date:   parseAnyFlwDate(e.LeavingDate),
       joining_date:   parseAnyFlwDate(e.JoiningDate ?? e.AppointmentDate),
       cnic:           e.CnicNo   ?? null,
       email:          e.Email    ?? null,
@@ -152,6 +155,11 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
       .from("flw_employees")
       .upsert(rows, { onConflict: "employee_code" });
     if (error) throw new Error(error.message);
+
+    // Resolve company_id / department_id / location_id against master tables —
+    // single RPC, all joins in the database (migration 214)
+    const { error: linkErr } = await db.rpc("resolve_flw_employee_links");
+    if (linkErr) console.error("resolve_flw_employee_links:", linkErr.message);
   }
 
   await logSync(db, "employees", "success", rows.length, Date.now() - t0);
