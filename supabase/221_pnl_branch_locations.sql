@@ -87,3 +87,9 @@ end;
 $$;
 
 select match_pnl_branches();
+
+-- ── Aliases confirmed by Khuram 30/08/2026 (applied directly) ──────
+-- 'ONLINE PK' → new virtual location 'Online' (IFPL, type 'online')
+-- 'Islamabad' → Centaurus Mall (Store 028 — runs in parallel with Capital Square)
+-- 'Mall of Sailkot' → Sialkot Store (renamed/relocated from July 2026 file)
+-- Result: 100% of rest_pnl_lines and ifpl_pnl_lines mapped to master locations.
