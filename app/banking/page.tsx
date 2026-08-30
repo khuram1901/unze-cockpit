@@ -35,7 +35,7 @@ const MONTH_FULL  = ["January","February","March","April","May","June","July","A
 const ENTITY_DISPLAY: Record<string, string> = {
   IFPL: "IFPL — Imperial Footwear",
   Baranh: "Baranh",
-  HD: "Haute Dolci",
+  HD: "HD",
   UTPL: "UTPL — Unze Trading",
 };
 

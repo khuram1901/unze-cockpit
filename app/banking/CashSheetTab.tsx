@@ -64,7 +64,7 @@ const COMPANY_TABS: { id: Company; label: string }[] = [
   { id: "UTPL", label: "Unze Trading (UTPL)" },
   { id: "IFPL", label: "Imperial Footwear (IFPL)" },
   { id: "BRNH", label: "Baranh (BRNH)" },
-  { id: "HD",   label: "Haute Dolci (HD)" },
+  { id: "HD",   label: "HD" },
   { id: "KKJ",  label: "K&K Jhang (KKJ)" },
 ];
 

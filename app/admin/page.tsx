@@ -90,7 +90,7 @@ const ENTITY_DISPLAY: Record<string, string> = {
   UTPL:   "UTPL — Unze Trading",
   IFPL:   "IFPL — Imperial Footwear",
   Baranh: "Baranh",
-  HD:     "Haute Dolci",
+  HD:     "HD",
   ALM:    "Almahar",
   DIR:    "Directors",
   UZL:    "Unze London",
@@ -916,7 +916,7 @@ export default function AdminDataPage() {
             <option value="UTPL">UTPL — Unze Trading</option>
             <option value="IFPL">IFPL — Imperial Footwear</option>
             <option value="Baranh">Baranh</option>
-            <option value="HD">Haute Dolci</option>
+            <option value="HD">HD</option>
             <option value="ALM">Almahar</option>
             <option value="DIR">Directors</option>
             <option value="UZL">Unze London</option>
@@ -946,7 +946,7 @@ export default function AdminDataPage() {
         </div>
 
         {renderSection(ifplRows, "IFPL — Imperial Footwear (Retail)", false, "ifpl")}
-        {renderSection(restRows, "Restaurants — Baranh & Haute Dolci", true, "restaurants")}
+        {renderSection(restRows, "Restaurants — Baranh & HD", true, "restaurants")}
         {renderSection(utplRows, "Unze Trading (UTPL)", false, "utpl")}
 
         {filtered.length === 0 && !loadingRegs && (
@@ -978,7 +978,7 @@ export default function AdminDataPage() {
                       <option value="UTPL">UTPL — Unze Trading</option>
                       <option value="IFPL">IFPL — Imperial Footwear</option>
                       <option value="Baranh">Baranh</option>
-                      <option value="HD">Haute Dolci</option>
+                      <option value="HD">HD</option>
                       <option value="ALM">Almahar</option>
                       <option value="DIR">Directors</option>
                       <option value="UZL">Unze London</option>
@@ -2080,7 +2080,7 @@ export default function AdminDataPage() {
       { value: "UTPL",   label: "UTPL — Unze Trading" },
       { value: "IFPL",   label: "IFPL — Imperial Footwear" },
       { value: "Baranh", label: "Baranh" },
-      { value: "HD",     label: "HD — Haute Dolci" },
+      { value: "HD",     label: "HD" },
       { value: "ALM",    label: "Almahar" },
       { value: "DIR",    label: "Directors" },
       { value: "UZL",    label: "Unze London" },

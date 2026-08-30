@@ -36,14 +36,14 @@ const QUARTERLY_ENTITIES = [
   { key: "UT",     label: "Unze Trading" },
   { key: "IMP",    label: "Imperial" },
   { key: "BARANH", label: "Baranh" },
-  { key: "HD",     label: "Haute Dolci" },
+  { key: "HD",     label: "HD" },
 ];
 
 const ANNUAL_ENTITIES = [
   { key: "UT",       label: "Unze Trading" },
   { key: "IMP",      label: "Imperial" },
   { key: "BARANH",   label: "Baranh" },
-  { key: "HD",       label: "Haute Dolci" },
+  { key: "HD",       label: "HD" },
   { key: "ALMAHAR",  label: "Almahar" },
   { key: "KK_JHANG", label: "K&K Jhang" },
   { key: "K_SALEEM", label: "Khuram Saleem" },

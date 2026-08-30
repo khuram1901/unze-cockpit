@@ -125,7 +125,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
     formFields: [
       { key: "title", label: "Notice Title", type: "text", required: true, placeholder: "e.g. Income Tax Notice FY2025" },
       { key: "notice_type", label: "Type", type: "select", options: ["income tax", "sales tax", "withholding tax", "FBR notice", "provincial tax", "customs", "other"] },
-      { key: "company_name", label: "Company", type: "select", options: ["Unze Trading PVT Limited", "Imperial Footwear PVT Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang"] },
+      { key: "company_name", label: "Company", type: "select", options: ["Unze Trading", "Imperial Footwear", "HD", "Baranh", "K&K Jhang"] },
       { key: "received_date", label: "Received Date", type: "date" },
       { key: "consultant_name", label: "Consultant", type: "select", options: ["Rana Munir", "Rana Shehbaz", "Hashim Butt", "Others"] },
       { key: "our_action_required", label: "Our Action Required", type: "textarea" },
@@ -160,7 +160,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
     ],
     formFields: [
       { key: "description", label: "Task Description", type: "text", required: true, placeholder: "e.g. Collect office rent receipt" },
-      { key: "project", label: "Company", type: "select", required: true, options: ["Unze Trading PVT Limited", "Imperial Footwear PVT Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang"] },
+      { key: "project", label: "Company", type: "select", required: true, options: ["Unze Trading", "Imperial Footwear", "HD", "Baranh", "K&K Jhang"] },
       { key: "assigned_to", label: "Assigned To", type: "text", required: true, placeholder: "Person name" },
       { key: "due_date", label: "Due Date", type: "date", required: true },
       { key: "priority", label: "Priority", type: "select", options: ["Low", "Normal", "High", "Urgent"] },

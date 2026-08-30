@@ -41,17 +41,39 @@ export type CompanyConfig = {
   currency: string;
 };
 
+// Names below are the CANONICAL display names, kept in sync with the
+// companies table in Supabase (renamed 30/08/2026 on Khuram's instruction:
+// Unze Trading, Imperial Footwear, HD, S&M Investment). If a company is
+// renamed in the database, rename it here too — and vice versa.
 export const COMPANIES: CompanyConfig[] = [
-  { id: UTPL_COMPANY_ID, name: "Unze Trading PVT Limited",      shortCode: "UTPL", slug: "unze-trading",    currency: "PKR" },
-  { id: IFPL_COMPANY_ID, name: "Imperial Footwear PVT Limited",  shortCode: "IFPL", slug: "imperial",        currency: "PKR" },
-  { id: BRNH_COMPANY_ID, name: "Baranh",                         shortCode: "BRNH", slug: "baranh",          currency: "PKR" },
-  { id: HD_COMPANY_ID,   name: "Haute Dolci",                    shortCode: "HD",   slug: "haute-dolci",     currency: "PKR" },
-  { id: KKJ_COMPANY_ID,  name: "K&K Jhang",                      shortCode: "KKJ",  slug: "kk-jhang",        currency: "PKR" },
-  { id: ALM_COMPANY_ID,  name: "Almahar",                        shortCode: "ALM",  slug: "almahar",         currency: "PKR" },
-  { id: DIR_COMPANY_ID,  name: "Directors",                      shortCode: "DIR",  slug: "directors",       currency: "PKR" },
-  { id: SMI_COMPANY_ID,  name: "S&M Investments",                shortCode: "SMI",  slug: "sm-investments",  currency: "PKR" },
-  { id: UZL_COMPANY_ID,  name: "Unze London",                    shortCode: "UZL",  slug: "unze-london",     currency: "GBP" },
+  { id: UTPL_COMPANY_ID, name: "Unze Trading",      shortCode: "UTPL", slug: "unze-trading",    currency: "PKR" },
+  { id: IFPL_COMPANY_ID, name: "Imperial Footwear", shortCode: "IFPL", slug: "imperial",        currency: "PKR" },
+  { id: BRNH_COMPANY_ID, name: "Baranh",            shortCode: "BRNH", slug: "baranh",          currency: "PKR" },
+  { id: HD_COMPANY_ID,   name: "HD",                shortCode: "HD",   slug: "haute-dolci",     currency: "PKR" },
+  { id: KKJ_COMPANY_ID,  name: "K&K Jhang",         shortCode: "KKJ",  slug: "kk-jhang",        currency: "PKR" },
+  { id: ALM_COMPANY_ID,  name: "Almahar",           shortCode: "ALM",  slug: "almahar",         currency: "PKR" },
+  { id: DIR_COMPANY_ID,  name: "Directors",         shortCode: "DIR",  slug: "directors",       currency: "PKR" },
+  { id: SMI_COMPANY_ID,  name: "S&M Investment",    shortCode: "SMI",  slug: "sm-investments",  currency: "PKR" },
+  { id: UZL_COMPANY_ID,  name: "Unze London",       shortCode: "UZL",  slug: "unze-london",     currency: "GBP" },
 ];
+
+// Legacy spellings that still exist in old data (members.company,
+// legal_notices.company_name, historic uploads). getCompanyByName()
+// resolves these to the canonical company so old records keep working.
+export const LEGACY_COMPANY_ALIASES: Record<string, string> = {
+  "unze trading pvt limited":      UTPL_COMPANY_ID,
+  "unze trading pvt ltd":          UTPL_COMPANY_ID,
+  "imperial footwear pvt limited": IFPL_COMPANY_ID,
+  "imperial footwear pvt ltd":     IFPL_COMPANY_ID,
+  "haute dolci":                   HD_COMPANY_ID,
+  "barahn pvt limited":            BRNH_COMPANY_ID,
+  "brnh":                          BRNH_COMPANY_ID,
+  "s&m investments":               SMI_COMPANY_ID,
+};
+
+export function companyNameByCode(shortCode: string): string {
+  return COMPANIES.find((c) => c.shortCode === shortCode)?.name ?? shortCode;
+}
 
 // Companies with a finance data pipeline (cash positions, PDC, budgets,
 // receivables) wired up. Single source of truth for both the Executive
@@ -72,19 +94,17 @@ export function getCompanyById(id: string): CompanyConfig | undefined {
 }
 
 export function getCompanyByName(name: string): CompanyConfig | undefined {
-  return COMPANIES.find((c) => c.name === name || c.name.startsWith(name));
+  const exact = COMPANIES.find((c) => c.name === name || c.name.startsWith(name));
+  if (exact) return exact;
+  // Fall back to legacy spellings still present in old data
+  const legacyId = LEGACY_COMPANY_ALIASES[name.trim().toLowerCase()];
+  return legacyId ? COMPANIES.find((c) => c.id === legacyId) : undefined;
 }
 
 // Company names for the Taxation notices dashboard — single source of truth so
 // TaxationDashboard.tsx and any future consumer stay in sync with the IDs above.
-export const TAX_COMPANY_NAMES: string[] = [
-  "Unze Trading PVT Limited",
-  "Imperial Footwear PVT Limited",
-  "Haute Dolci",
-  "Baranh",
-  "K&K Jhang",
-  "Directors",
-];
+export const TAX_COMPANY_NAMES: string[] = ["UTPL", "IFPL", "HD", "BRNH", "KKJ", "DIR"]
+  .map(companyNameByCode);
 
 // ── Department Budget lookup tables ───────────────────────────────────────────
 // Single source of truth for both finance/page.tsx and FinanceManager.tsx.

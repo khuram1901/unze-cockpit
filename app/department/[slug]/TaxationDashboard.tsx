@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, HD_COMPANY_ID, BRNH_COMPANY_ID, DIR_COMPANY_ID, KKJ_COMPANY_ID, TAX_COMPANY_NAMES } from "../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, HD_COMPANY_ID, BRNH_COMPANY_ID, DIR_COMPANY_ID, KKJ_COMPANY_ID, TAX_COMPANY_NAMES, getCompanyByName } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
 import { useMobile } from "../../lib/useMobile";
@@ -68,23 +68,25 @@ const COMPANIES = TAX_COMPANY_NAMES;
 // FinanceManager.tsx uses for company_id gaps, rather than guessing.
 // Maps display names used on taxation notices to their company UUID.
 // K&K Jhang now has a UUID (added migration 204, 28/07/2026).
+// Canonical names + legacy spellings both resolve via constants.ts —
+// the single source of truth synced with the companies table (30/08/2026).
 const COMPANY_ID_BY_NAME: Record<string, string | null> = {
-  "Unze Trading PVT Limited":      UTPL_COMPANY_ID,
-  "Imperial Footwear PVT Limited": IFPL_COMPANY_ID,
-  "Haute Dolci":                   HD_COMPANY_ID,
-  "Baranh":                        BRNH_COMPANY_ID,
-  "K&K Jhang":                     KKJ_COMPANY_ID,
-  "Directors":                     DIR_COMPANY_ID,
+  "Unze Trading":      UTPL_COMPANY_ID,
+  "Imperial Footwear": IFPL_COMPANY_ID,
+  "HD":                HD_COMPANY_ID,
+  "Baranh":            BRNH_COMPANY_ID,
+  "K&K Jhang":         KKJ_COMPANY_ID,
+  "Directors":         DIR_COMPANY_ID,
 };
 function resolveCompanyId(companyName: string | null | undefined): string | null {
   if (!companyName) return null;
-  return COMPANY_ID_BY_NAME[companyName] ?? null;
+  return COMPANY_ID_BY_NAME[companyName] ?? getCompanyByName(companyName)?.id ?? null;
 }
 
 function normaliseCompanyName(name: string): string {
-  const n = name.trim();
-  if (n.toLowerCase().startsWith("imperial footwear")) return "Imperial Footwear PVT Limited";
-  return n;
+  // Old notices carry legacy spellings ("Imperial Footwear PVT Limited",
+  // "Haute Dolci") — resolve to the canonical display name for grouping.
+  return getCompanyByName(name.trim())?.name ?? name.trim();
 }
 const CONSULTANTS = ["Rana Munir", "Rana Shehbaz", "Hashim Butt", "Others"];
 const NOTICE_STATUSES = ["Order", "Notice", "Show Cause"] as const;
@@ -116,11 +118,11 @@ const TYPE_COLOURS: Record<string, string> = {
 };
 
 const COMPANY_COLOURS: Record<string, string> = {
-  "Unze Trading PVT Limited":      COLOURS.BLUE,
-  "Imperial Footwear PVT Limited": COLOURS.AMBER,
-  "Haute Dolci":                   COLOURS.GREEN,
-  "Barahn PVT Limited":            COLOURS.PURPLE,
-  "K&K Jhang":                     COLOURS.SLATE,
+  "Unze Trading":      COLOURS.BLUE,
+  "Imperial Footwear": COLOURS.AMBER,
+  "HD":                COLOURS.GREEN,
+  "Baranh":            COLOURS.PURPLE,
+  "K&K Jhang":         COLOURS.SLATE,
 };
 
 const NOTICE_STATUS_BADGE: Record<string, { bg: string; text: string }> = {

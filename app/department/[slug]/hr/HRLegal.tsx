@@ -22,7 +22,7 @@ const ENTITY_DISPLAY: Record<string, string> = {
   UTPL:   "UTPL — Unze Trading",
   IFPL:   "IFPL — Imperial Footwear",
   Baranh: "Baranh",
-  HD:     "Haute Dolci",
+  HD:     "HD",
   ALM:    "Almahar",
 };
 

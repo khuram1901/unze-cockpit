@@ -80,7 +80,7 @@ const ENTITY_ORDER = ["UTPL", "IFPL", "Baranh", "HD", "ALM", "DIR", "UZL"];
 const ENTITY_DISPLAY: Record<string, string> = {
   IFPL: "IFPL — Imperial Footwear",
   Baranh: "Baranh",
-  HD: "Haute Dolci",
+  HD: "HD",
   UTPL: "UTPL — Unze Trading",
 };
 
