@@ -554,8 +554,7 @@ export default function StockManagePage() {
     const ok = await confirm(
       closing
         ? `Close letter #${l.letter_number}? It'll stop showing up in expiry alerts, but stays here with its history.`
-        : `Reopen letter #${l.letter_number}?`,
-      true
+        : `Reopen letter #${l.letter_number}?`
     );
     if (!ok) return;
     const res = await authFetch("/api/stock/authority-letters", { method: "PATCH", body: JSON.stringify({ id: l.id, close: closing }) });

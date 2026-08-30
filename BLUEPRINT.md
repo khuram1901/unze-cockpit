@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 30/08/2026 (FlowHCM master-data foundation + HR dashboard rebuild — see below).
+> **This is the source of truth.** Read before touching any code. Last updated: 30/08/2026 (Phase 4 tech debt: stock/folderit/P&L aggregation moved into RPCs — migrations 224-228; see CHANGELOG 2026-08-30 evening).
 >
 > Previous update: 16/08/2026 (tax consultant access rule centralised as `TAX_CONSULTANT_EMAIL` in permissions.ts — was hardcoded in four separate client files; the exemption itself moved into `canViewDepartment()` and is now subject to Access Matrix overrides; `useRequireCapability` and `useRequireDepartment` refactored onto a shared `useAuthGuard()`).
 >
@@ -27,7 +27,7 @@
 - Real FlowHCM field mappings confirmed from `raw` payloads (EmployeeRefNo, AccountTitle, AdvanceSalaryDate, EmployeeShare, PunchCode, etc.). `EmployeeName` is FIRST NAME ONLY — awaiting FlowHCM full-name field. Do NOT use `AccountTitle` as name fallback (bank accounts can be titled to family members).
 - Generic response unwrapping in `lib/flowhcm-client.ts` handles all FlowHCM wrapper keys (`employeesGetRequest`, `employeeLeavingGet`, etc.).
 
-**HR dashboard (7 CEO-level tabs, `HRDashboard.tsx`):** People, Payroll, Workforce Movement, Attendance, T&D Calendar, Tasks & Legal (merged), Live HR Data. Powered by 4 RPCs in migration 216 (`get_hr_people_overview`, `get_hr_payroll_insights`, `get_hr_movement`, `get_hr_attendance_overview`) via thin route `/api/hr/overview`. Payroll section is role-gated server-side (Admin/CEO + HR/Finance Managers; PA excluded). Deleted dead tabs (empty tables): Workforce, Insights, Performance, Recruitment, Onboarding, Off-boarding, old Payroll, EOBI — components removed 30/08/2026; their `hr_*` tables still exist in the DB (drop pending Khuram's confirmation).
+**HR dashboard (7 CEO-level tabs, `HRDashboard.tsx`):** People, Payroll, Workforce Movement, Attendance, T&D Calendar, Tasks & Legal (merged), Live HR Data. Powered by 4 RPCs in migration 216 (`get_hr_people_overview`, `get_hr_payroll_insights`, `get_hr_movement`, `get_hr_attendance_overview`) via thin route `/api/hr/overview`. Payroll section is role-gated server-side (Admin/CEO + HR/Finance Managers; PA excluded). Deleted dead tabs (empty tables): Workforce, Insights, Performance, Recruitment, Onboarding, Off-boarding, old Payroll, EOBI — components removed 30/08/2026; their `hr_*` tables were dropped in migrations 223 and 228 (Phase 4); the orphaned performance/eobi/recruitment API routes were deleted in Phase 4 (recruitment_* tables kept — FlowHCM sync writes them).
 
 **Phase 3 (pending):** migrate Finance/Admin/Production pages off hardcoded 'UTPL'/'IFPL' strings (32 files) onto `company_id` + master names, module by module.
 
