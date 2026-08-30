@@ -40,13 +40,15 @@ export async function GET(request: NextRequest) {
 
   let totalFiles = 0;
   const errors: string[] = [];
+  const perAccount: { name: string; files: number; source: string }[] = [];
 
   // Walk all cabinets in parallel — each is independently capped, and a
   // failure in one cabinet never blocks the others.
   await Promise.all(
     accounts.map(async (account) => {
       try {
-        const { files } = await listCabinetFiles(account.account_uid);
+        const { files, source } = await listCabinetFiles(account.account_uid);
+        perAccount.push({ name: account.account_name, files: files.length, source });
 
         // Wholesale replace this account's rows
         await db.from("folderit_all_files").delete().eq("account_uid", account.account_uid);
@@ -84,5 +86,12 @@ export async function GET(request: NextRequest) {
     await db.from("folderit_sync_log").update({ all_files_synced: totalFiles }).eq("id", lastLog.id);
   }
 
-  return Response.json({ ok: errors.length === 0, accounts: accounts.length, filesIndexed: totalFiles, errors });
+  return Response.json({
+    ok: errors.length === 0,
+    version: 2, // bump when sync logic changes — confirms which deploy served the request
+    accounts: accounts.length,
+    filesIndexed: totalFiles,
+    perAccount,
+    errors,
+  });
 }
