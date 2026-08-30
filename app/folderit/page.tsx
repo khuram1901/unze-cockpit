@@ -185,12 +185,32 @@ type SearchHit = {
 };
 
 function GlobalSearchBox() {
+  const setPreview = useContext(PreviewContext);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [previewingUid, setPreviewingUid] = useState<string | null>(null);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const boxRef = React.useRef<HTMLDivElement>(null);
+
+  // Click a result → preview IN the app (same modal as Browse), never a
+  // trip to Folderit. Khuram: "its taking me to the folder it. can i not
+  // view the document within the app." The ↗ icon still opens Folderit
+  // for when you need to act on the file.
+  async function openHit(hit: SearchHit) {
+    if (previewingUid) return;
+    setPreviewingUid(hit.uid);
+    try {
+      const url = await fetchPreviewBlobUrl(hit.uid, hit.account_uid);
+      setPreview({ url, name: hit.name });
+      setOpen(false);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Couldn't preview this document.");
+    } finally {
+      setPreviewingUid(null);
+    }
+  }
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -265,16 +285,17 @@ function GlobalSearchBox() {
           <div style={{ padding: "8px 12px 4px", fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>
             {results.length} result{results.length !== 1 ? "s" : ""}
           </div>
-          {results.map((hit) => (
-            <a
+          {results.map((hit) => {
+            const isPreviewing = previewingUid === hit.uid;
+            return (
+            <div
               key={hit.uid}
-              href={hit.folderit_url}
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={() => openHit(hit)}
               style={{
                 display: "flex", alignItems: "flex-start", gap: "10px",
                 padding: "8px 12px", borderTop: `1px solid ${COLOURS.BORDER}`,
-                textDecoration: "none", color: "inherit",
+                cursor: isPreviewing ? "wait" : "pointer",
+                opacity: isPreviewing ? 0.6 : 1, color: "inherit",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = COLOURS.CARD_ALT ?? "#F8F9FA")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
@@ -285,14 +306,23 @@ function GlobalSearchBox() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {hit.name}
+                  {isPreviewing && <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 400, marginLeft: "8px" }}>Opening…</span>}
                 </div>
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
                   {hit.account_name}{hit.folder_name ? ` › ${hit.folder_name}` : ""}
                 </div>
               </div>
-              <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, alignSelf: "center" }}>↗</span>
-            </a>
-          ))}
+              <a
+                href={hit.folderit_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title="Open in Folderit"
+                style={{ fontSize: "12px", color: COLOURS.SLATE, flexShrink: 0, alignSelf: "center", textDecoration: "none", padding: "4px" }}
+              >↗</a>
+            </div>
+            );
+          })}
           {results.length === 60 && (
             <div style={{ padding: "6px 12px", fontSize: "11px", color: COLOURS.SLATE, textAlign: "center" }}>
               Showing first 60 results — refine your search for more
