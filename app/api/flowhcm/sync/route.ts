@@ -124,7 +124,11 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
     if (!code) continue;
     empMap.set(code, {
       employee_code:  code,
-      full_name:      e.EmployeeName   ?? e.AccountTitle ?? null,
+      // EmployeeName only carries the first name; AccountTitle (bank account
+      // title) holds the full name — prefer it when present
+      full_name:      (e.AccountTitle && String(e.AccountTitle).trim())
+                        ? String(e.AccountTitle).trim()
+                        : (e.EmployeeName ?? null),
       designation:    e.DesignationName && e.DesignationName !== "--" ? e.DesignationName : null,
       department:     e.DepartmentName  && e.DepartmentName  !== "--" ? e.DepartmentName  : null,
       sub_department: e.SubDepName      && e.SubDepName      !== "--" ? e.SubDepName      : null,
