@@ -7,23 +7,14 @@ function canManage(role: string, department: string | null) {
     (role === "Manager" && department === "Unze Trading Ops");
 }
 
-// Returns the total qty already issued in letters for a PO (per size)
+// Returns the total qty already issued in letters for a PO (per size).
+// One RPC round-trip (rule 0) — the DB does the summing.
 async function getPoLetterTotals(supabase: ReturnType<typeof import("../../../lib/supabase-server").createServiceClient>, poId: string, excludeId?: string) {
-  let query = supabase
-    .from("authority_letters")
-    .select("qty_31, qty_36, qty_45, qty_meter")
-    .eq("po_id", poId);
-  if (excludeId) query = query.neq("id", excludeId);
-  const { data } = await query;
-  return (data || []).reduce(
-    (acc, r) => ({
-      qty_31: acc.qty_31 + (r.qty_31 || 0),
-      qty_36: acc.qty_36 + (r.qty_36 || 0),
-      qty_45: acc.qty_45 + (r.qty_45 || 0),
-      qty_meter: acc.qty_meter + (r.qty_meter || 0),
-    }),
-    { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 }
-  );
+  const { data } = await supabase.rpc("get_po_letter_totals", {
+    p_po_id: poId,
+    p_exclude_letter_id: excludeId ?? null,
+  });
+  return (data || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 }) as { qty_31: number; qty_36: number; qty_45: number; qty_meter: number };
 }
 
 export async function GET(request: NextRequest) {
@@ -40,126 +31,19 @@ export async function GET(request: NextRequest) {
 
   // List all active letters for a plant (dispatch dropdown flow)
   if (listAll && plantId) {
-    // Fetch all letters whose linked PO belongs to this plant
-    const { data: letters, error: lettersErr } = await supabase
-      .from("authority_letters")
-      .select("*, purchase_orders!inner(id, po_number, customer_name, plant_id), contractors(id, name)")
-      .eq("purchase_orders.plant_id", plantId)
-      .order("created_at", { ascending: false });
-
-    if (lettersErr) return Response.json({ error: lettersErr.message }, { status: 500 });
-
-    // Fetch all dispatch_records for these letters in one query
-    const letterIds = (letters || []).map((l) => l.id);
-    const { data: allRecords } = letterIds.length > 0
-      ? await supabase.from("dispatch_records").select("authority_letter_id, qty_31, qty_36, qty_45, qty_meter").in("authority_letter_id", letterIds)
-      : { data: [] };
-
-    const recordsByLetter: Record<string, { qty_31: number; qty_36: number; qty_45: number; qty_meter: number }> = {};
-    for (const r of allRecords || []) {
-      if (!recordsByLetter[r.authority_letter_id]) {
-        recordsByLetter[r.authority_letter_id] = { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
-      }
-      recordsByLetter[r.authority_letter_id].qty_31 += r.qty_31 || 0;
-      recordsByLetter[r.authority_letter_id].qty_36 += r.qty_36 || 0;
-      recordsByLetter[r.authority_letter_id].qty_45 += r.qty_45 || 0;
-      recordsByLetter[r.authority_letter_id].qty_meter += r.qty_meter || 0;
-    }
-
-    const result = (letters || []).map((data) => {
-      const po = data.purchase_orders as { id: string; po_number: string; customer_name: string } | null;
-      const contractor = data.contractors as { id: string; name: string } | null;
-      const dispatched = recordsByLetter[data.id] || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
-      const opening = {
-        qty_31: data.opening_dispatched_31 || 0,
-        qty_36: data.opening_dispatched_36 || 0,
-        qty_45: data.opening_dispatched_45 || 0,
-        qty_meter: data.opening_dispatched_meter || 0,
-      };
-      return {
-        id: data.id,
-        letter_number: data.letter_number,
-        expiry_date: data.expiry_date || null,
-        issued_by: data.issued_by || "",
-        po_id: po?.id || data.po_id,
-        contractor_id: contractor?.id || data.contractor_id,
-        po_number: po?.po_number || "",
-        customer_name: po?.customer_name || "",
-        contractor_name: contractor?.name || "",
-        qty_31: data.qty_31 || 0,
-        qty_36: data.qty_36 || 0,
-        qty_40: 0,
-        qty_45: data.qty_45 || 0,
-        qty_meter: data.qty_meter || 0,
-        remaining_31: Math.max(0, (data.qty_31 || 0) - opening.qty_31 - dispatched.qty_31),
-        remaining_36: Math.max(0, (data.qty_36 || 0) - opening.qty_36 - dispatched.qty_36),
-        remaining_40: 0,
-        remaining_45: Math.max(0, (data.qty_45 || 0) - opening.qty_45 - dispatched.qty_45),
-        remaining_meter: Math.max(0, (data.qty_meter || 0) - opening.qty_meter - dispatched.qty_meter),
-        closed_at: data.closed_at || null,
-      };
-    });
-
-    return Response.json({ letters: result });
+    const { data, error } = await supabase.rpc("get_plant_authority_letters", { p_plant_id: plantId });
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ letters: data || [] });
   }
 
   // Lookup by letter number (plant member dispatch flow) — returns single letter with remaining balances
   if (letterNumber) {
-    let q = supabase
-      .from("authority_letters")
-      .select("*, purchase_orders(id, po_number, customer_name, plant_id), contractors(id, name)")
-      .ilike("letter_number", letterNumber.trim());
-    if (plantId) {
-      // Filter via the linked PO's plant_id
-      q = q.eq("purchase_orders.plant_id", plantId);
-    }
-    const { data, error } = await q.limit(1).maybeSingle();
-    if (error) return Response.json({ error: error.message }, { status: 500 });
-    if (!data) return Response.json({ letter: null });
-
-    // Compute dispatched so far (opening + all dispatch_records)
-    const { data: records } = await supabase
-      .from("dispatch_records")
-      .select("qty_31, qty_36, qty_45, qty_meter")
-      .eq("authority_letter_id", data.id);
-    const dispatched = (records || []).reduce(
-      (acc, r) => ({
-        qty_31: acc.qty_31 + (r.qty_31 || 0),
-        qty_36: acc.qty_36 + (r.qty_36 || 0),
-        qty_45: acc.qty_45 + (r.qty_45 || 0),
-        qty_meter: acc.qty_meter + (r.qty_meter || 0),
-      }),
-      {
-        qty_31: data.opening_dispatched_31 || 0,
-        qty_36: data.opening_dispatched_36 || 0,
-        qty_45: data.opening_dispatched_45 || 0,
-        qty_meter: data.opening_dispatched_meter || 0,
-      }
-    );
-
-    const po = data.purchase_orders as { id: string; po_number: string; customer_name: string } | null;
-    const contractor = data.contractors as { id: string; name: string } | null;
-
-    return Response.json({
-      letter: {
-        id: data.id,
-        letter_number: data.letter_number,
-        expiry_date: data.expiry_date || null,
-        po_id: po?.id || data.po_id,
-        contractor_id: contractor?.id || data.contractor_id,
-        po_number: po?.po_number || "",
-        customer_name: po?.customer_name || "",
-        contractor_name: contractor?.name || "",
-        qty_31: data.qty_31 || 0,
-        qty_36: data.qty_36 || 0,
-        qty_45: data.qty_45 || 0,
-        qty_meter: data.qty_meter || 0,
-        remaining_31: Math.max(0, (data.qty_31 || 0) - dispatched.qty_31),
-        remaining_36: Math.max(0, (data.qty_36 || 0) - dispatched.qty_36),
-        remaining_45: Math.max(0, (data.qty_45 || 0) - dispatched.qty_45),
-        remaining_meter: Math.max(0, (data.qty_meter || 0) - dispatched.qty_meter),
-      },
+    const { data, error } = await supabase.rpc("get_authority_letter_lookup", {
+      p_letter_number: letterNumber.trim(),
+      p_plant_id: plantId || null,
     });
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ letter: data || null });
   }
 
   let query = supabase

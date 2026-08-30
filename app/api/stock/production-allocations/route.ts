@@ -83,27 +83,12 @@ export async function POST(request: NextRequest) {
 
     if (!po || po.is_system_unallocated) continue; // unallocated PO has no cap
 
-    // Get total already allocated to this PO (excluding this entry)
-    const { data: existing } = await supabase
-      .from("production_allocations")
-      .select("qty_31, qty_36, qty_45, qty_meter")
-      .eq("po_id", alloc.po_id)
-      .neq("production_entry_id", production_entry_id);
-
-    const alreadyProduced = (existing || []).reduce(
-      (acc, r) => ({
-        qty_31: acc.qty_31 + (r.qty_31 || 0),
-        qty_36: acc.qty_36 + (r.qty_36 || 0),
-        qty_45: acc.qty_45 + (r.qty_45 || 0),
-        qty_meter: acc.qty_meter + (r.qty_meter || 0),
-      }),
-      {
-        qty_31: po.opening_produced_31 || 0,
-        qty_36: po.opening_produced_36 || 0,
-        qty_45: po.opening_produced_45 || 0,
-        qty_meter: po.opening_produced_meter || 0,
-      }
-    );
+    // Total already produced against this PO (opening + other entries) — one RPC round-trip
+    const { data: producedTotals } = await supabase.rpc("get_po_produced_totals", {
+      p_po_id: alloc.po_id,
+      p_exclude_entry_id: production_entry_id,
+    });
+    const alreadyProduced = (producedTotals || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 }) as { qty_31: number; qty_36: number; qty_45: number; qty_meter: number };
 
     const varianceFactor = 1 + (po.variance_pct || 3) / 100;
     const capBreaches = [
@@ -172,16 +157,11 @@ export async function PATCH(request: NextRequest) {
     .eq("id", alloc.production_entry_id).single();
 
   if (entry) {
-    const { data: otherAllocs } = await supabase
-      .from("production_allocations")
-      .select("qty_31, qty_36, qty_45, qty_meter")
-      .eq("production_entry_id", alloc.production_entry_id)
-      .neq("id", id);
-
-    const otherTotal = (otherAllocs || []).reduce(
-      (acc, r) => ({ qty_31: acc.qty_31 + (r.qty_31 || 0), qty_36: acc.qty_36 + (r.qty_36 || 0), qty_45: acc.qty_45 + (r.qty_45 || 0), qty_meter: acc.qty_meter + (r.qty_meter || 0) }),
-      { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 }
-    );
+    const { data: entryTotals } = await supabase.rpc("get_entry_allocation_totals", {
+      p_entry_id: alloc.production_entry_id,
+      p_exclude_alloc_id: id,
+    });
+    const otherTotal = (entryTotals || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 }) as { qty_31: number; qty_36: number; qty_45: number; qty_meter: number };
 
     const overflows = [
       { size: "31ft", total: otherTotal.qty_31 + newQty.qty_31, cap: entry.qty_31 || 0 },
@@ -203,16 +183,11 @@ export async function PATCH(request: NextRequest) {
     .eq("id", alloc.po_id).single();
 
   if (po && !po.is_system_unallocated) {
-    const { data: otherPoAllocs } = await supabase
-      .from("production_allocations")
-      .select("qty_31, qty_36, qty_45, qty_meter")
-      .eq("po_id", alloc.po_id)
-      .neq("id", id);
-
-    const alreadyProduced = (otherPoAllocs || []).reduce(
-      (acc, r) => ({ qty_31: acc.qty_31 + (r.qty_31 || 0), qty_36: acc.qty_36 + (r.qty_36 || 0), qty_45: acc.qty_45 + (r.qty_45 || 0), qty_meter: acc.qty_meter + (r.qty_meter || 0) }),
-      { qty_31: po.opening_produced_31 || 0, qty_36: po.opening_produced_36 || 0, qty_45: po.opening_produced_45 || 0, qty_meter: po.opening_produced_meter || 0 }
-    );
+    const { data: poTotals } = await supabase.rpc("get_po_produced_totals", {
+      p_po_id: alloc.po_id,
+      p_exclude_alloc_id: id,
+    });
+    const alreadyProduced = (poTotals || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 }) as { qty_31: number; qty_36: number; qty_45: number; qty_meter: number };
 
     const varianceFactor = 1 + (po.variance_pct || 3) / 100;
     const capBreaches = [

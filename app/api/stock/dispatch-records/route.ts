@@ -65,28 +65,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Sum existing dispatch records for this letter
-  const { data: existing } = await supabase
-    .from("dispatch_records")
-    .select("qty_31, qty_36, qty_40, qty_45, qty_meter")
-    .eq("authority_letter_id", authority_letter_id);
-
-  const alreadyDispatched = (existing || []).reduce(
-    (acc, r) => ({
-      qty_31: acc.qty_31 + (r.qty_31 || 0),
-      qty_36: acc.qty_36 + (r.qty_36 || 0),
-      qty_40: acc.qty_40 + (r.qty_40 || 0),
-      qty_45: acc.qty_45 + (r.qty_45 || 0),
-      qty_meter: acc.qty_meter + (r.qty_meter || 0),
-    }),
-    {
-      qty_31: letter.opening_dispatched_31 || 0,
-      qty_36: letter.opening_dispatched_36 || 0,
-      qty_40: letter.opening_dispatched_40 || 0,
-      qty_45: letter.opening_dispatched_45 || 0,
-      qty_meter: letter.opening_dispatched_meter || 0,
-    }
-  );
+  // Total already dispatched on this letter (opening + records) — one RPC round-trip
+  const { data: dispatchedTotals } = await supabase.rpc("get_letter_dispatched_totals", {
+    p_letter_id: authority_letter_id,
+  });
+  const alreadyDispatched = (dispatchedTotals || { qty_31: 0, qty_36: 0, qty_40: 0, qty_45: 0, qty_meter: 0 }) as { qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number };
 
   // Hard block: dispatch cannot exceed letter qty per size
   const overflows = [
@@ -128,53 +111,12 @@ export async function POST(request: NextRequest) {
       .eq("id", authority_letter_id)
       .single();
 
+    // Check + close in one RPC round-trip: Active, non-system POs only;
+    // closes when every ordered size is fully dispatched across all letters
+    // (openings included). Now also respects ordered_40, which the old JS
+    // never checked.
     if (letterInfo?.po_id) {
-      const { data: po } = await supabase
-        .from("purchase_orders")
-        .select("id, ordered_31, ordered_36, ordered_45, ordered_meter, opening_produced_31, opening_produced_36, opening_produced_45, opening_produced_meter, status, is_system_unallocated")
-        .eq("id", letterInfo.po_id)
-        .single();
-
-      if (po && !po.is_system_unallocated && po.status === "Active") {
-        const { data: allLetters } = await supabase
-          .from("authority_letters")
-          .select("qty_31, qty_36, qty_40, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_40, opening_dispatched_45, opening_dispatched_meter, dispatch_records(qty_31, qty_36, qty_40, qty_45, qty_meter)")
-          .eq("po_id", po.id);
-
-        const totalDispatched = (allLetters || []).reduce(
-          (acc, l) => {
-            const letterDisp = (l.dispatch_records || []).reduce(
-              (la: { qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number }, dr: { qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number }) => ({
-                qty_31: la.qty_31 + (dr.qty_31 || 0),
-                qty_36: la.qty_36 + (dr.qty_36 || 0),
-                qty_40: la.qty_40 + (dr.qty_40 || 0),
-                qty_45: la.qty_45 + (dr.qty_45 || 0),
-                qty_meter: la.qty_meter + (dr.qty_meter || 0),
-              }),
-              { qty_31: l.opening_dispatched_31 || 0, qty_36: l.opening_dispatched_36 || 0, qty_40: l.opening_dispatched_40 || 0, qty_45: l.opening_dispatched_45 || 0, qty_meter: l.opening_dispatched_meter || 0 }
-            );
-            return {
-              qty_31: acc.qty_31 + letterDisp.qty_31,
-              qty_36: acc.qty_36 + letterDisp.qty_36,
-              qty_40: acc.qty_40 + letterDisp.qty_40,
-              qty_45: acc.qty_45 + letterDisp.qty_45,
-              qty_meter: acc.qty_meter + letterDisp.qty_meter,
-            };
-          },
-          { qty_31: 0, qty_36: 0, qty_40: 0, qty_45: 0, qty_meter: 0 }
-        );
-
-        const sizes = ["31", "36", "40", "45", "meter"] as const;
-        const fullyDelivered = sizes.every((s) => {
-          const ordered = po[`ordered_${s}` as keyof typeof po] as number;
-          if (!ordered || ordered <= 0) return true;
-          return (totalDispatched[`qty_${s}` as keyof typeof totalDispatched] as number) >= ordered;
-        });
-
-        if (fullyDelivered) {
-          await supabase.from("purchase_orders").update({ status: "Closed", updated_at: new Date().toISOString() }).eq("id", po.id);
-        }
-      }
+      await supabase.rpc("close_po_if_fully_dispatched", { p_po_id: letterInfo.po_id });
     }
   } catch {
     // Auto-close failure is non-fatal — log only
@@ -294,16 +236,11 @@ export async function PATCH(request: NextRequest) {
     .eq("id", record.authority_letter_id).single();
 
   if (letter) {
-    const { data: others } = await supabase
-      .from("dispatch_records")
-      .select("qty_31, qty_36, qty_40, qty_45, qty_meter")
-      .eq("authority_letter_id", record.authority_letter_id)
-      .neq("id", id);
-
-    const otherTotal = (others || []).reduce(
-      (acc, r) => ({ qty_31: acc.qty_31 + (r.qty_31 || 0), qty_36: acc.qty_36 + (r.qty_36 || 0), qty_40: acc.qty_40 + (r.qty_40 || 0), qty_45: acc.qty_45 + (r.qty_45 || 0), qty_meter: acc.qty_meter + (r.qty_meter || 0) }),
-      { qty_31: letter.opening_dispatched_31 || 0, qty_36: letter.opening_dispatched_36 || 0, qty_40: letter.opening_dispatched_40 || 0, qty_45: letter.opening_dispatched_45 || 0, qty_meter: letter.opening_dispatched_meter || 0 }
-    );
+    const { data: otherTotalData } = await supabase.rpc("get_letter_dispatched_totals", {
+      p_letter_id: record.authority_letter_id,
+      p_exclude_record_id: id,
+    });
+    const otherTotal = (otherTotalData || { qty_31: 0, qty_36: 0, qty_40: 0, qty_45: 0, qty_meter: 0 }) as { qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number };
 
     const newQty = {
       qty_31: qty_31 !== undefined ? qty_31 : record.qty_31,
