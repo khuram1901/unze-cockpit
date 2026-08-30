@@ -561,29 +561,44 @@ async function syncAllowancesAndDeductions(db: ReturnType<typeof createServiceCl
       flowhcm.getDeductions(year, month),
     ]);
 
-    const allowanceRows = allowances.map((r: FlwAllowance) => ({
-      employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
-      employee_name:  r.employeeName ?? r.EmployeeName ?? null,
-      year:           parseInt(year),
-      month:          parseInt(month),
-      allowance_type: r.allowanceType ?? r.AllowanceType ?? r.Type ?? null,
-      amount:         r.amount ?? r.Amount ?? 0,
-      status:         r.status ?? r.Status ?? null,
-      raw:            r,
-      synced_at:      new Date().toISOString(),
-    }));
+    // Build rows and deduplicate on conflict key (last row wins)
+    const allowanceMap = new Map<string, Record<string, any>>();
+    for (const r of allowances as FlwAllowance[]) {
+      const code = r.employeeCode ?? r.EmployeeCode ?? null;
+      const type = r.allowanceType ?? r.AllowanceType ?? r.Type ?? null;
+      const key  = `${code}__${year}__${month}__${type}`;
+      allowanceMap.set(key, {
+        employee_code:  code,
+        employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+        year:           parseInt(year),
+        month:          parseInt(month),
+        allowance_type: type,
+        amount:         r.amount ?? r.Amount ?? 0,
+        status:         r.status ?? r.Status ?? null,
+        raw:            r,
+        synced_at:      new Date().toISOString(),
+      });
+    }
+    const allowanceRows = [...allowanceMap.values()];
 
-    const deductionRows = deductions.map((r: FlwDeduction) => ({
-      employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
-      employee_name:  r.employeeName ?? r.EmployeeName ?? null,
-      year:           parseInt(year),
-      month:          parseInt(month),
-      deduction_type: r.deductionType ?? r.DeductionType ?? r.Type ?? null,
-      amount:         r.amount ?? r.Amount ?? 0,
-      status:         r.status ?? r.Status ?? null,
-      raw:            r,
-      synced_at:      new Date().toISOString(),
-    }));
+    const deductionMap = new Map<string, Record<string, any>>();
+    for (const r of deductions as FlwDeduction[]) {
+      const code = r.employeeCode ?? r.EmployeeCode ?? null;
+      const type = r.deductionType ?? r.DeductionType ?? r.Type ?? null;
+      const key  = `${code}__${year}__${month}__${type}`;
+      deductionMap.set(key, {
+        employee_code:  code,
+        employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+        year:           parseInt(year),
+        month:          parseInt(month),
+        deduction_type: type,
+        amount:         r.amount ?? r.Amount ?? 0,
+        status:         r.status ?? r.Status ?? null,
+        raw:            r,
+        synced_at:      new Date().toISOString(),
+      });
+    }
+    const deductionRows = [...deductionMap.values()];
 
     if (allowanceRows.length > 0) {
       const { error: ae } = await db.from("flw_allowances").upsert(allowanceRows, {
