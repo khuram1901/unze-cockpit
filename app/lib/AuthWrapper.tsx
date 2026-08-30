@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase, loadMyPermissions } from "./supabase";
+import { supabase, loadMyPermissions, ensureFreshSession } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
 import ChatPanel from "./ChatPanel";
@@ -55,6 +55,30 @@ export default function AuthWrapper({
     members: { name: string | null; email: string | null; role: string; department: string | null }[];
     meetings: { id: string; title: string; meeting_date: string }[];
   } | null>(null);
+
+  // Session keep-alive: when the tab comes back to the foreground (or the
+  // network returns), refresh an expired/near-expiry token BEFORE the user's
+  // next click — otherwise every direct Supabase call fires with a stale JWT
+  // ("JWT expired") until a manual logout/login. If the refresh token itself
+  // is dead, send them to login cleanly instead of a wall of errors.
+  useEffect(() => {
+    async function revive() {
+      const session = await ensureFreshSession();
+      if (!session) router.push("/login");
+    }
+    function onVisible() {
+      if (document.visibilityState === "visible") revive();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", revive);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", revive);
+      window.removeEventListener("focus", onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auth check
   useEffect(() => {

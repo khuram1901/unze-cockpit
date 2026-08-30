@@ -14,8 +14,32 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   },
 });
 
-export async function authHeaders(): Promise<Record<string, string>> {
+// Returns the current session, proactively refreshing it when the access
+// token is expired or about to expire. getSession() alone hands back the
+// CACHED token — after a laptop sleeps or a tab sits in the background the
+// auto-refresh timer has stalled, so the first clicks fire with an expired
+// JWT ("JWT expired" on every page until logout/login). This closes that gap.
+let refreshInFlight: Promise<void> | null = null;
+export async function ensureFreshSession() {
   const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return null;
+  const expiresAtMs = (session.expires_at ?? 0) * 1000;
+  if (expiresAtMs - Date.now() > 60_000) return session; // still fresh
+  // Deduplicate concurrent refreshes (several fetches can race on wake).
+  if (!refreshInFlight) {
+    refreshInFlight = supabase.auth
+      .refreshSession()
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => { refreshInFlight = null; });
+  }
+  await refreshInFlight;
+  const { data: { session: fresh } } = await supabase.auth.getSession();
+  return fresh ?? session;
+}
+
+export async function authHeaders(): Promise<Record<string, string>> {
+  const session = await ensureFreshSession();
   if (!session?.access_token) return {};
   return { Authorization: `Bearer ${session.access_token}` };
 }
@@ -32,7 +56,7 @@ export async function loadMyPermissions(token?: string): Promise<Record<string, 
   try {
     let accessToken = token;
     if (!accessToken) {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await ensureFreshSession();
       accessToken = session?.access_token || undefined;
     }
     if (!accessToken) return null;
@@ -51,7 +75,7 @@ export async function loadMyWidgetOverrides(token?: string): Promise<Record<stri
   try {
     let accessToken = token;
     if (!accessToken) {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await ensureFreshSession();
       accessToken = session?.access_token || undefined;
     }
     if (!accessToken) return null;
