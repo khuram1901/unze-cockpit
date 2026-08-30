@@ -68,8 +68,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fallback: live walk (index not yet populated for this cabinet)
-    const { files, truncated, source } = await listCabinetFiles(accountUid);
+    // Fallback: live walk (index not yet populated for this cabinet).
+    // 50s deadline keeps us inside the function's 60s ceiling.
+    const { files, truncated, source } = await listCabinetFiles(accountUid, Date.now() + 50_000);
     files.sort((a, b) => a.name.localeCompare(b.name));
     return Response.json({
       files: files.map((f) => ({ ...f, folderit_url: fileUrl(f.uid) })),

@@ -1,13 +1,22 @@
 /**
- * GET /api/folderit/sync-files — cron, every 30 minutes.
+ * GET /api/folderit/sync-files — cron, every 10 minutes.
  *
- * Indexes EVERY file in every active Folderit cabinet into
- * folderit_all_files (wholesale replace per account). This powers:
- *  - Global search (ILIKE on the table — instant, reliable; Folderit's
- *    own search API was silently returning nothing)
- *  - The Browse tab's "All Files" flat view
+ * Indexes ONE cabinet per run into folderit_all_files — the one whose
+ * index is stalest (never-indexed cabinets first). With 7 cabinets and a
+ * 10-minute cadence, every cabinet refreshes roughly hourly.
  *
- * Auth: Bearer CRON_SECRET (Vercel cron) — same pattern as /sync.
+ * Why one at a time: walking all 7 cabinets in a single invocation blew
+ * straight through the 60s serverless ceiling (FUNCTION_INVOCATION_TIMEOUT,
+ * 30/08/2026). Each run now has a 45s walk deadline — whatever is
+ * collected by then still gets indexed, and the next run continues with
+ * the next-stalest cabinet.
+ *
+ * ?account_uid=xxx forces a specific cabinet (handy for manual runs).
+ *
+ * This index powers global search (ILIKE) and the Browse tab's
+ * "All Files" flat view.
+ *
+ * Auth: Bearer CRON_SECRET — same pattern as /sync.
  */
 
 import { NextRequest } from "next/server";
@@ -18,6 +27,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const CRON_SECRET = process.env.CRON_SECRET;
+const WALK_BUDGET_MS = 45_000;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -27,71 +37,87 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient();
 
-  const { data: accounts } = await db
-    .from("folderit_account_map")
-    .select("account_uid, account_name")
-    .eq("is_active", true)
-    .neq("scope", "excluded")
-    .neq("scope", "pending");
+  const forcedAccount = request.nextUrl.searchParams.get("account_uid");
+
+  const [{ data: accounts }, { data: freshness }] = await Promise.all([
+    db
+      .from("folderit_account_map")
+      .select("account_uid, account_name")
+      .eq("is_active", true)
+      .neq("scope", "excluded")
+      .neq("scope", "pending"),
+    db
+      .from("folderit_all_files")
+      .select("account_uid, synced_at")
+      .order("synced_at", { ascending: false }),
+  ]);
 
   if (!accounts?.length) {
-    return Response.json({ ok: true, accounts: 0, filesIndexed: 0 });
+    return Response.json({ ok: true, version: 3, indexed: null, files: 0 });
   }
 
-  let totalFiles = 0;
-  const errors: string[] = [];
-  const perAccount: { name: string; files: number; source: string }[] = [];
-
-  // Walk all cabinets in parallel — each is independently capped, and a
-  // failure in one cabinet never blocks the others.
-  await Promise.all(
-    accounts.map(async (account) => {
-      try {
-        const { files, source } = await listCabinetFiles(account.account_uid);
-        perAccount.push({ name: account.account_name, files: files.length, source });
-
-        // Wholesale replace this account's rows
-        await db.from("folderit_all_files").delete().eq("account_uid", account.account_uid);
-
-        // Insert in chunks (Supabase caps request sizes)
-        for (let i = 0; i < files.length; i += 500) {
-          const chunk = files.slice(i, i + 500).map((f) => ({
-            account_uid: account.account_uid,
-            file_uid: f.uid,
-            name: f.name,
-            folder_path: f.folder_path,
-            size_bytes: f.size,
-            created_at_folderit: f.createdAt ? new Date(f.createdAt * 1000).toISOString() : null,
-          }));
-          const { error } = await db
-            .from("folderit_all_files")
-            .upsert(chunk, { onConflict: "file_uid" });
-          if (error) throw new Error(error.message);
-        }
-        totalFiles += files.length;
-      } catch (e) {
-        errors.push(`${account.account_name}: ${e instanceof Error ? e.message : "failed"}`);
-      }
-    })
-  );
-
-  // Note the run on the most recent sync log row (best-effort)
-  const { data: lastLog } = await db
-    .from("folderit_sync_log")
-    .select("id")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (lastLog?.id) {
-    await db.from("folderit_sync_log").update({ all_files_synced: totalFiles }).eq("id", lastLog.id);
+  // Newest synced_at per account (first occurrence wins — rows are sorted desc)
+  const lastSynced = new Map<string, string>();
+  for (const row of freshness ?? []) {
+    if (!lastSynced.has(row.account_uid)) lastSynced.set(row.account_uid, row.synced_at);
   }
 
-  return Response.json({
-    ok: errors.length === 0,
-    version: 2, // bump when sync logic changes — confirms which deploy served the request
-    accounts: accounts.length,
-    filesIndexed: totalFiles,
-    perAccount,
-    errors,
-  });
+  // Pick the target: forced > never-indexed > stalest
+  let target = forcedAccount
+    ? accounts.find((a) => a.account_uid === forcedAccount)
+    : undefined;
+  if (forcedAccount && !target) {
+    return Response.json({ error: "Unknown account_uid" }, { status: 400 });
+  }
+  if (!target) {
+    const sorted = [...accounts].sort((a, b) => {
+      const ta = lastSynced.get(a.account_uid) ?? "";
+      const tb = lastSynced.get(b.account_uid) ?? "";
+      return ta.localeCompare(tb); // "" (never indexed) sorts first
+    });
+    target = sorted[0];
+  }
+
+  try {
+    const deadline = Date.now() + WALK_BUDGET_MS;
+    const { files, truncated, source } = await listCabinetFiles(target.account_uid, deadline);
+
+    // Wholesale replace this account's rows
+    await db.from("folderit_all_files").delete().eq("account_uid", target.account_uid);
+
+    for (let i = 0; i < files.length; i += 500) {
+      const chunk = files.slice(i, i + 500).map((f) => ({
+        account_uid: target.account_uid,
+        file_uid: f.uid,
+        name: f.name,
+        folder_path: f.folder_path,
+        size_bytes: f.size,
+        created_at_folderit: f.createdAt ? new Date(f.createdAt * 1000).toISOString() : null,
+      }));
+      const { error } = await db
+        .from("folderit_all_files")
+        .upsert(chunk, { onConflict: "file_uid" });
+      if (error) throw new Error(error.message);
+    }
+
+    return Response.json({
+      ok: true,
+      version: 3,
+      indexed: target.account_name,
+      files: files.length,
+      truncated,
+      source,
+      staleness: accounts.map((a) => ({
+        name: a.account_name,
+        lastIndexed: a.account_uid === target!.account_uid ? "just now" : (lastSynced.get(a.account_uid) ?? "never"),
+      })),
+    });
+  } catch (e) {
+    return Response.json({
+      ok: false,
+      version: 3,
+      indexed: target.account_name,
+      error: e instanceof Error ? e.message : "failed",
+    }, { status: 500 });
+  }
 }

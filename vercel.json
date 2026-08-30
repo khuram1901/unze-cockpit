@@ -65,7 +65,7 @@
     },
     {
       "path": "/api/folderit/sync-files",
-      "schedule": "5,35 * * * *"
+      "schedule": "3,13,23,33,43,53 * * * *"
     },
     {
       "path": "/api/notifications/ceo-digest",

@@ -81,7 +81,7 @@ async function tryEntitiesAll(accountUid: string): Promise<WalkedFile[] | null> 
 }
 
 // ── Attempt 2: breadth-first walk ─────────────────────────────────────────
-async function walkTree(accountUid: string): Promise<{ files: WalkedFile[]; truncated: boolean }> {
+async function walkTree(accountUid: string, deadlineMs?: number): Promise<{ files: WalkedFile[]; truncated: boolean }> {
   const files: WalkedFile[] = [];
   let truncated = false;
 
@@ -127,6 +127,9 @@ async function walkTree(accountUid: string): Promise<{ files: WalkedFile[]; trun
 
   while (queue.length && !truncated) {
     if (foldersVisited >= MAX_FOLDERS) { truncated = true; break; }
+    // Stop cleanly before the serverless function's own timeout kills us —
+    // whatever was collected so far still gets indexed.
+    if (deadlineMs && Date.now() > deadlineMs) { truncated = true; break; }
     const batch = queue.splice(0, WALK_CONCURRENCY);
     foldersVisited += batch.length;
     const results = await Promise.all(batch.map((i) => processItem(i).catch(() => [] as QueueItem[])));
@@ -136,7 +139,7 @@ async function walkTree(accountUid: string): Promise<{ files: WalkedFile[]; trun
   return { files, truncated };
 }
 
-export async function listCabinetFiles(accountUid: string): Promise<{ files: WalkedFile[]; truncated: boolean; source: "bulk" | "walk" }> {
+export async function listCabinetFiles(accountUid: string, deadlineMs?: number): Promise<{ files: WalkedFile[]; truncated: boolean; source: "bulk" | "walk" }> {
   // Walk the folder tree first — the /folders + /files endpoints are the
   // proven ones (the inbox sync and health audit already rely on them)
   // and they give real folder paths. The bulk entities/all endpoint turned
@@ -144,7 +147,7 @@ export async function listCabinetFiles(accountUid: string): Promise<{ files: Wal
   // it as the primary source silently indexed only the first page of each
   // cabinet (7 cabinets × ~18 files). It remains only as a last-ditch
   // fallback if the walk finds nothing at all.
-  const walked = await walkTree(accountUid);
+  const walked = await walkTree(accountUid, deadlineMs);
   if (walked.files.length > 0) return { ...walked, source: "walk" };
 
   const bulk = await tryEntitiesAll(accountUid);
