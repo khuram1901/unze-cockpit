@@ -186,6 +186,12 @@ async function flwPost<T>(
     if (Array.isArray(inner)) return inner as T[];
   }
 
+  // Employee list: { "employeesGetRequest": [[{...}]] }
+  if (Array.isArray(json?.employeesGetRequest)) {
+    const inner = json.employeesGetRequest[0];
+    if (Array.isArray(inner)) return inner as T[];
+  }
+
   // Fallback shapes
   if (Array.isArray(json))          return json as T[];
   if (Array.isArray(json?.data))    return json.data as T[];

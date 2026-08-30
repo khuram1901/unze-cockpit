@@ -84,10 +84,10 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const employees = await flowhcm.getEmployees();
 
-  // DEBUG: log raw keys + first record so we can identify correct field names
+  // DEBUG: log actual employee record keys (now that flwPost unwraps employeesGetRequest)
   if (employees.length > 0 && employees[0]) {
     const keys = Object.keys(employees[0]).join(", ");
-    const sample = JSON.stringify(employees[0]).slice(0, 500);
+    const sample = JSON.stringify(employees[0]).slice(0, 800);
     await logSync(db, "employees_debug", "error", employees.length, 0,
       `keys: ${keys} | sample: ${sample}`);
   } else {
@@ -96,20 +96,23 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
 
   const rows = employees
     .map(e => ({
-      // FlowHCM returns PascalCase — fall back through common variants
-      employee_code:  e.EmployeeCode  ?? e.employeeCode  ?? e.EmpCode     ?? e.empCode     ?? String(e.EmployeeRefNo ?? e.employeeRefNo ?? ""),
-      full_name:      e.FullName      ?? e.fullName      ?? e.EmpName      ?? e.empName     ?? e.Name ?? null,
-      designation:    e.Designation   ?? e.designation   ?? null,
-      department:     e.Department    ?? e.department    ?? null,
+      // Confirmed fields from live API: CnicNo, AccountTitle, AreaName, BankName, etc.
+      // EmpCode / EmployeeCode likely appear after the A-C fields in the full record
+      employee_code:  e.EmpCode       ?? e.EmployeeCode  ?? e.employeeCode  ?? e.empCode
+                   ?? String(e.EmployeeRefNo ?? e.employeeRefNo ?? e.RefNo   ?? e.EmpNo ?? ""),
+      full_name:      e.EmployeeName  ?? e.EmpName       ?? e.FullName      ?? e.fullName
+                   ?? e.AccountTitle  ?? e.Name          ?? null,
+      designation:    e.Designation   ?? e.DesignationName ?? e.designation ?? null,
+      department:     e.DepartmentName ?? e.Department   ?? e.department    ?? null,
       sub_department: e.SubDepartment ?? e.subDepartment ?? null,
-      station:        e.Station       ?? e.station       ?? null,
+      station:        e.AreaName      ?? e.Station       ?? e.station       ?? null,
       division:       e.Division      ?? e.division      ?? null,
       company:        e.Company       ?? e.company       ?? null,
       status:         e.Status        ?? e.status        ?? null,
-      joining_date:   parseFlwDate(e.JoiningDate ?? e.joiningDate ?? e.DateOfJoining ?? null),
-      cnic:           e.CNIC          ?? e.cnic          ?? e.NIC          ?? null,
+      joining_date:   parseFlwDate(e.AppointmentDate ?? e.JoiningDate ?? e.joiningDate ?? e.DateOfJoining ?? null),
+      cnic:           e.CnicNo        ?? e.CNIC          ?? e.cnic          ?? e.NIC    ?? null,
       email:          e.Email         ?? e.email         ?? e.OfficialEmail ?? null,
-      mobile:         e.Mobile        ?? e.mobile        ?? e.MobileNo      ?? null,
+      mobile:         e.AccountNo     ?? e.Mobile        ?? e.mobile        ?? e.MobileNo ?? null,
       grade:          e.Grade         ?? e.grade         ?? null,
       reports_to:     e.ReportsTo     ?? e.reportsTo     ?? e.ManagerCode  ?? null,
       synced_at:      new Date().toISOString(),
