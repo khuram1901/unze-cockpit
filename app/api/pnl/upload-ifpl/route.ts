@@ -285,5 +285,9 @@ export async function POST(request: NextRequest) {
     }).catch((err) => console.error("[upload-ifpl] prior-year email failed:", err));
   }
 
+  // Link uploaded branch lines to the locations master (migration 221).
+  // Unmatched branches are logged as 'branch_unmapped' lifecycle events.
+  await supabase.rpc("match_pnl_branches");
+
   return Response.json({ results, priorYearWarnings: priorYearWarnings.length > 0 ? priorYearWarnings : undefined });
 }

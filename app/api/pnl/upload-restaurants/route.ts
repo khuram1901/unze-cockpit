@@ -242,5 +242,9 @@ export async function POST(request: NextRequest) {
     items: allRestated,
   });
 
+  // Link uploaded branch lines to the locations master (migration 221).
+  // Unmatched branches are logged as 'branch_unmapped' lifecycle events.
+  await supabase.rpc("match_pnl_branches");
+
   return Response.json({ results });
 }
