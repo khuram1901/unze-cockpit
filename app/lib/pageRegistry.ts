@@ -61,7 +61,7 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_access_banking", title: "Banking", subtitle: "EOBI, Social Security and payment tracking", href: "/banking", icon: "🏦", group: "Finance" },
   { permKey: "can_view_dept_audit", title: "Audit", subtitle: "Internal audit tracking", href: "/department/audit", icon: "🔎", group: "Departments", badgeKey: "audit" },
   { permKey: "can_view_dept_hr", title: "HR", subtitle: "Human resources dashboard", href: "/department/hr", icon: "🧑‍💼", group: "Departments" },
-  { permKey: "can_view_group_hr", title: "Group HR", subtitle: "People, payroll and movement across all companies", href: "/group-hr", icon: "👥", group: "Overview" },
+  { permKey: "can_view_group_hr", title: "Group HR", subtitle: "People, payroll and movement across all companies", href: "/group-hr", icon: "👥", group: "Departments" },
   { permKey: "can_view_dept_it", title: "IT", subtitle: "IT department dashboard", href: "/department/it", icon: "🖥️", group: "Departments" },
   { permKey: "can_view_dept_tax", title: "Tax Notices", subtitle: "Tax notices and compliance", href: "/department/taxation", icon: "🧾", group: "Departments" },
   { permKey: "can_view_dept_tax_accounts", title: "Accounts & Returns", subtitle: "Quarterly accounts schedule and return filings", href: "/accounts-tax", icon: "📂", group: "Departments" },
