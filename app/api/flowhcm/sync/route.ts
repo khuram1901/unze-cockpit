@@ -74,7 +74,8 @@ function parseAnyFlwDate(raw: string | null | undefined): string | null {
   if (!raw || typeof raw !== "string") return null;
   const s = raw.trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);              // ISO / YYYY-MM-DD
-  let m = s.match(/^(\d{1,2})-([A-Za-z]+)-(\d{2,4})$/);                 // DD-Mon-YY / DD-Month-YYYY
+  // DD-Mon-YY / DD-Month-YYYY / DD/Month/YYYY — with optional trailing time ("29-Aug-2026 10:26 AM")
+  let m = s.match(/^(\d{1,2})[-/]([A-Za-z]+)[-/](\d{2,4})/);
   if (m) {
     const mon = MONTH_MAP[m[2]];
     if (!mon) return null;
@@ -113,40 +114,34 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const employees = await flowhcm.getEmployees();
 
-  // DEBUG: log actual employee record keys (now that flwPost unwraps employeesGetRequest)
-  if (employees.length > 0 && employees[0]) {
-    const keys = Object.keys(employees[0]).join(", ");
-    const sample = JSON.stringify(employees[0]).slice(0, 800);
-    await logSync(db, "employees_debug", "error", employees.length, 0,
-      `keys: ${keys} | sample: ${sample}`);
-  } else {
-    await logSync(db, "employees_debug", "error", 0, 0, "API returned empty array");
-  }
-
-  const rows = employees
-    .map(e => ({
-      // Confirmed fields from live API: CnicNo, AccountTitle, AreaName, BankName, etc.
-      // EmpCode / EmployeeCode likely appear after the A-C fields in the full record
-      employee_code:  e.EmpCode       ?? e.EmployeeCode  ?? e.employeeCode  ?? e.empCode
-                   ?? String(e.EmployeeRefNo ?? e.employeeRefNo ?? e.RefNo   ?? e.EmpNo ?? ""),
-      full_name:      e.EmployeeName  ?? e.EmpName       ?? e.FullName      ?? e.fullName
-                   ?? e.AccountTitle  ?? e.Name          ?? null,
-      designation:    e.Designation   ?? e.DesignationName ?? e.designation ?? null,
-      department:     e.DepartmentName ?? e.Department   ?? e.department    ?? null,
-      sub_department: e.SubDepartment ?? e.subDepartment ?? null,
-      station:        e.AreaName      ?? e.Station       ?? e.station       ?? null,
-      division:       e.Division      ?? e.division      ?? null,
-      company:        e.Company       ?? e.company       ?? null,
-      status:         e.Status        ?? e.status        ?? null,
-      joining_date:   parseFlwDate(e.AppointmentDate ?? e.JoiningDate ?? e.joiningDate ?? e.DateOfJoining ?? null),
-      cnic:           e.CnicNo        ?? e.CNIC          ?? e.cnic          ?? e.NIC    ?? null,
-      email:          e.Email         ?? e.email         ?? e.OfficialEmail ?? null,
-      mobile:         e.AccountNo     ?? e.Mobile        ?? e.mobile        ?? e.MobileNo ?? null,
-      grade:          e.Grade         ?? e.grade         ?? null,
-      reports_to:     e.ReportsTo     ?? e.reportsTo     ?? e.ManagerCode  ?? null,
+  // Confirmed field names from live GetEmployeeList response (30/08/2026):
+  // EmployeeRefNo, EmployeeName, DepartmentName, SubDepName, DesignationName,
+  // GradeName, StationName, DivisionName, EmployeeGroup, CostCenterName,
+  // JoiningDate, EmployeeStatus, IsActive, Email, MobileNo, CnicNo, ManagerName
+  const empMap = new Map<string, Record<string, any>>();
+  for (const e of employees) {
+    const code = String(e.EmployeeRefNo ?? e.EmployeeCode ?? e.employeeCode ?? "");
+    if (!code) continue;
+    empMap.set(code, {
+      employee_code:  code,
+      full_name:      e.EmployeeName   ?? e.AccountTitle ?? null,
+      designation:    e.DesignationName && e.DesignationName !== "--" ? e.DesignationName : null,
+      department:     e.DepartmentName  && e.DepartmentName  !== "--" ? e.DepartmentName  : null,
+      sub_department: e.SubDepName      && e.SubDepName      !== "--" ? e.SubDepName      : null,
+      station:        e.StationName     && e.StationName     !== "--" ? e.StationName     : null,
+      division:       e.DivisionName    && e.DivisionName    !== "--" ? e.DivisionName    : null,
+      company:        e.EmployeeGroup   && e.EmployeeGroup   !== "--" ? e.EmployeeGroup   : null,
+      status:         e.EmployeeStatus ?? (e.IsActive != null ? (e.IsActive ? "Active" : "Inactive") : null),
+      joining_date:   parseAnyFlwDate(e.JoiningDate ?? e.AppointmentDate),
+      cnic:           e.CnicNo   ?? null,
+      email:          e.Email    ?? null,
+      mobile:         e.MobileNo ?? null,
+      grade:          e.GradeName && e.GradeName !== "--" ? e.GradeName : null,
+      reports_to:     e.ManagerName && e.ManagerName !== "--" ? e.ManagerName : null,
       synced_at:      new Date().toISOString(),
-    }))
-    .filter(r => r.employee_code && r.employee_code !== "");
+    });
+  }
+  const rows = [...empMap.values()];
 
   if (rows.length > 0) {
     const { error } = await db
