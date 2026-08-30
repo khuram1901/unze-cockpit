@@ -25,20 +25,27 @@ export async function GET(request: NextRequest) {
   const db = createServiceClient();
 
   try {
-    // Payroll figures are financial data: Admin/CEO + HR or Finance Managers only.
-    // Executive (PA) role must NEVER see financial data (CLAUDE.md rule 6).
+    // Role gate (30/08/2026 audit): HR overview data — including the employee
+    // directory with contact details — is for management roles, not every
+    // logged-in member. Payroll is stricter still: financial data, so
+    // Admin/CEO + HR/Finance Managers only (PA never sees it — rule 6).
+    const { data: member } = await db
+      .from("members")
+      .select("role, department")
+      .eq("email", auth.email)
+      .maybeSingle();
+    const role = member?.role ?? "";
+    const dept = member?.department ?? "";
+    const isManagement =
+      role === "Admin" || role === "CEO" || role === "Manager" || role === "Executive";
+    if (!isManagement) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     if (section === "payroll") {
-      const { data: member } = await db
-        .from("members")
-        .select("role, department")
-        .eq("email", auth.email)
-        .maybeSingle();
-      const role = member?.role ?? "";
-      const dept = member?.department ?? "";
-      const allowed =
+      const payrollAllowed =
         role === "Admin" || role === "CEO" ||
         (role === "Manager" && (dept === "HR" || dept === "Finance"));
-      if (!allowed) {
+      if (!payrollAllowed) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
@@ -74,7 +81,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (section === "people_list") {
-      const search  = (searchParams.get("search") ?? "").trim();
+      // Sanitise: commas/parens/percent would corrupt the PostgREST or() filter
+      const search  = (searchParams.get("search") ?? "").trim().replace(/[,()%]/g, "");
       const company = searchParams.get("company") ?? "";
       const active  = searchParams.get("active") !== "0";   // default: active only
       const limit   = Math.min(parseInt(searchParams.get("limit") ?? "100"), 500);
