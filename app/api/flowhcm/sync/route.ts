@@ -402,20 +402,27 @@ async function syncDisciplinary(db: ReturnType<typeof createServiceClient>) {
 async function syncLoans(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const loans = await flowhcm.getLoans();
-  const rows = loans.map((r: FlwLoan) => ({
-    flw_id:             r.id,
-    employee_code:      r.employeeCode,
-    employee_name:      r.employeeName,
-    department:         r.department,
-    loan_type:          r.loanType,
-    principal_amount:   r.principalAmount   ?? 0,
-    outstanding_amount: r.outstandingAmount ?? 0,
-    monthly_deduction:  r.monthlyDeduction  ?? 0,
-    start_date:         r.startDate?.slice(0, 10) ?? null,
-    expected_end_date:  r.expectedEndDate?.slice(0, 10) ?? null,
-    status:             r.status,
-    synced_at:          new Date().toISOString(),
-  }));
+  const rows = loans.map((r: FlwLoan) => {
+    const code      = r.EmployeeCode   ?? r.employeeCode   ?? "";
+    const loanType  = r.LoanType       ?? r.loanType       ?? "";
+    const startDate = parseFlwDate(r.StartDate ?? r.startDate ?? r.IssueDate ?? r.issueDate) ?? "";
+    return {
+      // Synthetic flw_id — stable composite key since API has no natural ID
+      flw_id:             `${code}_${loanType}_${startDate}`.replace(/\s/g, "_"),
+      employee_code:      code || null,
+      employee_name:      r.EmployeeName      ?? r.employeeName      ?? null,
+      department:         r.Department        ?? r.department        ?? null,
+      loan_type:          loanType || null,
+      principal_amount:   r.PrincipalAmount   ?? r.principalAmount   ?? 0,
+      outstanding_amount: r.OutstandingAmount ?? r.outstandingAmount ?? 0,
+      monthly_deduction:  r.MonthlyDeduction  ?? r.monthlyDeduction  ?? 0,
+      start_date:         startDate || null,
+      expected_end_date:  parseFlwDate(r.ExpectedEndDate ?? r.expectedEndDate ?? r.EndDate),
+      status:             r.Status ?? r.status ?? null,
+      synced_at:          new Date().toISOString(),
+    };
+  })
+  .filter(r => r.flw_id && r.flw_id !== "__");
   if (rows.length > 0) {
     const { error } = await db
       .from("flw_loans")
