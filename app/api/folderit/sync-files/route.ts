@@ -39,28 +39,35 @@ export async function GET(request: NextRequest) {
 
   const forcedAccount = request.nextUrl.searchParams.get("account_uid");
 
-  const [{ data: accounts }, { data: freshness }] = await Promise.all([
-    db
-      .from("folderit_account_map")
-      .select("account_uid, account_name")
-      .eq("is_active", true)
-      .neq("scope", "excluded")
-      .neq("scope", "pending"),
-    db
-      .from("folderit_all_files")
-      .select("account_uid, synced_at")
-      .order("synced_at", { ascending: false }),
-  ]);
+  const { data: accounts } = await db
+    .from("folderit_account_map")
+    .select("account_uid, account_name")
+    .eq("is_active", true)
+    .neq("scope", "excluded")
+    .neq("scope", "pending");
 
   if (!accounts?.length) {
-    return Response.json({ ok: true, version: 3, indexed: null, files: 0 });
+    return Response.json({ ok: true, version: 4, indexed: null, files: 0 });
   }
 
-  // Newest synced_at per account (first occurrence wins — rows are sorted desc)
+  // Newest synced_at per account — one tiny limit-1 query each. (A single
+  // "order by synced_at desc" select was silently capped at 1000 rows by
+  // PostgREST, so once one big cabinet held the 1000 newest rows, every
+  // other cabinet looked never-synced and the rotation kept re-indexing
+  // the same account forever — observed 30/08/2026.)
   const lastSynced = new Map<string, string>();
-  for (const row of freshness ?? []) {
-    if (!lastSynced.has(row.account_uid)) lastSynced.set(row.account_uid, row.synced_at);
-  }
+  await Promise.all(
+    accounts.map(async (a) => {
+      const { data } = await db
+        .from("folderit_all_files")
+        .select("synced_at")
+        .eq("account_uid", a.account_uid)
+        .order("synced_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data?.synced_at) lastSynced.set(a.account_uid, data.synced_at);
+    })
+  );
 
   // Pick the target: forced > never-indexed > stalest
   let target = forcedAccount
@@ -102,7 +109,7 @@ export async function GET(request: NextRequest) {
 
     return Response.json({
       ok: true,
-      version: 3,
+      version: 4,
       indexed: target.account_name,
       files: files.length,
       truncated,
@@ -115,7 +122,7 @@ export async function GET(request: NextRequest) {
   } catch (e) {
     return Response.json({
       ok: false,
-      version: 3,
+      version: 4,
       indexed: target.account_name,
       error: e instanceof Error ? e.message : "failed",
     }, { status: 500 });
