@@ -84,6 +84,16 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const employees = await flowhcm.getEmployees();
 
+  // DEBUG: log raw keys + first record so we can identify correct field names
+  if (employees.length > 0 && employees[0]) {
+    const keys = Object.keys(employees[0]).join(", ");
+    const sample = JSON.stringify(employees[0]).slice(0, 500);
+    await logSync(db, "employees_debug", "error", employees.length, 0,
+      `keys: ${keys} | sample: ${sample}`);
+  } else {
+    await logSync(db, "employees_debug", "error", 0, 0, "API returned empty array");
+  }
+
   const rows = employees
     .map(e => ({
       // FlowHCM returns PascalCase — fall back through common variants
