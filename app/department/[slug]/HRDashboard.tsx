@@ -10,7 +10,7 @@ import HRPayrollInsights from "./hr/HRPayrollInsights";
 import HRMovement from "./hr/HRMovement";
 import HRAttendance from "./hr/HRAttendance";
 import HRTraining from "./hr/HRTraining";
-import HRTasks from "./hr/HRTasks";
+import HRTasksLive from "./hr/HRTasksLive";
 import HRLegal from "./hr/HRLegal";
 import HRFlowData from "./hr/HRFlowData";
 
@@ -24,7 +24,10 @@ const ALL_HR_TABS = [
   { key: "movement",   label: "Workforce Movement", widgetKey: "hr_tabs.movement" },
   { key: "attendance", label: "Attendance",         widgetKey: "hr_tabs.attendance" },
   { key: "td",         label: "T&D Calendar",       widgetKey: "hr_tabs.td" },
-  { key: "taskslegal", label: "Tasks & Legal",      widgetKey: "hr_tabs.tasks" },
+  // Tasks and Legal are SEPARATE tabs (Khuram 30/08/2026): legal is managed
+  // by a different user, so each needs its own visibility key in the matrix.
+  { key: "tasks",      label: "HR Tasks",           widgetKey: "hr_tabs.tasks" },
+  { key: "legal",      label: "Legal Cases",        widgetKey: "hr_tabs.legal" },
   { key: "flowdata",   label: "Live HR Data",       widgetKey: "hr_tabs.flowdata" },
 ] as const;
 
@@ -89,12 +92,8 @@ export default function HRDashboard() {
       {safeTab === "movement"   && <HRMovement />}
       {safeTab === "attendance" && <HRAttendance />}
       {safeTab === "td"         && <HRTraining />}
-      {safeTab === "taskslegal" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          <HRTasks />
-          <HRLegal />
-        </div>
-      )}
+      {safeTab === "tasks"      && <HRTasksLive />}
+      {safeTab === "legal"      && <HRLegal />}
       {safeTab === "flowdata"   && <HRFlowData />}
     </main>
   );
