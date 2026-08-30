@@ -579,14 +579,16 @@ async function syncAllowancesAndDeductions(db: ReturnType<typeof createServiceCl
     }));
 
     if (allowanceRows.length > 0) {
-      await db.from("flw_allowances").upsert(allowanceRows, {
+      const { error: ae } = await db.from("flw_allowances").upsert(allowanceRows, {
         onConflict: "employee_code,year,month,allowance_type",
       });
+      if (ae) throw new Error(`allowances upsert: ${ae.message}`);
     }
     if (deductionRows.length > 0) {
-      await db.from("flw_deductions").upsert(deductionRows, {
+      const { error: de } = await db.from("flw_deductions").upsert(deductionRows, {
         onConflict: "employee_code,year,month,deduction_type",
       });
+      if (de) throw new Error(`deductions upsert: ${de.message}`);
     }
     totalAllowances += allowanceRows.length;
     totalDeductions += deductionRows.length;
