@@ -11,7 +11,7 @@ export const BACKUP_TABLES = [
   "daily_cash_position", "monthly_cash_plan", "cash_opening_balance",
   "bank_position_snapshots", "receivables", "receivable_stages",
   "audit_plan_items", "audit_findings",
-  "recruitment_positions", "performance_evaluations", "hr_strategy_goals",
+  "recruitment_positions",
   "legal_notices", "admin_categories", "admin_spend",
   "meetings", "meeting_tasks", "meeting_attendees", "monthly_budgets", "quarterly_forecasts",
   "audit_log", "notification_log",

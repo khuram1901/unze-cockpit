@@ -51,3 +51,4 @@ sessions/
 # local helper script (not part of the app)
 push.command
 graphify-out/
+_to_delete/
