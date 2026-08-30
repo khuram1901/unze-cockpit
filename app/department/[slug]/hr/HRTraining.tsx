@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { authFetch, supabase } from "../../../lib/supabase";
+import EmployeePicker from "../../../lib/EmployeePicker";
 import { formatDateUK } from "../../../lib/dateUtils";
 import DateInput from "../../../lib/DateInput";
 import { useMobile } from "../../../lib/useMobile";
@@ -136,6 +137,7 @@ function SessionDetail({
   const [syncing, setSyncing] = useState(false);
   const [addingAttendee, setAddingAttendee] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newCode, setNewCode] = useState("");
   const [newDept, setNewDept] = useState("");
 
   async function syncFeedback() {
@@ -170,10 +172,11 @@ function SessionDetail({
     const { error } = await supabase.from("hr_td_attendees").insert({
       session_id: session.session_id,
       employee_name: newName.trim(),
+      employee_id: newCode || null,
       department: newDept.trim() || null,
     });
     if (error) { show(error.message, "error"); return; }
-    setNewName(""); setNewDept(""); setAddingAttendee(false);
+    setNewName(""); setNewDept(""); setNewCode(""); setAddingAttendee(false);
     onRefresh();
   }
 
@@ -352,10 +355,18 @@ function SessionDetail({
             {canWrite(userRole) && (
               addingAttendee ? (
                 <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                  <input
-                    autoFocus value={newName} onChange={e => setNewName(e.target.value)}
-                    placeholder="Employee name" style={{ ...inputStyle, flex: 1, minWidth: "140px" }}
-                  />
+                  <div style={{ flex: 1, minWidth: "180px" }}>
+                    <EmployeePicker
+                      value={newName}
+                      placeholder="Search employee (FlowHCM)…"
+                      onSelect={(emp) => {
+                        setNewName(emp.full_name ?? "");
+                        setNewCode(emp.employee_code);
+                        if (emp.department) setNewDept(emp.department);
+                      }}
+                      onClear={() => { setNewName(""); setNewCode(""); }}
+                    />
+                  </div>
                   <input
                     value={newDept} onChange={e => setNewDept(e.target.value)}
                     placeholder="Department (optional)" style={{ ...inputStyle, flex: 1, minWidth: "120px" }}

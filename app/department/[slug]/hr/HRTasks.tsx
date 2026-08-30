@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 import DateInput from "../../../lib/DateInput";
+import EmployeePicker from "../../../lib/EmployeePicker";
 import { useUserCtx } from "../../../lib/useUserCtx";
 import {
   COLOURS, RADII, SectionTitle, CountCard, SkeletonRows,
@@ -361,10 +362,13 @@ function AddTaskForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
             <DateInput value={form.due_date} onChange={e => set("due_date", e.target.value)} placeholder="DD/MM/YYYY" style={inputStyle} />
           </div>
           <div>
-            <label style={labelStyle}>Linked Employee (optional)</label>
-            <input
-              value={form.employee_name} onChange={e => set("employee_name", e.target.value)}
-              placeholder="e.g. Ahmed Khan" style={inputStyle}
+            <label style={labelStyle}>Linked Employee (optional, from FlowHCM)</label>
+            <EmployeePicker
+              value={form.employee_name}
+              includeLeavers
+              placeholder="Search employee by name or code…"
+              onSelect={(emp) => set("employee_name", emp.full_name ?? "")}
+              onClear={() => set("employee_name", "")}
             />
           </div>
           {/* Recurring toggle */}

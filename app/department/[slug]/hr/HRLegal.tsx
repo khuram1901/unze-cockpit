@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { authFetch } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 import DateInput from "../../../lib/DateInput";
+import EmployeePicker from "../../../lib/EmployeePicker";
 import {
   COLOURS, RADII, SkeletonRows, useToast, primaryButtonStyle, inputStyle,
 } from "../../../lib/SharedUI";
@@ -363,9 +364,19 @@ export default function HRLegal() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
               <div style={{ gridColumn: "1 / -1" }}>
-                <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Full Name *</label>
-                <input value={form.subject_name} onChange={(e) => setForm({ ...form, subject_name: e.target.value })}
-                  placeholder="Name of accused" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Full Name * (from FlowHCM)</label>
+                <EmployeePicker
+                  value={form.subject_name}
+                  includeLeavers
+                  placeholder="Search accused employee by name or code…"
+                  onSelect={(emp) => setForm({
+                    ...form,
+                    subject_name: emp.full_name ?? "",
+                    subject_role: form.subject_role || (emp.designation ?? ""),
+                    subject_employee_id: emp.employee_code,
+                  })}
+                  onClear={() => setForm({ ...form, subject_name: "", subject_employee_id: "" })}
+                />
               </div>
               <div>
                 <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Role / Designation</label>
