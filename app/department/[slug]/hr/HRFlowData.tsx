@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { authFetch } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 import { COLOURS, RADII, SectionTitle, SkeletonRows } from "../../../lib/SharedUI";
+// Note: local StatusBadge below is intentionally different from SharedUI's — it handles raw string values
 import { useMobile } from "../../../lib/useMobile";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -271,7 +272,7 @@ function DataTable({ rows, cols, loading }: {
   };
 
   if (loading) return (
-    <div style={{ padding: "16px 0" }}><SkeletonRows n={8} /></div>
+    <div style={{ padding: "16px 0" }}><SkeletonRows count={8} /></div>
   );
 
   if (!rows.length) return (
@@ -387,7 +388,7 @@ export default function HRFlowData() {
 
   return (
     <div>
-      <SectionTitle>Live HR Data</SectionTitle>
+      <SectionTitle title="Live HR Data" />
       <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "16px", marginTop: "-4px" }}>
         Synced automatically every 10 minutes from FlowHCM.
       </p>
