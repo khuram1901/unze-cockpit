@@ -124,11 +124,11 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
     if (!code) continue;
     empMap.set(code, {
       employee_code:  code,
-      // EmployeeName only carries the first name; AccountTitle (bank account
-      // title) holds the full name — prefer it when present
-      full_name:      (e.AccountTitle && String(e.AccountTitle).trim())
-                        ? String(e.AccountTitle).trim()
-                        : (e.EmployeeName ?? null),
+      // EmployeeName only carries the first name. Do NOT use AccountTitle as a
+      // fallback — bank accounts can be titled to family members, so it can
+      // show the wrong person's name. First name only until FlowHCM exposes
+      // a proper full-name field.
+      full_name:      e.EmployeeName ?? null,
       designation:    e.DesignationName && e.DesignationName !== "--" ? e.DesignationName : null,
       department:     e.DepartmentName  && e.DepartmentName  !== "--" ? e.DepartmentName  : null,
       sub_department: e.SubDepName      && e.SubDepName      !== "--" ? e.SubDepName      : null,
