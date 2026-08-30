@@ -439,27 +439,31 @@ async function syncDisciplinary(db: ReturnType<typeof createServiceClient>) {
 async function syncLoans(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const loans = await flowhcm.getLoans();
-  const rows = loans.map((r: FlwLoan) => {
+  // Map dedup — synthetic flw_id can repeat within one batch (last row wins)
+  const map = new Map<string, Record<string, any>>();
+  for (const r of loans as FlwLoan[]) {
     const code      = r.EmployeeCode   ?? r.employeeCode   ?? "";
     const loanType  = r.LoanType       ?? r.loanType       ?? "";
-    const startDate = parseFlwDate(r.StartDate ?? r.startDate ?? r.IssueDate ?? r.issueDate) ?? "";
-    return {
-      // Synthetic flw_id — stable composite key since API has no natural ID
-      flw_id:             `${code}_${loanType}_${startDate}`.replace(/\s/g, "_"),
+    const startDate = parseAnyFlwDate(r.StartDate ?? r.startDate ?? r.IssueDate ?? r.issueDate) ?? "";
+    const amount    = r.PrincipalAmount ?? r.principalAmount ?? 0;
+    const flwId     = `${code}_${loanType}_${startDate}_${amount}`.replace(/\s/g, "_");
+    if (!code) continue;
+    map.set(flwId, {
+      flw_id:             flwId,
       employee_code:      code || null,
       employee_name:      r.EmployeeName      ?? r.employeeName      ?? null,
       department:         r.Department        ?? r.department        ?? null,
       loan_type:          loanType || null,
-      principal_amount:   r.PrincipalAmount   ?? r.principalAmount   ?? 0,
+      principal_amount:   amount,
       outstanding_amount: r.OutstandingAmount ?? r.outstandingAmount ?? 0,
       monthly_deduction:  r.MonthlyDeduction  ?? r.monthlyDeduction  ?? 0,
       start_date:         startDate || null,
-      expected_end_date:  parseFlwDate(r.ExpectedEndDate ?? r.expectedEndDate ?? r.EndDate),
+      expected_end_date:  parseAnyFlwDate(r.ExpectedEndDate ?? r.expectedEndDate ?? r.EndDate),
       status:             r.Status ?? r.status ?? null,
       synced_at:          new Date().toISOString(),
-    };
-  })
-  .filter(r => r.flw_id && r.flw_id !== "__");
+    });
+  }
+  const rows = [...map.values()];
   if (rows.length > 0) {
     const { error } = await db
       .from("flw_loans")
