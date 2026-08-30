@@ -84,24 +84,27 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const employees = await flowhcm.getEmployees();
 
-  const rows = employees.map(e => ({
-    employee_code:  e.employeeCode,
-    full_name:      e.fullName,
-    designation:    e.designation,
-    department:     e.department,
-    sub_department: e.subDepartment,
-    station:        e.station,
-    division:       e.division,
-    company:        e.company,
-    status:         e.status,
-    joining_date:   e.joiningDate ? e.joiningDate.slice(0, 10) : null,
-    cnic:           e.cnic,
-    email:          e.email,
-    mobile:         e.mobile,
-    grade:          e.grade,
-    reports_to:     e.reportsTo,
-    synced_at:      new Date().toISOString(),
-  }));
+  const rows = employees
+    .map(e => ({
+      // FlowHCM returns PascalCase — fall back through common variants
+      employee_code:  e.EmployeeCode  ?? e.employeeCode  ?? e.EmpCode     ?? e.empCode     ?? String(e.EmployeeRefNo ?? e.employeeRefNo ?? ""),
+      full_name:      e.FullName      ?? e.fullName      ?? e.EmpName      ?? e.empName     ?? e.Name ?? null,
+      designation:    e.Designation   ?? e.designation   ?? null,
+      department:     e.Department    ?? e.department    ?? null,
+      sub_department: e.SubDepartment ?? e.subDepartment ?? null,
+      station:        e.Station       ?? e.station       ?? null,
+      division:       e.Division      ?? e.division      ?? null,
+      company:        e.Company       ?? e.company       ?? null,
+      status:         e.Status        ?? e.status        ?? null,
+      joining_date:   parseFlwDate(e.JoiningDate ?? e.joiningDate ?? e.DateOfJoining ?? null),
+      cnic:           e.CNIC          ?? e.cnic          ?? e.NIC          ?? null,
+      email:          e.Email         ?? e.email         ?? e.OfficialEmail ?? null,
+      mobile:         e.Mobile        ?? e.mobile        ?? e.MobileNo      ?? null,
+      grade:          e.Grade         ?? e.grade         ?? null,
+      reports_to:     e.ReportsTo     ?? e.reportsTo     ?? e.ManagerCode  ?? null,
+      synced_at:      new Date().toISOString(),
+    }))
+    .filter(r => r.employee_code && r.employee_code !== "");
 
   if (rows.length > 0) {
     const { error } = await db
