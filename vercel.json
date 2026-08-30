@@ -73,7 +73,7 @@
     },
     {
       "path": "/api/flowhcm/sync",
-      "schedule": "*/2 * * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }
