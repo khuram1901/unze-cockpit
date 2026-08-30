@@ -192,15 +192,31 @@ async function flwPost<T>(
     if (Array.isArray(inner)) return inner as T[];
   }
 
+  // Generic unwrap: FlowHCM wraps every response in a single named key,
+  // e.g. { employeeLeavingGet: [[{...}]] }, { employeeSalarySetup: [{...}] },
+  // { employeeOTRequest: [[{...}]] }, { attendanceExemptionGet: [[{...}]] },
+  // { employeeTransferGet: [[{...}]] }, { employeeAllowances: [{...}] }.
+  // Handle any object with exactly one array-valued property, flattening
+  // one level of double-nesting ([[...]]) if present.
+  if (json && typeof json === "object" && !Array.isArray(json)) {
+    const arrayValues = Object.values(json).filter(Array.isArray);
+    if (arrayValues.length === 1) {
+      const arr = arrayValues[0] as unknown[];
+      if (arr.length > 0 && Array.isArray(arr[0])) {
+        // Double-nested [[{...}]] — flatten one level
+        return (arr as unknown[][]).flat() as T[];
+      }
+      return arr as T[];
+    }
+  }
+
   // Fallback shapes
   if (Array.isArray(json))          return json as T[];
   if (Array.isArray(json?.data))    return json.data as T[];
   if (Array.isArray(json?.records)) return json.records as T[];
   if (Array.isArray(json?.result))  return json.result as T[];
 
-  // Single object — wrap in array
-  if (json && typeof json === "object") return [json] as T[];
-
+  // Do NOT wrap unknown objects in an array — that inserted junk rows.
   return [];
 }
 

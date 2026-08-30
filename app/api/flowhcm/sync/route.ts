@@ -50,6 +50,8 @@ const MONTH_MAP: Record<string, string> = {
   January:"01", February:"02", March:"03",    April:"04",
   May:"05",     June:"06",     July:"07",      August:"08",
   September:"09", October:"10", November:"11", December:"12",
+  Jan:"01", Feb:"02", Mar:"03", Apr:"04", Jun:"06",
+  Jul:"07", Aug:"08", Sep:"09", Oct:"10", Nov:"11", Dec:"12",
 };
 function parseLeaveDate(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -59,6 +61,33 @@ function parseLeaveDate(raw: string | null | undefined): string | null {
     return `${m[3]}-${mon}-${m[1].padStart(2, "0")}`;
   }
   return parseFlwDate(raw);
+}
+
+/**
+ * Parse ANY date format FlowHCM has been seen to return:
+ *   "2022-11-02T00:00:00" (ISO)   "15-Aug-22" (DD-Mon-YY)
+ *   "29-Jul-26" (DD-Mon-YY)       "01-October-2026" (DD-Month-YYYY)
+ *   "07-June-2022"                "MM/DD/YYYY"      "YYYY-MM-DD"
+ * Returns YYYY-MM-DD or null.
+ */
+function parseAnyFlwDate(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);              // ISO / YYYY-MM-DD
+  let m = s.match(/^(\d{1,2})-([A-Za-z]+)-(\d{2,4})$/);                 // DD-Mon-YY / DD-Month-YYYY
+  if (m) {
+    const mon = MONTH_MAP[m[2]];
+    if (!mon) return null;
+    let year = m[3];
+    if (year.length === 2) {
+      // Two-digit year: 00–49 → 20xx, 50–99 → 19xx
+      year = parseInt(year) < 50 ? `20${year}` : `19${year}`;
+    }
+    return `${year}-${mon}-${m[1].padStart(2, "0")}`;
+  }
+  m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);                            // MM/DD/YYYY
+  if (m) return `${m[3]}-${m[1]}-${m[2]}`;
+  return null;
 }
 
 async function logSync(
@@ -451,25 +480,31 @@ async function syncLoans(db: ReturnType<typeof createServiceClient>) {
 async function syncTransfers(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const records = await flowhcm.getTransfers();
-  const rows = records.map((r: FlwTransfer) => ({
-    employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
-    employee_name:  r.employeeName ?? r.EmployeeName ?? null,
-    from_department: r.fromDepartment ?? r.FromDepartment ?? null,
-    to_department:  r.toDepartment ?? r.ToDepartment ?? null,
-    from_company:   r.fromCompany ?? r.FromCompany ?? null,
-    to_company:     r.toCompany ?? r.ToCompany ?? null,
-    transfer_date:  parseFlwDate(r.transferDate ?? r.TransferDate),
-    effective_date: parseFlwDate(r.effectiveDate ?? r.EffectiveDate),
-    transfer_type:  r.transferType ?? r.TransferType ?? null,
-    reason:         r.reason ?? r.Reason ?? null,
-    status:         r.status ?? r.Status ?? null,
-    raw:            r,
-    synced_at:      new Date().toISOString(),
-  }));
-  if (rows.length > 0) {
-    const { error } = await db.from("flw_transfers").upsert(rows, {
-      onConflict: "employee_code,transfer_date,to_department",
+  // Real fields (employeeTransferGet): PunchCode, CreatedOn, ExpiryDate, Area,
+  // City, Province, Country, RegionName, SubDepName, VendorName, Description
+  const map = new Map<string, Record<string, any>>();
+  for (const r of records as FlwTransfer[]) {
+    const code = r.PunchCode ?? r.employeeCode ?? r.EmployeeCode ?? null;
+    if (!code) continue;
+    const created = parseAnyFlwDate(r.CreatedOn ?? r.transferDate ?? r.TransferDate);
+    const key = `${code}|${created ?? "?"}|${r.Area ?? ""}|${r.City ?? ""}`;
+    map.set(key, {
+      flw_key:        key,
+      employee_code:  String(code),
+      employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+      to_department:  r.SubDepName && r.SubDepName !== "--" ? r.SubDepName : null,
+      transfer_date:  created,
+      effective_date: parseAnyFlwDate(r.ExpiryDate),
+      transfer_type:  [r.Area, r.City].filter(v => v && v !== "--").join(", ") || null,
+      reason:         r.Description ?? null,
+      status:         r.status ?? r.Status ?? null,
+      raw:            r,
+      synced_at:      new Date().toISOString(),
     });
+  }
+  const rows = [...map.values()];
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_transfers").upsert(rows, { onConflict: "flw_key" });
     if (error) throw new Error(error.message);
   }
   await logSync(db, "transfers", "success", rows.length, Date.now() - t0);
@@ -479,21 +514,30 @@ async function syncTransfers(db: ReturnType<typeof createServiceClient>) {
 async function syncExemptions(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const records = await flowhcm.getExemptions();
-  const rows = records.map((r: FlwExemption) => ({
-    employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
-    employee_name:  r.employeeName ?? r.EmployeeName ?? null,
-    exemption_date: parseFlwDate(r.exemptionDate ?? r.ExemptionDate ?? r.Date),
-    exemption_type: r.exemptionType ?? r.ExemptionType ?? r.Type ?? null,
-    reason:         r.reason ?? r.Reason ?? null,
-    status:         r.status ?? r.Status ?? null,
-    approved_by:    r.approvedBy ?? r.ApprovedBy ?? null,
-    raw:            r,
-    synced_at:      new Date().toISOString(),
-  }));
-  if (rows.length > 0) {
-    const { error } = await db.from("flw_exemptions").upsert(rows, {
-      onConflict: "employee_code,exemption_date,exemption_type",
+  // Real fields (attendanceExemptionGet): EmployeeRefNo, Date, Status, FlagType
+  const map = new Map<string, Record<string, any>>();
+  for (const r of records as FlwExemption[]) {
+    const code = r.EmployeeRefNo ?? r.employeeCode ?? r.EmployeeCode ?? null;
+    if (!code) continue;
+    const date = parseAnyFlwDate(r.Date ?? r.exemptionDate ?? r.ExemptionDate);
+    const type = r.FlagType ?? r.exemptionType ?? r.ExemptionType ?? null;
+    const key  = `${code}|${date ?? "?"}|${type ?? "?"}`;
+    map.set(key, {
+      flw_key:        key,
+      employee_code:  String(code),
+      employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+      exemption_date: date,
+      exemption_type: type,
+      reason:         r.reason ?? r.Reason ?? null,
+      status:         r.Status ?? r.status ?? null,
+      approved_by:    r.approvedBy ?? r.ApprovedBy ?? null,
+      raw:            r,
+      synced_at:      new Date().toISOString(),
     });
+  }
+  const rows = [...map.values()];
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_exemptions").upsert(rows, { onConflict: "flw_key" });
     if (error) throw new Error(error.message);
   }
   await logSync(db, "exemptions", "success", rows.length, Date.now() - t0);
@@ -503,24 +547,32 @@ async function syncExemptions(db: ReturnType<typeof createServiceClient>) {
 async function syncEmployeeExits(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const records = await flowhcm.getEmployeeExits();
-  const rows = records.map((r: FlwEmployeeExit) => ({
-    employee_code:      r.employeeCode ?? r.EmployeeCode ?? null,
-    employee_name:      r.employeeName ?? r.EmployeeName ?? null,
-    department:         r.department ?? r.Department ?? null,
-    designation:        r.designation ?? r.Designation ?? null,
-    joining_date:       parseFlwDate(r.joiningDate ?? r.JoiningDate),
-    leaving_date:       parseFlwDate(r.leavingDate ?? r.LeavingDate ?? r.ExitDate),
-    exit_type:          r.exitType ?? r.ExitType ?? r.LeavingType ?? null,
-    reason:             r.reason ?? r.Reason ?? null,
-    notice_period_days: r.noticePeriodDays ?? r.NoticePeriodDays ?? null,
-    clearance_status:   r.clearanceStatus ?? r.ClearanceStatus ?? null,
-    raw:                r,
-    synced_at:          new Date().toISOString(),
-  }));
-  if (rows.length > 0) {
-    const { error } = await db.from("flw_employee_exits").upsert(rows, {
-      onConflict: "employee_code",
+  // Real fields (employeeLeavingGet): EmployeeCode, LeavingDate, LastWorkingDate, Reason
+  const map = new Map<string, Record<string, any>>();
+  for (const r of records as FlwEmployeeExit[]) {
+    const code = r.EmployeeCode ?? r.employeeCode ?? null;
+    if (!code) continue;
+    const leaving = parseAnyFlwDate(r.LeavingDate ?? r.leavingDate ?? r.ExitDate);
+    const key = `${code}|${leaving ?? "?"}`;
+    map.set(key, {
+      flw_key:            key,
+      employee_code:      String(code),
+      employee_name:      r.employeeName ?? r.EmployeeName ?? null,
+      department:         r.department ?? r.Department ?? null,
+      designation:        r.designation ?? r.Designation ?? null,
+      joining_date:       parseAnyFlwDate(r.JoiningDate ?? r.joiningDate),
+      leaving_date:       leaving,
+      exit_type:          r.exitType ?? r.ExitType ?? r.LeavingType ?? null,
+      reason:             r.Reason ?? r.reason ?? null,
+      notice_period_days: r.noticePeriodDays ?? r.NoticePeriodDays ?? null,
+      clearance_status:   r.clearanceStatus ?? r.ClearanceStatus ?? null,
+      raw:                r,
+      synced_at:          new Date().toISOString(),
     });
+  }
+  const rows = [...map.values()];
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_employee_exits").upsert(rows, { onConflict: "flw_key" });
     if (error) throw new Error(error.message);
   }
   await logSync(db, "employee_exits", "success", rows.length, Date.now() - t0);
@@ -530,23 +582,34 @@ async function syncEmployeeExits(db: ReturnType<typeof createServiceClient>) {
 async function syncAdvanceSalary(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const records = await flowhcm.getAdvanceSalary();
-  const rows = records.map((r: FlwAdvanceSalary) => ({
-    employee_code:   r.employeeCode ?? r.EmployeeCode ?? null,
-    employee_name:   r.employeeName ?? r.EmployeeName ?? null,
-    request_date:    parseFlwDate(r.requestDate ?? r.RequestDate),
-    amount:          r.amount ?? r.Amount ?? 0,
-    approved_amount: r.approvedAmount ?? r.ApprovedAmount ?? 0,
-    repayment_months: r.repaymentMonths ?? r.RepaymentMonths ?? null,
-    status:          r.status ?? r.Status ?? null,
-    approved_by:     r.approvedBy ?? r.ApprovedBy ?? null,
-    remarks:         r.remarks ?? r.Remarks ?? null,
-    raw:             r,
-    synced_at:       new Date().toISOString(),
-  }));
-  if (rows.length > 0) {
-    const { error } = await db.from("flw_advance_salary").upsert(rows, {
-      onConflict: "employee_code,request_date,amount",
+  // Real fields: EmployeeCode, EmployeeName, Title, Amount, Status,
+  // AdvanceSalaryDate ("15-Aug-22"), PayrollStartDate, PayrollEndDate
+  const map = new Map<string, Record<string, any>>();
+  for (const r of records as FlwAdvanceSalary[]) {
+    const code = r.EmployeeCode ?? r.employeeCode ?? null;
+    if (!code) continue;
+    const date   = parseAnyFlwDate(r.AdvanceSalaryDate ?? r.requestDate ?? r.RequestDate);
+    const amount = r.Amount ?? r.amount ?? 0;
+    const title  = r.Title ?? "";
+    const key = `${code}|${date ?? "?"}|${amount}|${title}`;
+    map.set(key, {
+      flw_key:         key,
+      employee_code:   String(code),
+      employee_name:   r.EmployeeName ?? r.employeeName ?? null,
+      request_date:    date,
+      amount,
+      approved_amount: r.approvedAmount ?? r.ApprovedAmount ?? 0,
+      repayment_months: r.repaymentMonths ?? r.RepaymentMonths ?? null,
+      status:          r.Status ?? r.status ?? null,
+      approved_by:     r.approvedBy ?? r.ApprovedBy ?? null,
+      remarks:         title || null,
+      raw:             r,
+      synced_at:       new Date().toISOString(),
     });
+  }
+  const rows = [...map.values()];
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_advance_salary").upsert(rows, { onConflict: "flw_key" });
     if (error) throw new Error(error.message);
   }
   await logSync(db, "advance_salary", "success", rows.length, Date.now() - t0);
@@ -574,23 +637,32 @@ async function syncAllowancesAndDeductions(db: ReturnType<typeof createServiceCl
       flowhcm.getDeductions(year, month),
     ]);
 
-    // Build rows and deduplicate on conflict key (last row wins)
+    // Allowances come nested: [{ EmployeeCode, EmployeeName, Allowances: [{...}] }]
+    // Flatten to one row per employee+allowance, dedup on flw_key
     const allowanceMap = new Map<string, Record<string, any>>();
     for (const r of allowances as FlwAllowance[]) {
-      const code = r.employeeCode ?? r.EmployeeCode ?? null;
-      const type = r.allowanceType ?? r.AllowanceType ?? r.Type ?? null;
-      const key  = `${code}__${year}__${month}__${type}`;
-      allowanceMap.set(key, {
-        employee_code:  code,
-        employee_name:  r.employeeName ?? r.EmployeeName ?? null,
-        year:           parseInt(year),
-        month:          parseInt(month),
-        allowance_type: type,
-        amount:         r.amount ?? r.Amount ?? 0,
-        status:         r.status ?? r.Status ?? null,
-        raw:            r,
-        synced_at:      new Date().toISOString(),
-      });
+      const code = r.EmployeeCode ?? r.employeeCode ?? null;
+      if (!code) continue;
+      const name  = r.EmployeeName ?? r.employeeName ?? null;
+      const items = Array.isArray(r.Allowances) ? r.Allowances : [r];
+      for (const a of items) {
+        const type   = a.AllowanceType ?? a.allowanceType ?? null;
+        const title  = a.AllowanceTitle ?? "";
+        const amount = parseFloat(a.Amount ?? a.amount ?? "0") || 0;
+        const key    = `${code}|${year}-${month}|${type ?? "?"}|${title}|${amount}`;
+        allowanceMap.set(key, {
+          flw_key:        key,
+          employee_code:  String(code),
+          employee_name:  name,
+          year:           parseInt(year),
+          month:          parseInt(month),
+          allowance_type: type,
+          amount,
+          status:         a.IncludeInSalaryMonth ?? null,
+          raw:            a,
+          synced_at:      new Date().toISOString(),
+        });
+      }
     }
     const allowanceRows = [...allowanceMap.values()];
 
@@ -615,7 +687,7 @@ async function syncAllowancesAndDeductions(db: ReturnType<typeof createServiceCl
 
     if (allowanceRows.length > 0) {
       const { error: ae } = await db.from("flw_allowances").upsert(allowanceRows, {
-        onConflict: "employee_code,year,month,allowance_type",
+        onConflict: "flw_key",
       });
       if (ae) throw new Error(`allowances upsert: ${ae.message}`);
     }
@@ -637,21 +709,31 @@ async function syncAllowancesAndDeductions(db: ReturnType<typeof createServiceCl
 async function syncPFData(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const records = await flowhcm.getPFData();
-  const rows = records.map((r: FlwPFData) => ({
-    employee_code:            r.employeeCode ?? r.EmployeeCode ?? null,
-    employee_name:            r.employeeName ?? r.EmployeeName ?? null,
-    pf_type:                  r.pfType ?? r.PFType ?? r.Type ?? null,
-    employee_contribution:    r.employeeContribution ?? r.EmployeeContribution ?? 0,
-    employer_contribution:    r.employerContribution ?? r.EmployerContribution ?? 0,
-    effective_date:           parseFlwDate(r.effectiveDate ?? r.EffectiveDate),
-    status:                   r.status ?? r.Status ?? null,
-    raw:                      r,
-    synced_at:                new Date().toISOString(),
-  }));
-  if (rows.length > 0) {
-    const { error } = await db.from("flw_pf_data").upsert(rows, {
-      onConflict: "employee_code,pf_type,effective_date",
+  // Real fields: EmployeeCode, EmployeeName, EmployeeShare, EmployerShare,
+  // ProvidentFundType, PolicyAplicableFrom ("01-October-2022" — their typo)
+  const map = new Map<string, Record<string, any>>();
+  for (const r of records as FlwPFData[]) {
+    const code = r.EmployeeCode ?? r.employeeCode ?? null;
+    if (!code) continue;
+    const type = r.ProvidentFundType ?? r.pfType ?? r.PFType ?? null;
+    const from = parseAnyFlwDate(r.PolicyAplicableFrom ?? r.PolicyApplicableFrom ?? r.effectiveDate);
+    const key  = `${code}|${type ?? "?"}|${from ?? "?"}`;
+    map.set(key, {
+      flw_key:               key,
+      employee_code:         String(code),
+      employee_name:         r.EmployeeName ?? r.employeeName ?? null,
+      pf_type:               type,
+      employee_contribution: r.EmployeeShare ?? r.employeeContribution ?? 0,
+      employer_contribution: r.EmployerShare ?? r.employerContribution ?? 0,
+      effective_date:        from,
+      status:                r.status ?? r.Status ?? null,
+      raw:                   r,
+      synced_at:             new Date().toISOString(),
     });
+  }
+  const rows = [...map.values()];
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_pf_data").upsert(rows, { onConflict: "flw_key" });
     if (error) throw new Error(error.message);
   }
   await logSync(db, "pf_data", "success", rows.length, Date.now() - t0);
@@ -661,22 +743,31 @@ async function syncPFData(db: ReturnType<typeof createServiceClient>) {
 async function syncOvertime(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const records = await flowhcm.getOvertime();
-  const rows = records.map((r: FlwOvertime) => ({
-    employee_code:   r.employeeCode ?? r.EmployeeCode ?? null,
-    employee_name:   r.employeeName ?? r.EmployeeName ?? null,
-    overtime_date:   parseFlwDate(r.overtimeDate ?? r.OvertimeDate ?? r.Date),
-    hours:           r.hours ?? r.Hours ?? 0,
-    rate_multiplier: r.rateMultiplier ?? r.RateMultiplier ?? 1.5,
-    amount:          r.amount ?? r.Amount ?? 0,
-    status:          r.status ?? r.Status ?? null,
-    approved_by:     r.approvedBy ?? r.ApprovedBy ?? null,
-    raw:             r,
-    synced_at:       new Date().toISOString(),
-  }));
-  if (rows.length > 0) {
-    const { error } = await db.from("flw_overtime").upsert(rows, {
-      onConflict: "employee_code,overtime_date",
+  // Real fields (employeeOTRequest): EmployeeCode, Date (ISO), Title, Status,
+  // WeekDay (rate multiplier), Holiday, Gazzetted
+  const map = new Map<string, Record<string, any>>();
+  for (const r of records as FlwOvertime[]) {
+    const code = r.EmployeeCode ?? r.employeeCode ?? null;
+    if (!code) continue;
+    const date = parseAnyFlwDate(r.Date ?? r.overtimeDate ?? r.OvertimeDate);
+    const key  = `${code}|${date ?? "?"}|${r.Title ?? ""}`;
+    map.set(key, {
+      flw_key:         key,
+      employee_code:   String(code),
+      employee_name:   r.employeeName ?? r.EmployeeName ?? null,
+      overtime_date:   date,
+      hours:           r.hours ?? r.Hours ?? 0,
+      rate_multiplier: r.WeekDay ?? r.rateMultiplier ?? r.RateMultiplier ?? 1.5,
+      amount:          r.amount ?? r.Amount ?? 0,
+      status:          r.Status ?? r.status ?? null,
+      approved_by:     r.approvedBy ?? r.ApprovedBy ?? null,
+      raw:             r,
+      synced_at:       new Date().toISOString(),
     });
+  }
+  const rows = [...map.values()];
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_overtime").upsert(rows, { onConflict: "flw_key" });
     if (error) throw new Error(error.message);
   }
   await logSync(db, "overtime", "success", rows.length, Date.now() - t0);
@@ -686,21 +777,37 @@ async function syncOvertime(db: ReturnType<typeof createServiceClient>) {
 async function syncSalarySetup(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
   const records = await flowhcm.getSalarySetup();
-  const rows = records.map((r: FlwSalarySetup) => ({
-    employee_code:  r.employeeCode ?? r.EmployeeCode ?? null,
-    employee_name:  r.employeeName ?? r.EmployeeName ?? null,
-    grade:          r.grade ?? r.Grade ?? null,
-    basic_salary:   r.basicSalary ?? r.BasicSalary ?? 0,
-    gross_salary:   r.grossSalary ?? r.GrossSalary ?? 0,
-    currency:       r.currency ?? r.Currency ?? "PKR",
-    effective_date: parseFlwDate(r.effectiveDate ?? r.EffectiveDate),
-    raw:            r,
-    synced_at:      new Date().toISOString(),
-  }));
-  if (rows.length > 0) {
-    const { error } = await db.from("flw_salary_setup").upsert(rows, {
-      onConflict: "employee_code",
+  // Real fields (employeeSalarySetup): employeeCode, employeeName, monthlysalary,
+  // payrollSetupName, SalaryBreakup: [{"Basic Salary": "..."}], RecurringAllowances
+  const map = new Map<string, Record<string, any>>();
+  for (const r of records as FlwSalarySetup[]) {
+    const code = r.employeeCode ?? r.EmployeeCode ?? null;
+    if (!code) continue;
+    // Basic salary lives inside the SalaryBreakup array of single-key objects
+    let basic = 0;
+    if (Array.isArray(r.SalaryBreakup)) {
+      for (const item of r.SalaryBreakup) {
+        const v = item?.["Basic Salary"];
+        if (v != null) { basic = parseFloat(v) || 0; break; }
+      }
+    }
+    const key = `${code}`;   // one setup row per employee (latest wins)
+    map.set(key, {
+      flw_key:        key,
+      employee_code:  String(code),
+      employee_name:  r.employeeName ?? r.EmployeeName ?? null,
+      grade:          r.payrollSetupName ?? r.grade ?? r.Grade ?? null,
+      basic_salary:   basic,
+      gross_salary:   parseFloat(r.monthlysalary ?? r.grossSalary ?? r.GrossSalary ?? "0") || 0,
+      currency:       "PKR",
+      effective_date: null,
+      raw:            r,
+      synced_at:      new Date().toISOString(),
     });
+  }
+  const rows = [...map.values()];
+  if (rows.length > 0) {
+    const { error } = await db.from("flw_salary_setup").upsert(rows, { onConflict: "flw_key" });
     if (error) throw new Error(error.message);
   }
   await logSync(db, "salary_setup", "success", rows.length, Date.now() - t0);
