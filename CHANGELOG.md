@@ -4,6 +4,12 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-08-30 (later) — Lifecycle automation, entry-form pickers, Phase 3 complete, full audit
+
+Continuation of the same session. **Lifecycle automation (migration 218):** leavers in FlowHCM auto-deactivate their app account (reversible; `members.lifecycle_exempt` opts out — Yahya exempted); manager hierarchy syncs from FlowHCM `reports_to` when unambiguous (3 corrections applied: Shehzad→Nadeem Khan, Abdul Rehman→Shahid Masaud, Bilal→Shahid Masaud); all actions logged in `flw_lifecycle_events`. **Member linking complete:** 54/58 members linked to employee codes via Excel round-trip (4 "ignore": external auditor + 3 plant device logins). **Entry-form pickers:** shared `EmployeePicker` (app/lib) in Members add form, Legal case accused, T&D attendees, HR task links — new records always reference the FlowHCM roster. **Locations auto-create (migration 219):** new FlowHCM stations create master locations with inferred type+company; new plant locations auto-create inactive `plants` rows via trigger (migration 220); P&L branches 100% mapped incl. aliases Islamabad→Centaurus Mall, Mall of Sailkot→Sialkot Store, ONLINE PK→new virtual "Online" location (migration 221). **Phase 3c (migration 222):** `constants.ts` synced to canonical company names + legacy-alias resolver; `members.company` normalised (7 spellings→4); UI labels canonical everywhere. 8 dead `hr_*` tables dropped (migration 223). **HR Tasks tab fixed:** now reads the main `tasks` system (128 dept tasks) instead of the always-empty parallel `hr_tasks` table; Tasks and Legal split into separate tabs with own widget keys. **Audit fixes:** HR overview API role-gated (employee PII → management roles only; payroll stricter), search input sanitised against PostgREST filter injection. **Sync cron: 5 min** (2-min pace caused occasional overlap timeouts on transfers). Full verification: tsc/eslint 0 errors, 12/12 DB integrity checks, 30 clean sync runs, live pages verified. **Next: Phase 4 (tech debt)** — 18 JS-aggregation routes → RPCs, 17 select("*"), orphaned recruitment/performance routes.
+
+---
+
 ## 2026-08-30 — FlowHCM master data foundation + HR dashboard rebuilt on live data
 
 Full-day session with Khuram. Three phases, all deployed:
