@@ -70,7 +70,10 @@ function LoginPageInner() {
   // than an effect, since this only ever needs to run on first render.
   const [message, setMessage] = useState(() => {
     const err = searchParams.get("error");
-    return err ? "Error: " + err : "";
+    if (!err) return "";
+    // Informational sign-outs (e.g. inactivity) aren't errors — show them
+    // in the neutral/green style rather than prefixed with "Error:".
+    return err.startsWith("You were signed out") ? err : "Error: " + err;
   });
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);

@@ -80,6 +80,44 @@ export default function AuthWrapper({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Inactivity auto-logout (security) ──────────────────────────────
+  // 30 minutes without mouse/keyboard/touch activity signs the user out.
+  // At 29 minutes a "Still there?" countdown appears; any activity or the
+  // Stay-signed-in button resets the clock.
+  const IDLE_LIMIT_MS = 30 * 60_000;
+  const IDLE_WARN_MS = 60_000; // warning shown for the final 60 seconds
+  const lastActivityRef = useRef<number>(Date.now());
+  const [idleCountdown, setIdleCountdown] = useState<number | null>(null);
+  useEffect(() => {
+    let last = 0;
+    function activity() {
+      const now = Date.now();
+      if (now - last < 1000) return; // throttle bursts
+      last = now;
+      lastActivityRef.current = now;
+      setIdleCountdown((c) => (c !== null ? null : c));
+    }
+    const events: (keyof WindowEventMap)[] = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "wheel"];
+    for (const ev of events) window.addEventListener(ev, activity, { passive: true });
+
+    const tick = setInterval(async () => {
+      const idleFor = Date.now() - lastActivityRef.current;
+      if (idleFor >= IDLE_LIMIT_MS) {
+        clearInterval(tick);
+        await supabase.auth.signOut();
+        router.push("/login?error=You were signed out after 30 minutes of inactivity.");
+      } else if (idleFor >= IDLE_LIMIT_MS - IDLE_WARN_MS) {
+        setIdleCountdown(Math.max(1, Math.ceil((IDLE_LIMIT_MS - idleFor) / 1000)));
+      }
+    }, 1000);
+
+    return () => {
+      for (const ev of events) window.removeEventListener(ev, activity);
+      clearInterval(tick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auth check
   useEffect(() => {
     async function checkAuth() {
@@ -338,6 +376,19 @@ export default function AuthWrapper({
 
   return (
     <>
+      {idleCountdown !== null && (
+        <div style={{ position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 3000, background: "#fff", border: "1.5px solid #B4791F", borderRadius: 12, boxShadow: "0 8px 30px rgba(15,23,32,0.25)", padding: "12px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ fontSize: 13, color: "#0F1720" }}>
+            <b>Still there?</b> You&apos;ll be signed out in <b>{idleCountdown}s</b> for security.
+          </span>
+          <button
+            onClick={() => { lastActivityRef.current = Date.now(); setIdleCountdown(null); }}
+            style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: "#0F1720", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer" }}
+          >
+            Stay signed in
+          </button>
+        </div>
+      )}
       <SidebarLayout
         userCtx={userCtx}
         userName={displayName(member, email)}
