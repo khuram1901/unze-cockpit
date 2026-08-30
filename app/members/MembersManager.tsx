@@ -190,6 +190,54 @@ export default function MembersManager() {
   // person the moment they're created, instead of having to go tick them
   // one at a time afterwards from the new manager's own row.
   const [managerId, setManagerId] = useState("");
+
+  // ── FlowHCM employee picker (30/08/2026) ─────────────────────────
+  // New members are picked from the FlowHCM employee roster so the app
+  // and FlowHCM stay one source of truth. Picking pre-fills the form
+  // and stores employee_code for lifecycle automation (migration 218).
+  const [employeeCode, setEmployeeCode] = useState("");
+  const [empSearch, setEmpSearch]       = useState("");
+  const [empResults, setEmpResults]     = useState<{
+    employee_code: string; full_name: string | null; designation: string | null;
+    department: string | null; station: string | null; email: string | null; mobile: string | null;
+  }[]>([]);
+  const [empLoading, setEmpLoading]     = useState(false);
+
+  // FlowHCM department names → app department dropdown values
+  const FLW_DEPT_MAP: Record<string, string> = {
+    "HR": "HR", "IT": "IT", "Tax": "Tax", "Admin": "Admin",
+    "Internal Audit": "Audit", "Finance": "Finance", "Finance & Tax": "Finance",
+    "Accounts": "Finance", "Accounts Baranh": "Finance", "Accounts UK": "Finance",
+    "Unze Trading Operations": "Unze Trading Ops", "Unze Trading": "Unze Trading Ops",
+    "Unze Metering": "Unze Trading Ops",
+  };
+
+  useEffect(() => {
+    if (!empSearch.trim()) { setEmpResults([]); return; }
+    const t = setTimeout(async () => {
+      setEmpLoading(true);
+      try {
+        const res = await authFetch(`/api/hr/overview?section=people_list&search=${encodeURIComponent(empSearch.trim())}&limit=8`);
+        if (res.ok) {
+          const j = await res.json();
+          setEmpResults(j.rows ?? []);
+        }
+      } finally { setEmpLoading(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [empSearch]);
+
+  function pickEmployee(emp: typeof empResults[number]) {
+    const parts = (emp.full_name ?? "").trim().split(/\s+/);
+    setFirstName(parts[0] ?? "");
+    setLastName(parts.slice(1).join(" "));
+    if (emp.email) setEmail(emp.email);
+    const mapped = emp.department ? FLW_DEPT_MAP[emp.department] : undefined;
+    if (mapped) setDepartment(mapped);
+    setEmployeeCode(emp.employee_code);
+    setEmpSearch("");
+    setEmpResults([]);
+  }
   const [newMemberManages, setNewMemberManages] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -280,6 +328,7 @@ export default function MembersManager() {
       business_unit: businessUnit || null,
       company: company || null,
       manager_id: managerId || null,
+      employee_code: employeeCode || null,
     }).select("id").single();
     setSaving(false);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
@@ -790,6 +839,50 @@ export default function MembersManager() {
           {/* ── Add form ──────────────────────────────── */}
           {isAdmin && showAddForm && (
             <form onSubmit={addMember} style={{ ...cardStyle, marginBottom: "14px" }}>
+              {/* FlowHCM employee picker — search the live roster and pre-fill */}
+              <div style={{ marginBottom: "10px", position: "relative" }}>
+                <label style={lbl}>Find in FlowHCM (recommended — links the account to the employee record)</label>
+                <input
+                  style={inp}
+                  value={empSearch}
+                  onChange={(e) => setEmpSearch(e.target.value)}
+                  placeholder="Search employee by name or code…"
+                />
+                {employeeCode && !empSearch && (
+                  <div style={{ fontSize: "12px", color: COLOURS.GREEN, marginTop: "4px" }}>
+                    ✓ Linked to employee {employeeCode}
+                    <button type="button" onClick={() => setEmployeeCode("")} style={{
+                      marginLeft: "8px", fontSize: "11px", color: COLOURS.SLATE, background: "none",
+                      border: "none", cursor: "pointer", textDecoration: "underline",
+                    }}>unlink</button>
+                  </div>
+                )}
+                {(empResults.length > 0 || empLoading) && (
+                  <div style={{
+                    position: "absolute", zIndex: 20, left: 0, right: 0, top: "100%",
+                    backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
+                    borderRadius: RADII.SM, boxShadow: SHADOWS.DROPDOWN, maxHeight: "260px", overflowY: "auto",
+                  }}>
+                    {empLoading ? (
+                      <div style={{ padding: "10px 12px", fontSize: "13px", color: COLOURS.SLATE }}>Searching…</div>
+                    ) : empResults.map((emp) => (
+                      <button
+                        key={emp.employee_code}
+                        type="button"
+                        onClick={() => pickEmployee(emp)}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left", padding: "8px 12px",
+                          fontSize: "13px", color: COLOURS.NAVY, background: "none", border: "none",
+                          borderBottom: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer",
+                        }}
+                      >
+                        <strong>{emp.full_name ?? "—"}</strong> · {emp.employee_code}
+                        <span style={{ color: COLOURS.SLATE }}> — {emp.designation ?? "—"} · {emp.department ?? "—"} · {emp.station ?? "—"}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "8px" }}>
                 <div><label style={lbl}>First Name</label><input style={inp} value={firstName} onChange={(e) => setFirstName(e.target.value)} required /></div>
                 <div><label style={lbl}>Last Name</label><input style={inp} value={lastName} onChange={(e) => setLastName(e.target.value)} required /></div>
