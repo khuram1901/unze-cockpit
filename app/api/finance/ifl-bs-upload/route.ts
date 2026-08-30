@@ -402,10 +402,10 @@ export async function POST(request: NextRequest) {
 
   // Prior period for comparisons
   const { data: priorRows } = await supabase
-    .from("balance_sheet_ifl").select("*")
+    .from("balance_sheet_ifl").select(FIELDS.join(", "))
     .eq("company_id", IFPL_COMPANY_ID).lt("month", month)
     .order("month", { ascending: false }).limit(1);
-  const pr = priorRows?.[0];
+  const pr = priorRows?.[0] as unknown as Record<string, number | null> | undefined;
   const prior = pr ? {
     total_assets: FIELDS.filter((f) => ["fixed_assets","receivables_kamran","long_term_investments","provident_fund_asset","stock","intercompany_receivables","receivables_directors","trade_debtors","supplier_deposits","prepayments","employee_loans","advance_income_tax","cash_bank"].includes(f)).reduce((sum, f) => sum + Number(pr[f] ?? 0), 0),
     cash_bank: Number(pr.cash_bank ?? 0),

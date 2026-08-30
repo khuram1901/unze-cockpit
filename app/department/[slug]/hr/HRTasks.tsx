@@ -427,7 +427,7 @@ export default function HRTasks() {
       supabase.rpc("get_hr_tasks_summary"),
       supabase
         .from("hr_tasks")
-        .select("*, companies(name)")
+        .select("id, company_id, title, description, assigned_to, department, employee_name, priority, status, due_date, is_recurring, recurrence, last_generated, parent_task_id, created_by, created_at, updated_at, companies(name)")
         .is("parent_task_id", null)  // show master tasks and one-offs; instances appear below
         .order("due_date", { ascending: true, nullsFirst: false })
         .order("priority", { ascending: true })

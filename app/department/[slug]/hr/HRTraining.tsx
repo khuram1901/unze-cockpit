@@ -920,9 +920,9 @@ export default function HRTraining() {
     (async () => {
       setLoadingDetail(true);
       const [{ data: sess }, { data: attendees }, { data: feedback }] = await Promise.all([
-        supabase.from("hr_td_sessions").select("*, companies(name)").eq("id", selectedSessionId).single(),
-        supabase.from("hr_td_attendees").select("*").eq("session_id", selectedSessionId).order("employee_name"),
-        supabase.from("hr_td_feedback").select("*").eq("session_id", selectedSessionId).order("submitted_at", { ascending: false }),
+        supabase.from("hr_td_sessions").select("id, company_id, title, session_type, department, trainer, session_date, duration_hours, location, cost_pkr, max_attendees, status, notes, feedback_sheet_id, feedback_synced_at, feedback_close_date, companies(name)").eq("id", selectedSessionId).single(),
+        supabase.from("hr_td_attendees").select("id, employee_name, employee_id, department, attended, passed, certificate_url, notes").eq("session_id", selectedSessionId).order("employee_name"),
+        supabase.from("hr_td_feedback").select("id, employee_name, overall_rating, content_rating, trainer_rating, relevance_rating, comments, submitted_at").eq("session_id", selectedSessionId).order("submitted_at", { ascending: false }),
       ]);
 
       if (sess) {

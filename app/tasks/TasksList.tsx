@@ -254,7 +254,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
     let query = supabase
       .from("tasks")
-      .select("*, task_subtasks(id, is_complete), task_comments(id)")
+      .select("id, task_type, description, project, priority, due_date, original_due_date, assigned_date, assigned_to, assigned_to_email, assigned_by, assigned_by_email, status, stage, stuck_reason, notes, reply_required, reply_text, reply_by, reply_at, corrective_action, recovery_date, impact_on_monthly_target, meeting_id, time_spent_minutes, whatsapp_auto_remind, created_at, completed_at, assigned_to_department, company_id, requires_manager_signoff, explanation_required, submitted_by_name, submitted_by_email, waiting_reply_note, waiting_reply_to_email, waiting_reply_to_name, waiting_reply_by_email, waiting_reply_by_name, manager_reply_text, manager_reply_at, task_subtasks(id, is_complete), task_comments(id)")
       .order("created_at", { ascending: false });
 
     if (!isPrivileged && email) {

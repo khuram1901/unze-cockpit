@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("authority_letters")
-    .select("*, contractors(name)")
+    .select("id, po_id, contractor_id, letter_number, issue_date, issued_by, expiry_date, qty_31, qty_36, qty_40, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_40, opening_dispatched_45, opening_dispatched_meter, notes, created_by, created_at, closed_at, closed_by, contractors(name)")
     .order("created_at", { ascending: false });
 
   if (poId) query = query.eq("po_id", poId);

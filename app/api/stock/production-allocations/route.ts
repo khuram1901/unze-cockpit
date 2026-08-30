@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("production_allocations")
-    .select("*, purchase_orders(po_number, customer_name, po_label)");
+    .select("id, production_entry_id, po_id, qty_31, qty_36, qty_40, qty_45, qty_meter, created_at, purchase_orders(po_number, customer_name, po_label)");
 
   if (entryId) query = query.eq("production_entry_id", entryId);
   if (poId) query = query.eq("po_id", poId);
@@ -205,7 +205,10 @@ export async function PATCH(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("production_allocations")
-    .update({ ...newQty, updated_at: new Date().toISOString() })
+    // production_allocations has no updated_at column — writing one made every
+    // allocation edit fail with "Could not find the 'updated_at' column"
+    // (same class of bug as authority_letters, fixed 18/07/2026).
+    .update(newQty)
     .eq("id", id).select().single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

@@ -532,7 +532,7 @@ export async function POST(request: NextRequest) {
   // ── Load prior month data for comparison ─────────────────────────────────
   const { data: priorRows } = await supabase
     .from("balance_sheet")
-    .select("*")
+    .select("ppe, long_term_investment, receivables, stocks, advances_prepayments, advance_taxation, cash_bank, retained_earnings")
     .eq("company_id", UTPL_COMPANY_ID)
     .lt("month", month)
     .order("month", { ascending: false })
@@ -557,11 +557,11 @@ export async function POST(request: NextRequest) {
   const restated: { field: string; old_value: number; new_value: number }[] = [];
   const { data: existingRows } = await supabase
     .from("balance_sheet")
-    .select("*")
+    .select("ppe, long_term_investment, receivables, stocks, advances_prepayments, advance_taxation, cash_bank, owner_capital, revenue_reserves, retained_earnings, hbl_stf, loan_family, mazhar_sb_ac, loan_associates, lease_liabilities, accrued_liabilities, payable_controls, taxation")
     .eq("company_id", UTPL_COMPANY_ID)
     .eq("month", month)
     .limit(1);
-  const existing = existingRows?.[0];
+  const existing = existingRows?.[0] as Record<string, number | null> | undefined;
   if (existing && accepted) {
     const LINE_FIELDS: (keyof BsParsed)[] = [
       "ppe","long_term_investment","receivables","stocks","advances_prepayments",
