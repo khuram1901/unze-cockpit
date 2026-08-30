@@ -160,6 +160,12 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
     // single RPC, all joins in the database (migration 214)
     const { error: linkErr } = await db.rpc("resolve_flw_employee_links");
     if (linkErr) console.error("resolve_flw_employee_links:", linkErr.message);
+
+    // Member lifecycle: deactivate leavers' app access, sync manager
+    // hierarchy from FlowHCM reports_to (migration 218). Every action is
+    // logged in flw_lifecycle_events; lifecycle_exempt members untouched.
+    const { error: lifeErr } = await db.rpc("sync_member_lifecycle");
+    if (lifeErr) console.error("sync_member_lifecycle:", lifeErr.message);
   }
 
   await logSync(db, "employees", "success", rows.length, Date.now() - t0);
