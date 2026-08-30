@@ -28,7 +28,7 @@ const ALL_HR_TABS = [
   // by a different user, so each needs its own visibility key in the matrix.
   { key: "tasks",      label: "HR Tasks",           widgetKey: "hr_tabs.tasks" },
   { key: "legal",      label: "Legal Cases",        widgetKey: "hr_tabs.legal" },
-  { key: "flowdata",   label: "Live HR Data",       widgetKey: "hr_tabs.flowdata" },
+  { key: "flowdata",   label: "HR Records",         widgetKey: "hr_tabs.flowdata" },
 ] as const;
 
 type HRTab = (typeof ALL_HR_TABS)[number]["key"];

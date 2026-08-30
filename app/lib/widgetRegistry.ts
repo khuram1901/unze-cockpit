@@ -98,7 +98,7 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "hr_tabs.td",         label: "T&D Calendar tab",       page: "HR Dashboard Tabs", tip: "Training and development calendar" },
   { key: "hr_tabs.tasks",      label: "HR Tasks tab",           page: "HR Dashboard Tabs", tip: "HR department tasks from the main task system" },
   { key: "hr_tabs.legal",      label: "Legal Cases tab",        page: "HR Dashboard Tabs", tip: "Legal cases initiated and tracked by HR" },
-  { key: "hr_tabs.flowdata",   label: "Live HR Data tab",       page: "HR Dashboard Tabs", tip: "Raw FlowHCM sync data and status" },
+  { key: "hr_tabs.flowdata",   label: "HR Records tab",         page: "HR Dashboard Tabs", tip: "Raw FlowHCM pay, statutory and movement records" },
 
   { key: "dept_tax.attention_banner", label: "Alert banner", page: "Tax Notices", tip: "Overdue/urgent items dropdown at the top" },
   { key: "dept_tax.kpi_charts", label: "KPI cards + charts", page: "Tax Notices" },

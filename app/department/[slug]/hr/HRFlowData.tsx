@@ -184,9 +184,12 @@ const MODULES: Record<ModuleKey, ModuleMeta> = {
   },
 };
 
-const MODULE_ORDER: ModuleKey[] = [
-  "employees", "salary_setup", "advances", "allowances", "deductions",
-  "overtime", "pf_data", "tax", "loans", "transfers", "exits", "exemptions",
+// Grouped for the "HR Records" filing-cabinet layout (30/08/2026).
+// "employees" is deliberately absent — the People tab is the directory.
+const MODULE_GROUPS: { label: string; keys: ModuleKey[] }[] = [
+  { label: "Pay",       keys: ["salary_setup", "advances", "allowances", "deductions", "overtime", "loans", "tax"] },
+  { label: "Statutory", keys: ["pf_data"] },
+  { label: "Movement",  keys: ["transfers", "exits", "exemptions"] },
 ];
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -324,7 +327,7 @@ function DataTable({ rows, cols, loading }: {
 
 export default function HRFlowData() {
   const isMobile = useMobile();
-  const [activeModule, setActiveModule] = useState<ModuleKey>("employees");
+  const [activeModule, setActiveModule] = useState<ModuleKey>("salary_setup");
   const [search, setSearch]             = useState("");
   const [debouncedSearch, setDebounced] = useState("");
   const [loading, setLoading]           = useState(false);
@@ -388,23 +391,31 @@ export default function HRFlowData() {
 
   return (
     <div>
-      <SectionTitle title="Live HR Data" />
+      <SectionTitle title="HR Records" />
       <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "16px", marginTop: "-4px" }}>
-        Synced automatically from FlowHCM.
+        Every person&rsquo;s raw pay, statutory and movement records, synced automatically from FlowHCM.
+        For the employee directory, use the People tab.
       </p>
 
-      {/* Module picker */}
-      <div style={subTabBar}>
-        {MODULE_ORDER.map(k => (
-          <button
-            key={k}
-            style={subTab(k)}
-            onClick={() => { setActiveModule(k); setSearch(""); }}
-          >
-            {MODULES[k].label}
-          </button>
-        ))}
-      </div>
+      {/* Module picker — grouped like a filing cabinet */}
+      {MODULE_GROUPS.map(g => (
+        <div key={g.label} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
+          <span style={{
+            fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase",
+            letterSpacing: "0.5px", width: "76px", flexShrink: 0,
+          }}>{g.label}</span>
+          {g.keys.map(k => (
+            <button
+              key={k}
+              style={subTab(k)}
+              onClick={() => { setActiveModule(k); setSearch(""); }}
+            >
+              {MODULES[k].label}
+            </button>
+          ))}
+        </div>
+      ))}
+      <div style={{ marginBottom: "8px" }} />
 
       {/* Search */}
       <div style={{ marginBottom: "12px", display: "flex", gap: "8px", alignItems: "center" }}>
