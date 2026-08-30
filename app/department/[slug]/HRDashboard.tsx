@@ -16,6 +16,7 @@ import HRWorkforce from "./hr/HRWorkforce";
 import HRInsights from "./hr/HRInsights";
 import HRLegal from "./hr/HRLegal";
 import HRPerformance from "./hr/HRPerformance";
+import HRFlowData from "./hr/HRFlowData";
 
 // ─── Tab definitions ────────────────────────────────────────────────────────
 const ALL_HR_TABS = [
@@ -31,6 +32,7 @@ const ALL_HR_TABS = [
   { key: "td",          label: "T&D Calendar",           widgetKey: "hr_tabs.td" },
   { key: "tasks",       label: "HR Tasks",               widgetKey: "hr_tabs.tasks" },
   { key: "legal",       label: "Legal Cases",            widgetKey: "hr_tabs.legal" },
+  { key: "flowdata",    label: "Live HR Data",           widgetKey: "hr_tabs.flowdata" },
 ] as const;
 
 type HRTab = (typeof ALL_HR_TABS)[number]["key"];
@@ -120,6 +122,7 @@ export default function HRDashboard() {
       {safeTab === "tasks"        && <HRTasks />}
       {safeTab === "performance"  && <HRPerformance />}
       {safeTab === "legal"        && <HRLegal />}
+      {safeTab === "flowdata"     && <HRFlowData />}
     </main>
   );
 }
