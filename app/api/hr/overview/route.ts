@@ -25,6 +25,24 @@ export async function GET(request: NextRequest) {
   const db = createServiceClient();
 
   try {
+    // Payroll figures are financial data: Admin/CEO + HR or Finance Managers only.
+    // Executive (PA) role must NEVER see financial data (CLAUDE.md rule 6).
+    if (section === "payroll") {
+      const { data: member } = await db
+        .from("members")
+        .select("role, department")
+        .eq("email", auth.email)
+        .maybeSingle();
+      const role = member?.role ?? "";
+      const dept = member?.department ?? "";
+      const allowed =
+        role === "Admin" || role === "CEO" ||
+        (role === "Manager" && (dept === "HR" || dept === "Finance"));
+      if (!allowed) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+
     if (section === "people") {
       const { data, error } = await db.rpc("get_hr_people_overview");
       if (error) throw new Error(error.message);
