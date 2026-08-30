@@ -161,6 +161,7 @@ const PERM_SECTIONS: PermSection[] = [
     items: [
       { key: "can_view_dept_ops", label: "Unze Trading Ops" },
       { key: "can_view_dept_hr", label: "HR" },
+      { key: "can_view_group_hr", label: "Group HR (CEO view)", description: "Group-wide people & payroll dashboard" },
       { key: "can_view_dept_audit", label: "Audit" },
       { key: "can_view_dept_admin", label: "Admin" },
       { key: "can_view_dept_it", label: "IT" },

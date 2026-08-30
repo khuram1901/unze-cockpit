@@ -208,6 +208,18 @@ export function canViewIfplPnl(u: UserCtx) {
   return isAdminTier(u);
 }
 
+// ── Group HR dashboard (CEO view — payroll across all companies) ──
+// Same model as canViewIfplPnl: PA blocked unconditionally (rule 6 —
+// payroll is financial data), Admin/CEO roles by default, everyone else
+// via the Access Matrix toggle (member_permissions.can_view_group_hr,
+// migration 234).
+export function canViewGroupHR(u: UserCtx) {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_group_hr");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+
 // ── Restaurants P&L (Baranh + Haute Dolci) ────────────────────────
 // Same model as canViewIfplPnl: PA blocked unconditionally, Admin/CEO
 // roles by default, everyone else via the Access Matrix toggle

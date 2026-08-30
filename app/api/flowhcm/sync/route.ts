@@ -160,6 +160,10 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
     // single RPC, all joins in the database (migration 214)
     const { error: linkErr } = await db.rpc("resolve_flw_employee_links");
     if (linkErr) console.error("resolve_flw_employee_links:", linkErr.message);
+    // Group HR payroll trend: capture this month's per-company gross
+    // (idempotent upsert — migration 234).
+    const { error: snapErr } = await db.rpc("snapshot_group_payroll");
+    if (snapErr) console.error("snapshot_group_payroll:", snapErr.message);
 
     // Member lifecycle: deactivate leavers' app access, sync manager
     // hierarchy from FlowHCM reports_to (migration 218). Every action is

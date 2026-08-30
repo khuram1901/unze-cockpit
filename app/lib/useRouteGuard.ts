@@ -9,7 +9,7 @@ import {
   canManageMembers, canViewAuditLog, canImportExport,
   canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry, canAccessBanking,
   canViewPADashboard, canViewInvestments,
-  canViewStock, canViewGuarantees, canViewIfplPnl, canViewRestaurantsPnl, canAccessFolderit,
+  canViewStock, canViewGuarantees, canViewIfplPnl, canViewRestaurantsPnl, canViewGroupHR, canAccessFolderit,
   isPrivileged, isAdminTier, isMainAdmin,
   type UserCtx, type PermOverrides,
 } from "./permissions";
@@ -18,7 +18,7 @@ type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
   | "audit_log" | "import_export" | "daily_entry"
   | "pa_dashboard" | "investments" | "system_backups" | "stock" | "guarantees"
-  | "ifpl_pnl" | "restaurants_pnl" | "admin_ops" | "admin_entry" | "folderit" | "banking";
+  | "ifpl_pnl" | "restaurants_pnl" | "admin_ops" | "admin_entry" | "folderit" | "banking" | "group_hr";
 
 const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   finance: canViewFinance,
@@ -41,6 +41,7 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   stock: canViewStock,
   ifpl_pnl: canViewIfplPnl,
   restaurants_pnl: canViewRestaurantsPnl,
+  group_hr: canViewGroupHR,
   folderit: canAccessFolderit,
   banking: canAccessBanking,
 };

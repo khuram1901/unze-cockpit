@@ -19,7 +19,7 @@ import {
   canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry, canAccessBanking,
   canViewPADashboard, canViewInvestments,
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
-  canViewIfplPnl, canViewRestaurantsPnl,
+  canViewIfplPnl, canViewRestaurantsPnl, canViewGroupHR,
   isMainAdmin, isSecondaryCEO, isDailyEntryOnly,
   type UserCtx,
 } from "./permissions";
@@ -58,6 +58,7 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_view_dept_tax_accounts: canViewTaxAccounts,
   can_view_ifpl_pnl: canViewIfplPnl,
   can_view_restaurants_pnl: canViewRestaurantsPnl,
+  can_view_group_hr: canViewGroupHR,
   can_access_banking: canAccessBanking,
 };
 
