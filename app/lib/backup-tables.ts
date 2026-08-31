@@ -17,5 +17,5 @@ export const BACKUP_TABLES = [
   "audit_log", "notification_log",
   "department_budgets", "member_permissions", "recurring_tasks",
   "holdings", "price_history", "pending_minutes", "push_subscriptions",
-  "document_archive",
+
 ];
