@@ -338,7 +338,8 @@ function QuoteCard() {
 /* ─── Quick Links card ───────────────────────────────────────── */
 // Khuram's Google booking pages — shown inside the booking modal.
 const BOOKING_OPTIONS = [
-  { label: "In-person meeting", icon: "🤝", url: "https://calendar.app.google/W3egi75KJ78sg9jK9", caption: "Book a face-to-face slot" },
+  { label: "In-person · 15 min", icon: "🤝", url: "https://calendar.app.google/gw4rnydXU6Q4wJro9", caption: "Quick face-to-face (15 min)" },
+  { label: "In-person · 45 min", icon: "🤝", url: "https://calendar.app.google/W3egi75KJ78sg9jK9", caption: "Longer face-to-face (45 min)" },
   { label: "Video call", icon: "🎥", url: "https://calendar.app.google/HKbrgDEYudfnya2k9", caption: "Book a Google Meet call" },
 ];
 
