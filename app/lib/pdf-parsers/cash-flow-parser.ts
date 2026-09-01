@@ -37,15 +37,14 @@ function parseAmount(text: string): number {
 // e.g. "Today Opening Balance(16,333,132)" or "Today Opening Balance 16,333,132"
 function extractInlineAmount(text: string, label: string): number | null {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // Match label followed immediately by optional space then optional ( then digits/commas then optional )
-  const re = new RegExp(escaped + "\\s*\\(?([\\d,]+(?:\\.\\d+)?)\\)?", "i");
+  // Capture optional leading minus/paren prefix then the digit string.
+  // Handles: "1,234", "(1,234)", "-(1,234)", "-1,234"
+  const re = new RegExp(escaped + "\\s*(-?\\(?)([ \\d,]+(?:\\.\\d+)?)\\)?", "i");
   const m = text.match(re);
   if (!m) return null;
-  // Check if there's a ( before the digits
-  const matchStart = text.indexOf(m[0]);
-  const chunk = text.slice(matchStart, matchStart + m[0].length + 5);
-  const isNeg = chunk.includes("(");
-  return isNeg ? -parseAmount(m[1]) : parseAmount(m[1]);
+  const prefix = m[1] ?? "";
+  const isNeg = prefix.includes("-") || prefix.includes("(");
+  return isNeg ? -parseAmount(m[2]) : parseAmount(m[2]);
 }
 
 // Picks the most-frequent DD/MM/YYYY date in the text, not just the first
@@ -375,10 +374,12 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
   const pdcSectionIdx = text.search(/Total\s+PDC/i);
   if (pdcSectionIdx >= 0) {
     const afterPDC = text.slice(pdcSectionIdx);
-    const m = afterPDC.match(/Closing Balance\s*\n?\s*\(?([,\d]+(?:\.\d+)?)\)?/i);
+    const m = afterPDC.match(/Closing Balance\s*\n?\s*(-?\(?)\s*([,\d]+(?:\.\d+)?)\)?/i);
     if (m) {
       const chunk = afterPDC.slice(afterPDC.search(/Closing Balance/i), afterPDC.search(/Closing Balance/i) + 60);
-      closingAfterPDC = chunk.includes("(") ? -parseAmount(m[1]) : parseAmount(m[1]);
+      const impPrefix = m[1] ?? "";
+      const impIsNeg = impPrefix.includes("-") || impPrefix.includes("(");
+      closingAfterPDC = impIsNeg ? -parseAmount(m[2]) : parseAmount(m[2]);
     }
   }
 
@@ -454,7 +455,8 @@ function parseBaranhStyle(
     const m = afterPDC.match(/Closing Balance\s*\n?\s*(\(?\s*[\d,]+(?:\.\d+)?\s*\)?)/i);
     if (m) {
       const raw = m[1].trim();
-      closingAfterPDC = raw.startsWith("(") ? -parseAmount(raw) : parseAmount(raw);
+      const barIsNeg = raw.startsWith("(") || raw.startsWith("-");
+      closingAfterPDC = barIsNeg ? -parseAmount(raw) : parseAmount(raw);
     }
   }
 
