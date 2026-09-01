@@ -203,13 +203,13 @@ export default function RestaurantsFinancePage() {
   // Period receipts/payments — prefer sheet-level totals (from PDF parse), fall back to transactions
   const periodReceipts = sheets.reduce((sum, s) => {
     const fromSheet = s.receipts_pkr;
-    if (fromSheet != null) return sum + fromSheet;
+    if (fromSheet != null && fromSheet > 0) return sum + fromSheet;
     return sum + s.cash_sheet_transactions.filter((t) => t.txn_type === "receipt").reduce((s2, t) => s2 + Number(t.amount_pkr), 0);
   }, 0);
 
   const periodPayments = sheets.reduce((sum, s) => {
     const fromSheet = s.payments_pkr;
-    if (fromSheet != null) return sum + fromSheet;
+    if (fromSheet != null && fromSheet > 0) return sum + fromSheet;
     return sum + s.cash_sheet_transactions.filter((t) => t.txn_type === "payment").reduce((s2, t) => s2 + Number(t.amount_pkr), 0);
   }, 0);
 
@@ -497,10 +497,10 @@ export default function RestaurantsFinancePage() {
                     .sort((a, b) => b.sheet_date.localeCompare(a.sheet_date))
                     .map((s) => {
                       // Prefer sheet-level totals (from PDF parse); fall back to summing transactions
-                      const receipts = s.receipts_pkr ?? s.cash_sheet_transactions
+                      const receipts = (s.receipts_pkr != null && s.receipts_pkr > 0) ? s.receipts_pkr : s.cash_sheet_transactions
                         .filter((t) => t.txn_type === "receipt")
                         .reduce((sum, t) => sum + Number(t.amount_pkr), 0);
-                      const payments = s.payments_pkr ?? s.cash_sheet_transactions
+                      const payments = (s.payments_pkr != null && s.payments_pkr > 0) ? s.payments_pkr : s.cash_sheet_transactions
                         .filter((t) => t.txn_type === "payment")
                         .reduce((sum, t) => sum + Number(t.amount_pkr), 0);
                       const net = (s.closing_balance_pkr ?? 0) - (s.opening_balance_pkr ?? 0);
@@ -633,8 +633,8 @@ export default function RestaurantsFinancePage() {
                 const activeTabLight = COMPANY_TABS.find((t) => t.id === d.company)?.lightColor ?? tab.lightColor;
 
                 // Effective receipts/payments: prefer sheet-level totals
-                const effectiveReceipts = d.receipts_pkr ?? d.receipts.reduce((s, t) => s + Number(t.amount_pkr), 0);
-                const effectivePayments = d.payments_pkr ?? d.payments.reduce((s, t) => s + Number(t.amount_pkr), 0);
+                const effectiveReceipts = (d.receipts_pkr != null && d.receipts_pkr > 0) ? d.receipts_pkr : d.receipts.reduce((s, t) => s + Number(t.amount_pkr), 0);
+                const effectivePayments = (d.payments_pkr != null && d.payments_pkr > 0) ? d.payments_pkr : d.payments.reduce((s, t) => s + Number(t.amount_pkr), 0);
 
                 return (
                   <>
