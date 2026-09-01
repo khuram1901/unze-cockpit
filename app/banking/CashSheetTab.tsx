@@ -837,12 +837,14 @@ export default function CashSheetTab() {
 
                   {/* Balance summary */}
                   {(detail.opening_balance_pkr != null || detail.closing_balance_pkr != null || detail.receipts_pkr != null || detail.payments_pkr != null) && (() => {
-                    const hasParsed = detail.receipts_pkr != null || detail.payments_pkr != null;
+                    const effectiveReceipts = (detail.receipts_pkr != null && detail.receipts_pkr > 0) ? detail.receipts_pkr : detail.receipts.reduce((s, t) => s + Number(t.amount_pkr), 0);
+                    const effectivePayments = (detail.payments_pkr != null && detail.payments_pkr > 0) ? detail.payments_pkr : detail.payments.reduce((s, t) => s + Number(t.amount_pkr), 0);
+                    const hasParsed = effectiveReceipts > 0 || effectivePayments > 0;
                     const tiles = [
                       { label: "Opening Balance", value: detail.opening_balance_pkr, color: COLOURS.SLATE },
                       ...(hasParsed ? [
-                        { label: "Receipts", value: detail.receipts_pkr, color: COLOURS.GREEN },
-                        { label: "Payments", value: detail.payments_pkr, color: COLOURS.RED },
+                        { label: "Receipts", value: effectiveReceipts, color: COLOURS.GREEN },
+                        { label: "Payments", value: effectivePayments, color: COLOURS.RED },
                       ] : []),
                       { label: "Closing Balance", value: detail.closing_balance_pkr, color: COLOURS.SLATE },
                       {
