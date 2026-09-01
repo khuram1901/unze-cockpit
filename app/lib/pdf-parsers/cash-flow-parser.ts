@@ -24,8 +24,9 @@ export type CashFlowParsed = {
 
 function parseAmount(text: string): number {
   // Handle negative amounts in parentheses like (4,168,201) or -(4,168,201)
+  // and plain minus prefixes like -904,994
   const trimmed = text.trim();
-  const isNegative = trimmed.startsWith("(") || trimmed.startsWith("-(");
+  const isNegative = trimmed.startsWith("(") || trimmed.startsWith("-");
   const cleaned = trimmed.replace(/[(),-\s]/g, "");
   const num = parseFloat(cleaned.replace(/,/g, ""));
   if (isNaN(num)) return 0;
@@ -76,13 +77,22 @@ function extractDate(text: string): string | null {
 
 function findAmount(text: string, label: string): number {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Capture an optional leading "-" or "(" before the digits so negative
+  // opening/closing balances (e.g. -904,994) are preserved correctly.
   const patterns = [
-    new RegExp(escaped + "\\s*\\(?([ \\d,]+(?:\\.\\d+)?)\\)?", "i"),
-    new RegExp(escaped + "[\\s\\S]{0,20}?\\(?([ \\d,]{4,}(?:\\.\\d+)?)\\)?", "i"),
+    new RegExp(escaped + "\\s*(-?\\(?)([ \\d,]+(?:\\.\\d+)?)\\)?", "i"),
+    new RegExp(escaped + "[\\s\\S]{0,20}?(-?\\(?)([ \\d,]{4,}(?:\\.\\d+)?)\\)?", "i"),
   ];
   for (const re of patterns) {
     const m = text.match(re);
-    if (m) return parseAmount(m[1]);
+    if (m) {
+      const prefix = m[1] ?? "";
+      const digits = m[2] ?? "";
+      const isNegative = prefix.includes("-") || prefix.includes("(");
+      const num = parseFloat(digits.replace(/[,\s]/g, ""));
+      if (isNaN(num)) continue;
+      return isNegative ? -num : num;
+    }
   }
   return 0;
 }
