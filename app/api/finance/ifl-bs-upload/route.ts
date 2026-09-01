@@ -401,9 +401,10 @@ export async function POST(request: NextRequest) {
   const t = totals(parsed);
 
   // Prior period for comparisons — total_assets summed in Postgres via RPC (Rule 0)
-  const { data: priorData } = await supabase
+  const { data: priorRaw } = await supabase
     .rpc("get_ifl_bs_prior_totals", { p_company_id: IFPL_COMPANY_ID, p_month: month })
     .maybeSingle();
+  const priorData = priorRaw as { total_assets: number; cash_bank: number; retained_earnings: number } | null;
   const prior = priorData ? {
     total_assets: Number(priorData.total_assets ?? 0),
     cash_bank: Number(priorData.cash_bank ?? 0),
