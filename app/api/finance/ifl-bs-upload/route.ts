@@ -400,16 +400,14 @@ export async function POST(request: NextRequest) {
 
   const t = totals(parsed);
 
-  // Prior period for comparisons
-  const { data: priorRows } = await supabase
-    .from("balance_sheet_ifl").select(FIELDS.join(", "))
-    .eq("company_id", IFPL_COMPANY_ID).lt("month", month)
-    .order("month", { ascending: false }).limit(1);
-  const pr = priorRows?.[0] as unknown as Record<string, number | null> | undefined;
-  const prior = pr ? {
-    total_assets: FIELDS.filter((f) => ["fixed_assets","receivables_kamran","long_term_investments","provident_fund_asset","stock","intercompany_receivables","receivables_directors","trade_debtors","supplier_deposits","prepayments","employee_loans","advance_income_tax","cash_bank"].includes(f)).reduce((sum, f) => sum + Number(pr[f] ?? 0), 0),
-    cash_bank: Number(pr.cash_bank ?? 0),
-    retained_earnings: Number(pr.retained_earnings ?? 0),
+  // Prior period for comparisons — total_assets summed in Postgres via RPC (Rule 0)
+  const { data: priorData } = await supabase
+    .rpc("get_ifl_bs_prior_totals", { p_company_id: IFPL_COMPANY_ID, p_month: month })
+    .maybeSingle();
+  const prior = priorData ? {
+    total_assets: Number(priorData.total_assets ?? 0),
+    cash_bank: Number(priorData.cash_bank ?? 0),
+    retained_earnings: Number(priorData.retained_earnings ?? 0),
   } : null;
 
   const checks = runChecks(parsed, subtotals);

@@ -102,9 +102,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const restoredTables = results.filter((r) => r.status === "restored").length;
-  const errorTables = results.filter((r) => r.status.startsWith("error")).length;
-  const totalRows = results.reduce((s, r) => s + (r.restored || 0), 0);
+  let restoredTables = 0, errorTables = 0, totalRows = 0;
+  for (const r of results) {
+    if (r.status === "restored") restoredTables++;
+    if (r.status.startsWith("error")) errorTables++;
+    totalRows += r.restored || 0;
+  }
 
   return Response.json({
     ok: errorTables === 0,

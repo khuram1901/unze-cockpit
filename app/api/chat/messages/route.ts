@@ -79,18 +79,19 @@ export async function GET(req: Request) {
     .eq("conversation_id", conversationId)
     .eq("member_id", member.id);
 
-  // Fetch other participants' last_read_at for read receipts (✓✓)
-  const { data: otherParticipants } = await db
+  // MAX(last_read_at) among other participants — done in Postgres via order+limit,
+  // not in JS, so no stored-data aggregation crosses the wire (Rule 0).
+  const { data: maxRead } = await db
     .from("chat_participants")
     .select("last_read_at")
     .eq("conversation_id", conversationId)
-    .neq("member_id", member.id);
+    .neq("member_id", member.id)
+    .not("last_read_at", "is", null)
+    .order("last_read_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  // The latest read timestamp among all other participants
-  const othersLastReadAt = otherParticipants?.reduce<string | null>((latest, p) => {
-    if (!latest) return p.last_read_at;
-    return p.last_read_at > latest ? p.last_read_at : latest;
-  }, null) ?? null;
+  const othersLastReadAt = maxRead?.last_read_at ?? null;
 
   // Return in chronological order (oldest first for display)
   return Response.json({

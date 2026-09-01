@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const totalSynced = results.reduce((s, r) => s + r.synced, 0);
+  let totalSynced = 0;
+  for (const r of results) totalSynced += r.synced;
   return Response.json({ ok: true, total_synced: totalSynced, results });
 }

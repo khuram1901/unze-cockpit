@@ -52,15 +52,13 @@ export async function POST(request: NextRequest) {
 
   if (!entry) return Response.json({ error: "Production entry not found" }, { status: 404 });
 
-  const totalAllocated = allocations.reduce(
-    (acc, a) => ({
-      qty_31: acc.qty_31 + (a.qty_31 || 0),
-      qty_36: acc.qty_36 + (a.qty_36 || 0),
-      qty_45: acc.qty_45 + (a.qty_45 || 0),
-      qty_meter: acc.qty_meter + (a.qty_meter || 0),
-    }),
-    { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 }
-  );
+  const totalAllocated = { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
+  for (const a of allocations) {
+    totalAllocated.qty_31   += a.qty_31   || 0;
+    totalAllocated.qty_36   += a.qty_36   || 0;
+    totalAllocated.qty_45   += a.qty_45   || 0;
+    totalAllocated.qty_meter += a.qty_meter || 0;
+  }
 
   const overflows = [
     { size: "31ft", allocated: totalAllocated.qty_31, entry: entry.qty_31 || 0 },

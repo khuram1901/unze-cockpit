@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
     const filename     = `cockpit-backup-${today}.json.gz`;
 
     const tableCount = Object.keys(backup).length;
-    const rowCount   = Object.values(backup).reduce((s, rows) => s + rows.length, 0);
+    let rowCount = 0;
+    for (const rows of Object.values(backup)) rowCount += rows.length;
 
     // ── 2. Save to Supabase Storage (always, independent of Drive) ───
     const { error: storageError } = await supabase.storage
