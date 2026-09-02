@@ -99,6 +99,10 @@ export default function DailyEntryPage() {
   const [submittingFuel, setSubmittingFuel] = useState(false);
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreviewUrl, setSlipPreviewUrl] = useState<string | null>(null);
+  const [stationFile, setStationFile] = useState<File | null>(null);
+  const [stationPreviewUrl, setStationPreviewUrl] = useState<string | null>(null);
+  const [finishedFile, setFinishedFile] = useState<File | null>(null);
+  const [finishedPreviewUrl, setFinishedPreviewUrl] = useState<string | null>(null);
 
   // ── Maintenance last-ODO (to show reference + validate forward-only) ─
   const [lastMaintOdo, setLastMaintOdo] = useState<number | null>(null);
@@ -338,7 +342,8 @@ export default function DailyEntryPage() {
       const objectUrl = URL.createObjectURL(file);
       img.onload = () => {
         URL.revokeObjectURL(objectUrl);
-        const MAX_PX = 480;
+        // Max 1200px on the long edge — readable text on slips; quality 0.82 keeps file size reasonable
+        const MAX_PX = 1200;
         let { width, height } = img;
         if (width > height) {
           if (width > MAX_PX) { height = Math.round(height * MAX_PX / width); width = MAX_PX; }
@@ -352,7 +357,7 @@ export default function DailyEntryPage() {
         canvas.toBlob((blob) => {
           if (!blob) { resolve(file); return; }
           resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
-        }, "image/jpeg", 0.65);
+        }, "image/jpeg", 0.82);
       };
       img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
       img.src = objectUrl;
@@ -378,35 +383,48 @@ export default function DailyEntryPage() {
       showToast("Please attach a photo of the fuel slip before saving", "error"); return;
     }
     setSubmittingFuel(true);
-    try {
-      // Upload slip image first — abort if upload fails
-      let slip_image_url: string | null = null;
+
+    async function uploadPhoto(file: File): Promise<string | null> {
       const fd = new FormData();
-      fd.append("file", slipFile);
-      const upRes = await authFetch("/api/admin/fuel/upload", { method: "POST", body: fd });
-      const upJson = await upRes.json();
-      if (!upRes.ok) {
-        showToast(upJson.error || "Failed to upload slip image", "error");
-        return;
-      }
-      slip_image_url = upJson.url;
+      fd.append("file", file);
+      const res = await authFetch("/api/admin/fuel/upload", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Upload failed");
+      return json.url as string;
+    }
+
+    try {
+      // Upload all provided photos — abort the whole save if any upload fails
+      let slip_image_url: string | null = null;
+      let station_image_url: string | null = null;
+      let finished_image_url: string | null = null;
+
+      slip_image_url = await uploadPhoto(slipFile);
+      if (stationFile) station_image_url = await uploadPhoto(stationFile);
+      if (finishedFile) finished_image_url = await uploadPhoto(finishedFile);
+
       const res = await authFetch("/api/admin/fuel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...fuel, slip_image_url }),
+        body: JSON.stringify({ ...fuel, slip_image_url, station_image_url, finished_image_url }),
       });
       const json = await res.json();
       if (json.ok) {
         showToast("Fuel entry saved ✓", "success");
         setFuel((f) => ({ ...f, price_per_litre: "", quantity_litres: "", current_odometer: "", notes: "" }));
         if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl);
-        setSlipFile(null);
-        setSlipPreviewUrl(null);
+        if (stationPreviewUrl) URL.revokeObjectURL(stationPreviewUrl);
+        if (finishedPreviewUrl) URL.revokeObjectURL(finishedPreviewUrl);
+        setSlipFile(null); setSlipPreviewUrl(null);
+        setStationFile(null); setStationPreviewUrl(null);
+        setFinishedFile(null); setFinishedPreviewUrl(null);
         authFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
           .then((r) => r.json()).then((j) => setRecentFuel(j.data || []));
       } else {
         showToast(json.error || "Failed to save", "error");
       }
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Failed to upload photo", "error");
     } finally {
       setSubmittingFuel(false);
     }
@@ -638,37 +656,111 @@ export default function DailyEntryPage() {
                   style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const, marginTop: "12px" }} />
               </Field>
 
-              <div style={{ marginTop: "14px" }}>
-                <label style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>FUEL SLIP PHOTO *</label>
-                <label style={{
-                  display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px",
-                  border: `1.5px dashed ${slipPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
-                  borderRadius: RADII.SM, cursor: "pointer",
-                  backgroundColor: slipPreviewUrl ? "#F0FDF4" : "#FAFBFC",
-                }}>
-                  <span style={{ fontSize: "22px" }}>📷</span>
-                  <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>
-                    {slipFile ? `${slipFile.name} (${(slipFile.size / 1024).toFixed(0)} KB)` : "Tap to capture slip · auto-compressed to 72 DPI"}
-                  </span>
-                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const compressed = await compressImage(file);
-                      const previewUrl = URL.createObjectURL(compressed);
-                      if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl);
-                      setSlipFile(compressed);
-                      setSlipPreviewUrl(previewUrl);
-                      e.target.value = "";
-                    }} />
-                </label>
-                {slipPreviewUrl && (
-                  <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
-                    <img src={slipPreviewUrl} alt="slip preview" style={{ height: "64px", borderRadius: "6px", objectFit: "cover", border: `1px solid ${COLOURS.HAIRLINE}` }} />
-                    <button type="button" onClick={() => { if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl); setSlipFile(null); setSlipPreviewUrl(null); }}
-                      style={{ fontSize: "12px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Remove</button>
-                  </div>
-                )}
+              {/* ── Photo uploads ── */}
+              <div style={{ marginTop: "14px", display: "flex", flexDirection: "column" as const, gap: "12px" }}>
+
+                {/* 1 — Fuel slip */}
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>📄 FUEL SLIP PHOTO *</label>
+                  <label style={{
+                    display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px",
+                    border: `1.5px dashed ${slipPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+                    borderRadius: RADII.SM, cursor: "pointer",
+                    backgroundColor: slipPreviewUrl ? "#F0FDF4" : "#FAFBFC",
+                  }}>
+                    <span style={{ fontSize: "20px" }}>📷</span>
+                    <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>
+                      {slipFile ? `${slipFile.name} (${(slipFile.size / 1024).toFixed(0)} KB)` : "Tap to capture fuel slip"}
+                    </span>
+                    <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const compressed = await compressImage(file);
+                        const previewUrl = URL.createObjectURL(compressed);
+                        if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl);
+                        setSlipFile(compressed);
+                        setSlipPreviewUrl(previewUrl);
+                        e.target.value = "";
+                      }} />
+                  </label>
+                  {slipPreviewUrl && (
+                    <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
+                      <img src={slipPreviewUrl} alt="slip preview" style={{ height: "64px", borderRadius: "6px", objectFit: "cover", border: `1px solid ${COLOURS.HAIRLINE}` }} />
+                      <button type="button" onClick={() => { if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl); setSlipFile(null); setSlipPreviewUrl(null); }}
+                        style={{ fontSize: "12px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Remove</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2 — Pump/Filling station */}
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>⛽ PUMP FILLING STATION PHOTO</label>
+                  <label style={{
+                    display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px",
+                    border: `1.5px dashed ${stationPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+                    borderRadius: RADII.SM, cursor: "pointer",
+                    backgroundColor: stationPreviewUrl ? "#F0FDF4" : "#FAFBFC",
+                  }}>
+                    <span style={{ fontSize: "20px" }}>📷</span>
+                    <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>
+                      {stationFile ? `${stationFile.name} (${(stationFile.size / 1024).toFixed(0)} KB)` : "Tap to capture pump / station"}
+                    </span>
+                    <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const compressed = await compressImage(file);
+                        const previewUrl = URL.createObjectURL(compressed);
+                        if (stationPreviewUrl) URL.revokeObjectURL(stationPreviewUrl);
+                        setStationFile(compressed);
+                        setStationPreviewUrl(previewUrl);
+                        e.target.value = "";
+                      }} />
+                  </label>
+                  {stationPreviewUrl && (
+                    <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
+                      <img src={stationPreviewUrl} alt="station preview" style={{ height: "64px", borderRadius: "6px", objectFit: "cover", border: `1px solid ${COLOURS.HAIRLINE}` }} />
+                      <button type="button" onClick={() => { if (stationPreviewUrl) URL.revokeObjectURL(stationPreviewUrl); setStationFile(null); setStationPreviewUrl(null); }}
+                        style={{ fontSize: "12px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Remove</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3 — Pump finished / meter reading */}
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>✅ PUMP FINISHED PHOTO</label>
+                  <label style={{
+                    display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px",
+                    border: `1.5px dashed ${finishedPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+                    borderRadius: RADII.SM, cursor: "pointer",
+                    backgroundColor: finishedPreviewUrl ? "#F0FDF4" : "#FAFBFC",
+                  }}>
+                    <span style={{ fontSize: "20px" }}>📷</span>
+                    <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>
+                      {finishedFile ? `${finishedFile.name} (${(finishedFile.size / 1024).toFixed(0)} KB)` : "Tap to capture pump meter after filling"}
+                    </span>
+                    <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const compressed = await compressImage(file);
+                        const previewUrl = URL.createObjectURL(compressed);
+                        if (finishedPreviewUrl) URL.revokeObjectURL(finishedPreviewUrl);
+                        setFinishedFile(compressed);
+                        setFinishedPreviewUrl(previewUrl);
+                        e.target.value = "";
+                      }} />
+                  </label>
+                  {finishedPreviewUrl && (
+                    <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
+                      <img src={finishedPreviewUrl} alt="finished preview" style={{ height: "64px", borderRadius: "6px", objectFit: "cover", border: `1px solid ${COLOURS.HAIRLINE}` }} />
+                      <button type="button" onClick={() => { if (finishedPreviewUrl) URL.revokeObjectURL(finishedPreviewUrl); setFinishedFile(null); setFinishedPreviewUrl(null); }}
+                        style={{ fontSize: "12px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Remove</button>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
 
