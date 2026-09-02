@@ -285,17 +285,38 @@ export default function AdminDataPage() {
     date: string; price_per_litre: string; quantity_litres: string;
     previous_odometer: string; current_odometer: string; notes: string;
     slipFile: File | null; slipPreviewUrl: string | null;
+    stationFile: File | null; stationPreviewUrl: string | null;
+    finishedFile: File | null; finishedPreviewUrl: string | null;
   } | null>(null);
+  // ── Solar add-entry state ──────────────────────────────────────────
+  const [addingSolar, setAddingSolar] = useState<{
+    branch_id: string; branch_name: string; date: string;
+    production_kwh: string; status: string; notes: string;
+  } | null>(null);
+  const [savingSolarAdd, setSavingSolarAdd] = useState(false);
+  // ── Utility add-entry state ────────────────────────────────────────
+  const [addingUtility, setAddingUtility] = useState<{
+    location_id: string; location_name: string; meter_label: string;
+    utility_company: string; reading_date: string;
+    current_reading: string; previous_reading: string; bill_amount_pkr: string;
+  } | null>(null);
+  const [savingUtilityAdd, setSavingUtilityAdd] = useState(false);
+  // ── Maintenance add-entry state ────────────────────────────────────
+  const [addingMaint, setAddingMaint] = useState<{
+    date: string; work_type: string; description: string;
+    odometer_km: string; workshop: string; cost_pkr: string; next_service_due: string;
+  } | null>(null);
+  const [savingMaintAdd, setSavingMaintAdd] = useState(false);
   const [savingFuelAdd, setSavingFuelAdd] = useState(false);
 
-  // Canvas-based image compression: resize to max 480px (≈ 72 DPI slip), JPEG quality 0.65
+  // Canvas-based image compression: resize to max 1200px, JPEG quality 0.82
   function compressImage(file: File): Promise<File> {
     return new Promise((resolve) => {
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);
       img.onload = () => {
         URL.revokeObjectURL(objectUrl);
-        const MAX_PX = 480;
+        const MAX_PX = 1200;
         let { width, height } = img;
         if (width > height) {
           if (width > MAX_PX) { height = Math.round(height * MAX_PX / width); width = MAX_PX; }
@@ -309,7 +330,7 @@ export default function AdminDataPage() {
         canvas.toBlob((blob) => {
           if (!blob) { resolve(file); return; }
           resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
-        }, "image/jpeg", 0.65);
+        }, "image/jpeg", 0.82);
       };
       img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
       img.src = objectUrl;
@@ -2449,9 +2470,16 @@ export default function AdminDataPage() {
               ))}
               {vehicleDetailTab === "fuel" && (
                 <button
-                  onClick={() => setAddingFuel({ date: new Date().toISOString().slice(0, 10), price_per_litre: "", quantity_litres: "", previous_odometer: "", current_odometer: "", notes: "", slipFile: null, slipPreviewUrl: null })}
+                  onClick={() => setAddingFuel({ date: new Date().toISOString().slice(0, 10), price_per_litre: "", quantity_litres: "", previous_odometer: "", current_odometer: "", notes: "", slipFile: null, slipPreviewUrl: null, stationFile: null, stationPreviewUrl: null, finishedFile: null, finishedPreviewUrl: null })}
                   style={{ marginLeft: "auto", padding: "5px 13px", borderRadius: "20px", border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "white", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const }}>
                   ＋ Log Entry
+                </button>
+              )}
+              {vehicleDetailTab === "maintenance" && canManageLocations && (
+                <button
+                  onClick={() => setAddingMaint({ date: new Date().toISOString().slice(0, 10), work_type: "", description: "", odometer_km: "", workshop: "", cost_pkr: "", next_service_due: "" })}
+                  style={{ marginLeft: "auto", padding: "5px 13px", borderRadius: "20px", border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "white", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const }}>
+                  ＋ Log Maintenance
                 </button>
               )}
             </div>
@@ -2974,6 +3002,16 @@ export default function AdminDataPage() {
                   📥 Import
                 </button>
                 {canManageLocations && (
+                  <button
+                    onClick={() => {
+                      const first = solarBranches[0];
+                      setAddingSolar({ branch_id: first?.branch_id ?? "", branch_name: first?.branch_name ?? "", date: new Date().toISOString().slice(0, 10), production_kwh: "", status: "normal", notes: "" });
+                    }}
+                    style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.GREEN}`, backgroundColor: COLOURS.GREEN, color: "white", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    ☀️ Log Reading
+                  </button>
+                )}
+                {canManageLocations && (
                   <button onClick={openManageSolar}
                     style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "white", cursor: "pointer", whiteSpace: "nowrap" }}>
                     ⚙ Manage
@@ -2991,6 +3029,16 @@ export default function AdminDataPage() {
                 <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>
                   {utilityLocations.length} sites
                 </span>
+                {canManageLocations && (
+                  <button
+                    onClick={() => {
+                      const first = utilityLocations[0];
+                      setAddingUtility({ location_id: first?.location_id ?? "", location_name: first?.location_name ?? "", meter_label: "", utility_company: "", reading_date: new Date().toISOString().slice(0, 10), current_reading: "", previous_reading: "", bill_amount_pkr: "" });
+                    }}
+                    style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.GREEN}`, backgroundColor: COLOURS.GREEN, color: "white", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    ⚡ Log Bill
+                  </button>
+                )}
                 {canManageLocations && (
                   <button onClick={openManageUtility}
                     style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "white", cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -3091,7 +3139,7 @@ export default function AdminDataPage() {
       {addingFuel && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
-          onClick={() => { if (!savingFuelAdd) { if (addingFuel?.slipPreviewUrl) URL.revokeObjectURL(addingFuel.slipPreviewUrl); setAddingFuel(null); } }}
+          onClick={() => { if (!savingFuelAdd) { if (addingFuel?.slipPreviewUrl) URL.revokeObjectURL(addingFuel.slipPreviewUrl); if (addingFuel?.stationPreviewUrl) URL.revokeObjectURL(addingFuel.stationPreviewUrl); if (addingFuel?.finishedPreviewUrl) URL.revokeObjectURL(addingFuel.finishedPreviewUrl); setAddingFuel(null); } }}
         >
           <div
             style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "460px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}
@@ -3200,6 +3248,76 @@ export default function AdminDataPage() {
                   </button>
                 )}
               </div>
+
+              {/* Station photo */}
+              <div style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>⛽ Pump Filling Station Photo <span style={{ fontWeight: 400, textTransform: "none" as const }}>(optional)</span></span>
+                <label style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  padding: "10px 14px", borderRadius: "8px",
+                  border: `1.5px dashed ${addingFuel.stationPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+                  cursor: "pointer", backgroundColor: addingFuel.stationPreviewUrl ? "#F0FDF4" : "#FAFBFC",
+                }}>
+                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const raw = e.target.files?.[0];
+                      if (!raw) return;
+                      const compressed = await compressImage(raw);
+                      const previewUrl = URL.createObjectURL(compressed);
+                      setAddingFuel(f => f && ({ ...f, stationFile: compressed, stationPreviewUrl: previewUrl }));
+                    }} />
+                  <span style={{ fontSize: "20px" }}>📷</span>
+                  <div>
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{addingFuel.stationFile ? addingFuel.stationFile.name : "Tap to capture station photo"}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>{addingFuel.stationFile ? `${(addingFuel.stationFile.size / 1024).toFixed(0)} KB · compressed` : "Opens phone camera · auto-compressed"}</div>
+                  </div>
+                  {addingFuel.stationPreviewUrl && (
+                    <img src={addingFuel.stationPreviewUrl} alt="station preview"
+                      style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "6px", marginLeft: "auto", border: `1px solid ${COLOURS.HAIRLINE}` }} />
+                  )}
+                </label>
+                {addingFuel.stationFile && (
+                  <button onClick={() => { if (addingFuel.stationPreviewUrl) URL.revokeObjectURL(addingFuel.stationPreviewUrl); setAddingFuel(f => f && ({ ...f, stationFile: null, stationPreviewUrl: null })); }}
+                    style={{ marginTop: "6px", fontSize: "11px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    ✕ Remove photo
+                  </button>
+                )}
+              </div>
+
+              {/* Finished photo */}
+              <div style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>✅ Pump Finished Photo <span style={{ fontWeight: 400, textTransform: "none" as const }}>(optional)</span></span>
+                <label style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  padding: "10px 14px", borderRadius: "8px",
+                  border: `1.5px dashed ${addingFuel.finishedPreviewUrl ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+                  cursor: "pointer", backgroundColor: addingFuel.finishedPreviewUrl ? "#F0FDF4" : "#FAFBFC",
+                }}>
+                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const raw = e.target.files?.[0];
+                      if (!raw) return;
+                      const compressed = await compressImage(raw);
+                      const previewUrl = URL.createObjectURL(compressed);
+                      setAddingFuel(f => f && ({ ...f, finishedFile: compressed, finishedPreviewUrl: previewUrl }));
+                    }} />
+                  <span style={{ fontSize: "20px" }}>📷</span>
+                  <div>
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{addingFuel.finishedFile ? addingFuel.finishedFile.name : "Tap to capture finished photo"}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>{addingFuel.finishedFile ? `${(addingFuel.finishedFile.size / 1024).toFixed(0)} KB · compressed` : "Opens phone camera · auto-compressed"}</div>
+                  </div>
+                  {addingFuel.finishedPreviewUrl && (
+                    <img src={addingFuel.finishedPreviewUrl} alt="finished preview"
+                      style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "6px", marginLeft: "auto", border: `1px solid ${COLOURS.HAIRLINE}` }} />
+                  )}
+                </label>
+                {addingFuel.finishedFile && (
+                  <button onClick={() => { if (addingFuel.finishedPreviewUrl) URL.revokeObjectURL(addingFuel.finishedPreviewUrl); setAddingFuel(f => f && ({ ...f, finishedFile: null, finishedPreviewUrl: null })); }}
+                    style={{ marginTop: "6px", fontSize: "11px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    ✕ Remove photo
+                  </button>
+                )}
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
@@ -3209,21 +3327,20 @@ export default function AdminDataPage() {
                   if (!vehiclePanel) return;
                   setSavingFuelAdd(true);
                   try {
-                    let slip_image_url: string | null = null;
-
-                    // Upload image if provided — authFetch adds Bearer token, lets browser set multipart boundary
-                    if (addingFuel.slipFile) {
+                    const uploadPhoto = async (file: File | null): Promise<string | null> => {
+                      if (!file) return null;
                       const fd = new FormData();
-                      fd.append("file", addingFuel.slipFile);
-                      const uploadRes = await authFetch("/api/admin/fuel/upload", {
-                        method: "POST",
-                        body: fd,
-                      });
-                      if (uploadRes.ok) {
-                        const { url } = await uploadRes.json();
-                        slip_image_url = url;
-                      }
-                    }
+                      fd.append("file", file);
+                      const res = await authFetch("/api/admin/fuel/upload", { method: "POST", body: fd });
+                      if (!res.ok) return null;
+                      const { url } = await res.json();
+                      return url ?? null;
+                    };
+                    const [slip_image_url, station_image_url, finished_image_url] = await Promise.all([
+                      uploadPhoto(addingFuel.slipFile),
+                      uploadPhoto(addingFuel.stationFile),
+                      uploadPhoto(addingFuel.finishedFile),
+                    ]);
 
                     await authFetch("/api/admin/fuel", {
                       method: "POST",
@@ -3235,11 +3352,13 @@ export default function AdminDataPage() {
                         previous_odometer: addingFuel.previous_odometer || null,
                         current_odometer:  addingFuel.current_odometer  || null,
                         notes:             addingFuel.notes || null,
-                        slip_image_url,
+                        slip_image_url, station_image_url, finished_image_url,
                       }),
                     });
 
                     if (addingFuel.slipPreviewUrl) URL.revokeObjectURL(addingFuel.slipPreviewUrl);
+                    if (addingFuel.stationPreviewUrl) URL.revokeObjectURL(addingFuel.stationPreviewUrl);
+                    if (addingFuel.finishedPreviewUrl) URL.revokeObjectURL(addingFuel.finishedPreviewUrl);
                     vehicleDetailCache.current.clear();
                     loadVehicleDetail(vehiclePanel.vehicleId, vehicleDetailYear);
                     setAddingFuel(null);
@@ -3249,12 +3368,14 @@ export default function AdminDataPage() {
                 }}
                 style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: (savingFuelAdd || !addingFuel.date || !addingFuel.price_per_litre || !addingFuel.quantity_litres) ? "default" : "pointer", opacity: (savingFuelAdd || !addingFuel.date || !addingFuel.price_per_litre || !addingFuel.quantity_litres) ? 0.6 : 1 }}
               >
-                {savingFuelAdd ? (addingFuel.slipFile ? "Uploading slip…" : "Saving…") : "Save Entry"}
+                {savingFuelAdd ? "Saving…" : "Save Entry"}
               </button>
               <button
                 disabled={savingFuelAdd}
                 onClick={() => {
                   if (addingFuel.slipPreviewUrl) URL.revokeObjectURL(addingFuel.slipPreviewUrl);
+                  if (addingFuel.stationPreviewUrl) URL.revokeObjectURL(addingFuel.stationPreviewUrl);
+                  if (addingFuel.finishedPreviewUrl) URL.revokeObjectURL(addingFuel.finishedPreviewUrl);
                   setAddingFuel(null);
                 }}
                 style={{ padding: "9px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}
@@ -3436,6 +3557,332 @@ export default function AdminDataPage() {
           </div>
         </div>
       )}
+      {/* ── Solar log-reading modal ──────────────────────────────────────── */}
+      {addingSolar && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={() => { if (!savingSolarAdd) setAddingSolar(null); }}
+        >
+          <div
+            style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "420px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>☀️ Log Solar Reading</h3>
+            <p style={{ margin: "0 0 18px", fontSize: "12px", color: COLOURS.SLATE }}>Record monthly solar production for a branch</p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              {/* Branch */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Branch</span>
+                <select value={addingSolar.branch_id}
+                  onChange={e => {
+                    const b = solarBranches.find(x => x.branch_id === e.target.value);
+                    setAddingSolar(s => s && ({ ...s, branch_id: e.target.value, branch_name: b?.branch_name ?? "" }));
+                  }}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }}>
+                  {solarBranches.map(b => <option key={b.branch_id} value={b.branch_id}>{b.branch_name}</option>)}
+                </select>
+              </label>
+
+              {/* Date */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Reading Date</span>
+                <DateInput value={addingSolar.date} onChange={e => setAddingSolar(s => s && ({ ...s, date: e.target.value }))} />
+              </label>
+
+              {/* Production */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Production (kWh)</span>
+                <input type="number" step="0.1" min="0" placeholder="e.g. 320.5" value={addingSolar.production_kwh}
+                  onChange={e => setAddingSolar(s => s && ({ ...s, production_kwh: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Status */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Status</span>
+                <select value={addingSolar.status}
+                  onChange={e => setAddingSolar(s => s && ({ ...s, status: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }}>
+                  <option value="normal">Normal</option>
+                  <option value="fault">Fault</option>
+                  <option value="offline">Offline</option>
+                </select>
+              </label>
+
+              {/* Notes */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Notes (optional)</span>
+                <textarea value={addingSolar.notes}
+                  onChange={e => setAddingSolar(s => s && ({ ...s, notes: e.target.value }))}
+                  rows={2}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", resize: "vertical", boxSizing: "border-box" as const }} />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+              <button
+                disabled={savingSolarAdd || !addingSolar.branch_id || !addingSolar.date || !addingSolar.production_kwh}
+                onClick={async () => {
+                  setSavingSolarAdd(true);
+                  try {
+                    await authFetch("/api/admin/solar", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        branch_id:      addingSolar.branch_id,
+                        date:           addingSolar.date,
+                        production_kwh: parseFloat(addingSolar.production_kwh),
+                        status:         addingSolar.status,
+                        notes:          addingSolar.notes || null,
+                      }),
+                    });
+                    setAddingSolar(null);
+                    loadSolar();
+                  } finally {
+                    setSavingSolarAdd(false);
+                  }
+                }}
+                style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: (savingSolarAdd || !addingSolar.branch_id || !addingSolar.date || !addingSolar.production_kwh) ? "default" : "pointer", opacity: (savingSolarAdd || !addingSolar.branch_id || !addingSolar.date || !addingSolar.production_kwh) ? 0.6 : 1 }}
+              >
+                {savingSolarAdd ? "Saving…" : "Save Reading"}
+              </button>
+              <button
+                disabled={savingSolarAdd}
+                onClick={() => setAddingSolar(null)}
+                style={{ padding: "9px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Utility log-bill modal ────────────────────────────────────────── */}
+      {addingUtility && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={() => { if (!savingUtilityAdd) setAddingUtility(null); }}
+        >
+          <div
+            style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "460px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>⚡ Log Utility Bill</h3>
+            <p style={{ margin: "0 0 18px", fontSize: "12px", color: COLOURS.SLATE }}>Record a meter reading and bill amount for a site</p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              {/* Site */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Site</span>
+                <select value={addingUtility.location_id}
+                  onChange={e => {
+                    const loc = utilityLocations.find(x => x.location_id === e.target.value);
+                    setAddingUtility(u => u && ({ ...u, location_id: e.target.value, location_name: loc?.location_name ?? "" }));
+                  }}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }}>
+                  {utilityLocations.map(loc => <option key={loc.location_id} value={loc.location_id}>{loc.location_name}</option>)}
+                </select>
+              </label>
+
+              {/* Meter label */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Meter Label</span>
+                <input type="text" placeholder="e.g. Main" value={addingUtility.meter_label}
+                  onChange={e => setAddingUtility(u => u && ({ ...u, meter_label: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Utility company */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Utility Company</span>
+                <input type="text" placeholder="e.g. LESCO" value={addingUtility.utility_company}
+                  onChange={e => setAddingUtility(u => u && ({ ...u, utility_company: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Reading date */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Reading Date</span>
+                <DateInput value={addingUtility.reading_date} onChange={e => setAddingUtility(u => u && ({ ...u, reading_date: e.target.value }))} />
+              </label>
+
+              {/* Previous reading */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Prev Reading</span>
+                <input type="number" min="0" placeholder="units" value={addingUtility.previous_reading}
+                  onChange={e => setAddingUtility(u => u && ({ ...u, previous_reading: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Current reading */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Curr Reading</span>
+                <input type="number" min="0" placeholder="units" value={addingUtility.current_reading}
+                  onChange={e => setAddingUtility(u => u && ({ ...u, current_reading: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Bill amount */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Bill Amount (PKR)</span>
+                <input type="number" min="0" step="0.01" placeholder="e.g. 15000" value={addingUtility.bill_amount_pkr}
+                  onChange={e => setAddingUtility(u => u && ({ ...u, bill_amount_pkr: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+              <button
+                disabled={savingUtilityAdd || !addingUtility.location_id || !addingUtility.reading_date || !addingUtility.current_reading || !addingUtility.bill_amount_pkr}
+                onClick={async () => {
+                  setSavingUtilityAdd(true);
+                  try {
+                    await authFetch("/api/admin/utility", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        location_id:      addingUtility.location_id,
+                        meter_label:      addingUtility.meter_label || null,
+                        utility_company:  addingUtility.utility_company || null,
+                        reading_date:     addingUtility.reading_date,
+                        current_reading:  parseFloat(addingUtility.current_reading),
+                        previous_reading: addingUtility.previous_reading ? parseFloat(addingUtility.previous_reading) : null,
+                        bill_amount_pkr:  parseFloat(addingUtility.bill_amount_pkr),
+                      }),
+                    });
+                    setAddingUtility(null);
+                    loadUtility();
+                  } finally {
+                    setSavingUtilityAdd(false);
+                  }
+                }}
+                style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: (savingUtilityAdd || !addingUtility.location_id || !addingUtility.reading_date || !addingUtility.current_reading || !addingUtility.bill_amount_pkr) ? "default" : "pointer", opacity: (savingUtilityAdd || !addingUtility.location_id || !addingUtility.reading_date || !addingUtility.current_reading || !addingUtility.bill_amount_pkr) ? 0.6 : 1 }}
+              >
+                {savingUtilityAdd ? "Saving…" : "Save Bill"}
+              </button>
+              <button
+                disabled={savingUtilityAdd}
+                onClick={() => setAddingUtility(null)}
+                style={{ padding: "9px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Maintenance log modal ─────────────────────────────────────────── */}
+      {addingMaint && vehiclePanel && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={() => { if (!savingMaintAdd) setAddingMaint(null); }}
+        >
+          <div
+            style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "460px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>🔧 Log Maintenance</h3>
+            <p style={{ margin: "0 0 18px", fontSize: "12px", color: COLOURS.SLATE }}>{vehiclePanel.vehicleName} · {vehiclePanel.plateNumber}</p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              {/* Date */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Date</span>
+                <DateInput value={addingMaint.date} onChange={e => setAddingMaint(m => m && ({ ...m, date: e.target.value }))} />
+              </label>
+
+              {/* Work type */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Work Type</span>
+                <input type="text" placeholder="e.g. Oil Change, Tyre Replacement" value={addingMaint.work_type}
+                  onChange={e => setAddingMaint(m => m && ({ ...m, work_type: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Description */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Description (optional)</span>
+                <textarea value={addingMaint.description}
+                  onChange={e => setAddingMaint(m => m && ({ ...m, description: e.target.value }))}
+                  rows={2}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", resize: "vertical", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Odometer */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Odometer (km)</span>
+                <input type="number" min="0" placeholder="km" value={addingMaint.odometer_km}
+                  onChange={e => setAddingMaint(m => m && ({ ...m, odometer_km: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Cost */}
+              <label>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Cost (PKR)</span>
+                <input type="number" min="0" step="0.01" placeholder="e.g. 5000" value={addingMaint.cost_pkr}
+                  onChange={e => setAddingMaint(m => m && ({ ...m, cost_pkr: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Workshop */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Workshop (optional)</span>
+                <input type="text" placeholder="e.g. Al-Noor Auto Workshop" value={addingMaint.workshop}
+                  onChange={e => setAddingMaint(m => m && ({ ...m, workshop: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" as const }} />
+              </label>
+
+              {/* Next service due */}
+              <label style={{ gridColumn: "1/-1" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Next Service Due (optional)</span>
+                <DateInput value={addingMaint.next_service_due} onChange={e => setAddingMaint(m => m && ({ ...m, next_service_due: e.target.value }))} />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+              <button
+                disabled={savingMaintAdd || !addingMaint.date || !addingMaint.work_type}
+                onClick={async () => {
+                  if (!vehiclePanel) return;
+                  setSavingMaintAdd(true);
+                  try {
+                    await authFetch("/api/admin/maintenance", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        vehicle_id:       vehiclePanel.vehicleId,
+                        date:             addingMaint.date,
+                        work_type:        addingMaint.work_type,
+                        description:      addingMaint.description || null,
+                        odometer_km:      addingMaint.odometer_km ? parseInt(addingMaint.odometer_km) : null,
+                        workshop:         addingMaint.workshop || null,
+                        cost_pkr:         addingMaint.cost_pkr ? parseFloat(addingMaint.cost_pkr) : null,
+                        next_service_due: addingMaint.next_service_due || null,
+                      }),
+                    });
+                    vehicleDetailCache.current.clear();
+                    loadVehicleDetail(vehiclePanel.vehicleId, vehicleDetailYear);
+                    setAddingMaint(null);
+                  } finally {
+                    setSavingMaintAdd(false);
+                  }
+                }}
+                style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: (savingMaintAdd || !addingMaint.date || !addingMaint.work_type) ? "default" : "pointer", opacity: (savingMaintAdd || !addingMaint.date || !addingMaint.work_type) ? 0.6 : 1 }}
+              >
+                {savingMaintAdd ? "Saving…" : "Save Entry"}
+              </button>
+              <button
+                disabled={savingMaintAdd}
+                onClick={() => setAddingMaint(null)}
+                style={{ padding: "9px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </AuthWrapper>
   );
 }
