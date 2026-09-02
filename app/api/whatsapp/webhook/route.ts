@@ -58,12 +58,14 @@ const MONTHS: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4,
 // Parses a human due date: today, tomorrow, monday…sunday (next occurrence),
 // 5 sep / sep 5, 05/09 (DD/MM), 2026-09-05. Returns YYYY-MM-DD or null.
 function parseDueDate(raw: string): string | null {
-  // Strip time expressions like "10am", "3pm", "10:30am", "at 9" so
-  // "tomorrow 10am" and "Friday at 3pm" parse correctly.
+  // Strip time expressions so "tomorrow 10:30am", "Friday at 3 PM",
+  // "9:00 am Tuesday", "14:00 tomorrow" all parse correctly.
   const s = raw.trim().toLowerCase()
-    .replace(/\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/g, "")
-    .replace(/\bat\s+\d{1,2}\b/g, "")
+    .replace(/\b(?:at\s+)?\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi, "")  // HH:MM or HH:MM am/pm
+    .replace(/\b(?:at\s+)?\d{1,2}\s*(?:am|pm)\b/gi, "")           // H am/pm
+    .replace(/\bat\s+\d{1,2}\b/gi, "")                              // "at 9"
     .replace(/^(due|by|on|next)\s+/g, "")
+    .replace(/\s{2,}/g, " ")
     .trim();
   const today = pktToday();
   if (!s) return null;
