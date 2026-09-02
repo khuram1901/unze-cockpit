@@ -107,6 +107,15 @@ function LoginPageInner() {
       return;
     }
 
+    // Store whether the user wants to stay signed in (skips inactivity timeout).
+    try {
+      if (keepSignedIn) {
+        localStorage.setItem("unze:keep-signed-in", "true");
+      } else {
+        localStorage.removeItem("unze:keep-signed-in");
+      }
+    } catch { /* private mode */ }
+
     // Session is persisted via Supabase's own localStorage mechanism.
     // Supabase JS v2 re-reads from storage on every getSession() call, so
     // manually removing the key immediately breaks auth for the current tab.

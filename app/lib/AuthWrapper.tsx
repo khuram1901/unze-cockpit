@@ -74,6 +74,10 @@ export default function AuthWrapper({
   }
   const [idleCountdown, setIdleCountdown] = useState<number | null>(null);
   useEffect(() => {
+    // If the user ticked "Keep me signed in for 30 days", skip inactivity logout entirely.
+    const keepSignedIn = (() => { try { return localStorage.getItem("unze:keep-signed-in") === "true"; } catch { return false; } })();
+    if (keepSignedIn) return;
+
     try { localStorage.setItem(ACTIVITY_KEY, String(Date.now())); } catch { /* ignore */ }
     let last = 0;
     function activity() {
@@ -121,7 +125,8 @@ export default function AuthWrapper({
       // If the user has been idle past the logout limit, don't refresh —
       // the idle-logout tick is about to sign them out, and a refresh
       // response landing after signOut() would resurrect the session.
-      if (Date.now() - sharedLastActivity() >= IDLE_LIMIT_MS) return;
+      const keepSignedIn = (() => { try { return localStorage.getItem("unze:keep-signed-in") === "true"; } catch { return false; } })();
+      if (!keepSignedIn && Date.now() - sharedLastActivity() >= IDLE_LIMIT_MS) return;
       const session = await ensureFreshSession();
       if (!session) router.push("/login");
     }
@@ -369,6 +374,7 @@ export default function AuthWrapper({
   }, [notifOpen, searchOpen]);
 
   async function handleSignOut() {
+    try { localStorage.removeItem("unze:keep-signed-in"); } catch { /* ignore */ }
     await supabase.auth.signOut();
     router.push("/login");
   }
