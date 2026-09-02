@@ -46,12 +46,15 @@ export default function EmployeePicker({ value, onSelect, onClear, includeLeaver
   const [loading, setLoading] = useState(false);
   const [open, setOpen]       = useState(false);
 
+  // Fetch employees: immediately on open (initial list), or debounced when typing.
   useEffect(() => {
-    if (!search.trim()) { setResults([]); return; }
+    if (!open) return;
+    const delay = search.trim() ? 300 : 0;
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({ section: "people_list", search: search.trim(), limit: "8" });
+        const params = new URLSearchParams({ section: "people_list", limit: "8" });
+        if (search.trim()) params.set("search", search.trim());
         if (includeLeavers) params.set("active", "0");
         const res = await authFetch(`/api/hr/overview?${params.toString()}`);
         if (res.ok) {
@@ -59,9 +62,9 @@ export default function EmployeePicker({ value, onSelect, onClear, includeLeaver
           setResults(j.rows ?? []);
         }
       } finally { setLoading(false); }
-    }, 300);
+    }, delay);
     return () => clearTimeout(t);
-  }, [search, includeLeavers]);
+  }, [search, open, includeLeavers]);
 
   const baseInput: React.CSSProperties = {
     width: "100%", padding: "8px 12px", fontSize: "13px",
