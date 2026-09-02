@@ -134,21 +134,39 @@ const fullName = (m: MemberRow) =>
 
 // Resolve the assignee from the words after "@" / "task for". Tries the
 // longest name match first ("@Ali Nasir …" beats "@Ali …").
+// Matches on: full name, first name, last name, or any word in the full name.
 function resolveAssignee(text: string, members: MemberRow[]): { member?: MemberRow; rest?: string; ambiguous?: MemberRow[] } {
   const words = text.trim().split(/\s+/);
-  for (let take = Math.min(3, words.length); take >= 1; take--) {
-    const candidate = words.slice(0, take).join(" ").toLowerCase().replace(/[:,]+$/, "");
-    if (!candidate) continue;
+  for (let take = Math.min(4, words.length); take >= 1; take--) {
+    const candidate = words.slice(0, take).join(" ").toLowerCase().replace(/[:,]+$/, "").trim();
+    if (!candidate || candidate.length < 2) continue;
     const matches = members.filter((m) => {
-      const fn = (m.first_name || "").toLowerCase();
+      const fn = (m.first_name || "").trim().toLowerCase();
+      const ln = (m.last_name || "").trim().toLowerCase();
       const full = fullName(m).toLowerCase();
-      return full === candidate || fn === candidate || full.startsWith(candidate + " ");
+      return (
+        full === candidate ||
+        fn === candidate ||
+        ln === candidate ||
+        full.startsWith(candidate + " ") ||
+        full.includes(" " + candidate) ||
+        fn.startsWith(candidate) ||
+        ln.startsWith(candidate)
+      );
     });
     if (matches.length === 1) {
       const rest = words.slice(take).join(" ").replace(/^[:\-–,]\s*/, "").trim();
       return { member: matches[0], rest };
     }
-    if (matches.length > 1 && take === 1) return { ambiguous: matches };
+    if (matches.length > 1) {
+      // If all matches share the same person (duplicate rows), pick first
+      const ids = [...new Set(matches.map((m) => m.id))];
+      if (ids.length === 1) {
+        const rest = words.slice(take).join(" ").replace(/^[:\-–,]\s*/, "").trim();
+        return { member: matches[0], rest };
+      }
+      if (take === 1) return { ambiguous: matches };
+    }
   }
   return {};
 }
