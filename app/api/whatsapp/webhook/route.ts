@@ -102,12 +102,23 @@ function parseDueDate(raw: string): string | null {
   return null;
 }
 
-// Splits "…, due Friday" / "… by 5 Sep" off the end of a description.
+// Splits "…, due Friday" / "… by 5 Sep" off the description.
+// Searches the whole message (not just the end) so "by tomorrow. Waleed has my cash"
+// and "pay Ali tomorrow to confirm" both resolve correctly — takes the LAST match.
 function extractDue(text: string): { description: string; due: string | null } {
-  const m = text.match(/[,;\s]\b(?:due|by)\s+([a-z0-9\s\/\-]{2,30})\s*$/i);
-  if (m) {
-    const due = parseDueDate(m[1]);
-    if (due) return { description: text.slice(0, m.index).replace(/[,;\s]+$/, "").trim(), due };
+  const pattern = /[,;\s]\b(?:due|by)\s+([a-z0-9\/\-]+(?:\s+[a-z0-9\/\-]+){0,2})\b/gi;
+  let lastMatch: RegExpExecArray | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(text)) !== null) lastMatch = m;
+  if (lastMatch) {
+    const due = parseDueDate(lastMatch[1]);
+    if (due) {
+      // Remove the "by/due <date>" fragment from the description
+      const before = text.slice(0, lastMatch.index).replace(/[,;\s]+$/, "").trim();
+      const after = text.slice(lastMatch.index + lastMatch[0].length).replace(/^[.,;\s]+/, "").trim();
+      const description = after ? `${before}${after ? " — " + after : ""}` : before;
+      return { description: description.trim(), due };
+    }
   }
   return { description: text.trim(), due: null };
 }
