@@ -124,7 +124,7 @@ function extractDue(text: string): { description: string; due: string | null } {
     if (due) {
       const before = text.slice(0, lastMatch.index).replace(/[,;\s]+$/, "").trim();
       const after = text.slice(lastMatch.index + lastMatch[0].length).replace(/^[.,;\s]+/, "").trim();
-      const description = after ? \`\${before} — \${after}\` : before;
+      const description = after ? (before + " — " + after) : before;
       return { description: description.trim(), due };
     }
   }
