@@ -58,7 +58,13 @@ const MONTHS: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4,
 // Parses a human due date: today, tomorrow, monday…sunday (next occurrence),
 // 5 sep / sep 5, 05/09 (DD/MM), 2026-09-05. Returns YYYY-MM-DD or null.
 function parseDueDate(raw: string): string | null {
-  const s = raw.trim().toLowerCase().replace(/^(due|by|on|next)\s+/g, "").trim();
+  // Strip time expressions like "10am", "3pm", "10:30am", "at 9" so
+  // "tomorrow 10am" and "Friday at 3pm" parse correctly.
+  const s = raw.trim().toLowerCase()
+    .replace(/\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/g, "")
+    .replace(/\bat\s+\d{1,2}\b/g, "")
+    .replace(/^(due|by|on|next)\s+/g, "")
+    .trim();
   const today = pktToday();
   if (!s) return null;
   if (s === "today" || s === "eod") return iso(today);
@@ -102,22 +108,39 @@ function parseDueDate(raw: string): string | null {
   return null;
 }
 
-// Splits "…, due Friday" / "… by 5 Sep" off the description.
-// Searches the whole message (not just the end) so "by tomorrow. Waleed has my cash"
-// and "pay Ali tomorrow to confirm" both resolve correctly — takes the LAST match.
+// Splits "…, due Friday" / "… by 5 Sep" / "… tomorrow …" off the description.
+// 1. Looks for explicit "by/due <date>" anywhere in the message (takes last match).
+// 2. Falls back to bare date keywords (today, tomorrow, weekday names, DD/MM).
 function extractDue(text: string): { description: string; due: string | null } {
-  const pattern = /[,;\s]\b(?:due|by)\s+([a-z0-9\/\-]+(?:\s+[a-z0-9\/\-]+){0,2})\b/gi;
+  // Pass 1: explicit "by/due <date>"
+  const pattern = /[,;\s]\b(?:due|by)\s+([a-z0-9\/\-]+(?:\s+[a-z0-9\/\-]+){0,3})\b/gi;
   let lastMatch: RegExpExecArray | null = null;
   let m: RegExpExecArray | null;
   while ((m = pattern.exec(text)) !== null) lastMatch = m;
   if (lastMatch) {
     const due = parseDueDate(lastMatch[1]);
     if (due) {
-      // Remove the "by/due <date>" fragment from the description
       const before = text.slice(0, lastMatch.index).replace(/[,;\s]+$/, "").trim();
       const after = text.slice(lastMatch.index + lastMatch[0].length).replace(/^[.,;\s]+/, "").trim();
-      const description = after ? `${before}${after ? " — " + after : ""}` : before;
+      const description = after ? \`\${before} — \${after}\` : before;
       return { description: description.trim(), due };
+    }
+  }
+  // Pass 2: bare date keywords — today, tomorrow, tmrw, weekday names, DD/MM
+  const bare = /\b(today|eod|tomorrow|tmrw|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|\d{1,2}[\/-]\d{1,2})\b/gi;
+  let bareMatch: RegExpExecArray | null = null;
+  while ((m = bare.exec(text)) !== null) bareMatch = m;
+  if (bareMatch) {
+    const due = parseDueDate(bareMatch[1]);
+    if (due) {
+      // Strip the matched date word and any time suffix immediately after it
+      const cleaned = text
+        .slice(0, bareMatch.index)
+        .concat(text.slice(bareMatch.index + bareMatch[0].length))
+        .replace(/\s*\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      return { description: cleaned, due };
     }
   }
   return { description: text.trim(), due: null };
