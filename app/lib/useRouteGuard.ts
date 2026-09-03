@@ -10,6 +10,7 @@ import {
   canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry, canAccessBanking,
   canViewPADashboard, canViewInvestments,
   canViewStock, canViewGuarantees, canViewIfplPnl, canViewRestaurantsPnl, canViewGroupHR, canAccessFolderit,
+  canViewTaxAccounts,
   isPrivileged, isAdminTier, isMainAdmin,
   type UserCtx, type PermOverrides,
 } from "./permissions";
@@ -18,7 +19,8 @@ type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
   | "audit_log" | "import_export" | "daily_entry"
   | "pa_dashboard" | "investments" | "system_backups" | "stock" | "guarantees"
-  | "ifpl_pnl" | "restaurants_pnl" | "admin_ops" | "admin_entry" | "folderit" | "banking" | "group_hr";
+  | "ifpl_pnl" | "restaurants_pnl" | "admin_ops" | "admin_entry" | "folderit" | "banking" | "group_hr"
+  | "dept_tax_accounts";
 
 const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   finance: canViewFinance,
@@ -44,6 +46,7 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   group_hr: canViewGroupHR,
   folderit: canAccessFolderit,
   banking: canAccessBanking,
+  dept_tax_accounts: canViewTaxAccounts,
 };
 
 // ── In-memory cache ────────────────────────────────────────────────────────

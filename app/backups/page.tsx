@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
-import { authFetch, supabase } from "../lib/supabase";
+import { authFetch } from "../lib/supabase";
+import { useRequireCapability } from "../lib/useRouteGuard";
 import { COLOURS, RADII, PageHeader, useToast, primaryButtonStyle, inputStyle } from "../lib/SharedUI";
 import { formatDateUK, formatDateTimeUK } from "../lib/dateUtils";
 import { COMPANIES } from "../lib/constants";
-
-const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 
 type Backup = { name: string; sizeKB: number | null; createdAt: string; driveLink: string | null };
 type ArchivedDoc = {
@@ -26,9 +25,7 @@ function companyName(id: string) {
 export default function BackupsPage() {
   const router = useRouter();
   const { show: showToast, element: toastElement } = useToast();
-
-  const [checking, setChecking] = useState(true);
-  const [authorised, setAuthorised] = useState(false);
+  const { checking } = useRequireCapability("system_backups");
 
   // ── State ──────────────────────────────────────────────────────────
   const [backups, setBackups] = useState<Backup[]>([]);
@@ -46,25 +43,13 @@ export default function BackupsPage() {
   const [restoreConfirmText, setRestoreConfirmText] = useState("");
   const [restoring, setRestoring] = useState(false);
 
-  // ── Auth check ─────────────────────────────────────────────────────
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user || !ADMIN_EMAILS.includes((user.email || "").toLowerCase())) {
-        router.replace("/");
-        return;
-      }
-      setAuthorised(true);
-      setChecking(false);
-    });
-  }, [router]);
-
   // ── Load on mount ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!authorised) return;
+    if (checking) return;
     loadBackups();
     loadDocs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authorised]);
+  }, [checking]);
 
   // Reload docs when filters change
   const loadDocs = useCallback(async () => {
@@ -79,7 +64,7 @@ export default function BackupsPage() {
   }, [docTypeFilter, companyFilter]);
 
   useEffect(() => {
-    if (!authorised) return;
+    if (checking) return;
     loadDocs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docTypeFilter, companyFilter]);
@@ -172,7 +157,7 @@ export default function BackupsPage() {
     );
   }
 
-  if (!authorised) return null;
+  if (checking) return null;
 
   const skeletonRow = (
     <div style={{ height: "44px", borderRadius: RADII.SM, backgroundColor: COLOURS.HAIRLINE, marginBottom: "8px", animation: "pulse 1.5s ease-in-out infinite" }} />

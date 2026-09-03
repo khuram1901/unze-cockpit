@@ -190,7 +190,7 @@ export default function AccountsTaxDashboard() {
   const router = useRouter();
   const isMobile = useMobile();
   const toast = useToast();
-  const { checking } = useRequireCapability("can_view_dept_tax_accounts");
+  const { checking } = useRequireCapability("dept_tax_accounts");
   if (checking) return null;
 
   const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
