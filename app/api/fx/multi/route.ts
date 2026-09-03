@@ -1,3 +1,9 @@
+// PUBLIC ROUTE — intentionally unauthenticated.
+// Returns USD/GBP/CNY/AED → PKR cross-rates from Open Exchange Rates
+// (no API key, no user data). Most callers use authFetch; home/page.tsx
+// and welcome/page.tsx call it via authFetch already. The route itself
+// exposes no sensitive information and carries no per-user state.
+
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";

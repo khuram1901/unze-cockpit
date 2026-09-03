@@ -1,3 +1,10 @@
+// PUBLIC ROUTE — intentionally unauthenticated.
+// This is the forgot-password endpoint: the caller has no session by
+// definition (they can't log in). Identity is not verified here; a
+// one-time recovery link is emailed to the address on record. Rate
+// limiting (3 per 10 min per IP) is the primary abuse control.
+// Do NOT add requireAuth() — it would break the password-reset flow.
+
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { sendNotificationEmail } from "../../../lib/send-email";

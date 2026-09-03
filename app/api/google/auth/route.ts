@@ -1,3 +1,16 @@
+// PUBLIC ROUTE — intentionally unauthenticated at the HTTP level.
+// This endpoint initiates the Google OAuth 2.0 consent flow by
+// redirecting the browser to accounts.google.com. It is linked from
+// the authenticated Profile page (profile/page.tsx) but the browser
+// navigation cannot carry an Authorization header, so requireAuth()
+// cannot be used here without middleware cookie-based session support.
+//
+// Security: the callback (google/callback) enforces that only
+// GOOGLE_INTEGRATION_EMAIL may complete the flow — any other account
+// is rejected before a token is stored. An unauthenticated request
+// here can only redirect the browser to Google's consent screen; it
+// cannot store credentials or affect application state.
+
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {

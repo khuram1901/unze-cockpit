@@ -1,3 +1,9 @@
+// PUBLIC ROUTE — OAuth callback, must be reachable by Google.
+// Google redirects the browser here after the user completes consent.
+// requireAuth() cannot be added — no session exists at redirect time.
+// Security is enforced by validating the returned tokens against the
+// expected account (same pattern as google/callback).
+
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { encrypt } from "../../../lib/crypto";

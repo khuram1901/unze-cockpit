@@ -291,7 +291,7 @@ export default function ProfilePage() {
     setMessage("");
 
     try {
-      const res = await fetch("/api/auth/change-password", {
+      const res = await authFetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, currentPassword: currentPw, newPassword: newPw }),

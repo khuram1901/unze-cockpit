@@ -1,3 +1,9 @@
+// PUBLIC ROUTE — intentionally unauthenticated at the HTTP level.
+// Initiates the Google OAuth flow for the notifications Gmail account.
+// Admin-only: visited manually by the system administrator, not linked
+// from any user-facing page. Same security model as google/auth:
+// the callback rejects any account other than the designated one.
+
 export async function GET() {
   const scopes = [
     "https://www.googleapis.com/auth/gmail.send",

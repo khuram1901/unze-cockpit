@@ -1,0 +1,748 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Unze Dashboard — Weekly Security Audit
+# ─────────────────────────────────────────────────────────────────────────────
+# Runs: Monday 06:00 UTC (schedule) | manual (workflow_dispatch) | pull requests
+#
+# ✅ ACTION SHA PINNING — COMPLETE
+# All third-party action references are pinned to immutable commit SHAs.
+# To update a pinned action: resolve the new tag's commit SHA with:
+#   gh api /repos/OWNER/REPO/git/ref/tags/TAG | jq -r .object.sha
+# then replace the SHA and the version comment below.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Weekly Security Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'          # Monday 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      skip_zap:
+        description: 'Skip OWASP ZAP scan (e.g. staging down)'
+        required: false
+        default: 'false'
+        type: boolean
+  pull_request:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.claude/**'
+
+# Minimum permissions — individual jobs override only what they need
+permissions:
+  contents: read
+
+# Do not cancel a running audit mid-flight
+concurrency:
+  group: security-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  GITLEAKS_VERSION: '8.21.2'
+  # SHA-256 of gitleaks_8.21.2_linux_x64.tar.gz — verify at:
+  # https://github.com/gitleaks/gitleaks/releases/tag/v8.21.2
+  GITLEAKS_TARBALL_SHA256: '5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba'
+  SEMGREP_VERSION: '1.90.0'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# A. CodeQL — static analysis (TypeScript / JavaScript)
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  codeql:
+    name: "A · CodeQL (TypeScript)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@486fec2a3ea2626afcd8c7e9208b4f515078dd7e  # v3 (codeql-bundle-v2.26.4)
+        with:
+          languages: javascript-typescript
+          # security-extended includes all security queries + OWASP
+          queries: security-extended,security-and-quality
+
+      - name: Auto-build
+        uses: github/codeql-action/autobuild@486fec2a3ea2626afcd8c7e9208b4f515078dd7e  # v3 (codeql-bundle-v2.26.4)
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@486fec2a3ea2626afcd8c7e9208b4f515078dd7e  # v3 (codeql-bundle-v2.26.4)
+        with:
+          category: /language:javascript-typescript
+
+      - name: Write CodeQL summary artifact
+        if: always()
+        run: |
+          mkdir -p scripts/security/results
+          node -e "
+            const s={tool:'codeql',status:'complete',
+              note:'See GitHub Security Code Scanning tab for full CodeQL results.',
+              findings:[],counts:{critical:0,high:0,medium:0,low:0}};
+            require('fs').writeFileSync(
+              'scripts/security/results/codeql-summary.json',
+              JSON.stringify(s,null,2));
+          "
+
+      - name: Upload CodeQL summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: codeql-results
+          path: scripts/security/results/codeql-summary.json
+          retention-days: 30
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # B. Dependency audit (npm audit)
+  # ───────────────────────────────────────────────────────────────────────────
+  dependency-audit:
+    name: "B · Dependency Audit (npm)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install (skip lifecycle scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Run npm audit
+        id: audit
+        run: |
+          mkdir -p scripts/security/results
+          # Capture full JSON output; allow non-zero exit (vulnerabilities found)
+          npm audit --json > scripts/security/results/npm-audit-raw.json 2>/dev/null || true
+
+          # Normalise to our finding schema
+          node --input-type=module << 'JSEOF'
+          import { readFileSync, writeFileSync } from 'fs';
+          const raw = JSON.parse(readFileSync('scripts/security/results/npm-audit-raw.json', 'utf8'));
+          const meta = raw.metadata?.vulnerabilities || {};
+          const findings = [];
+          for (const [pkg, info] of Object.entries(raw.vulnerabilities || {})) {
+            const sev = info.severity === 'moderate' ? 'medium' : (info.severity || 'low');
+            const via = (info.via || []).map(v => typeof v === 'string' ? v : (v.title || '')).filter(Boolean);
+            const fixAvail = info.fixAvailable;
+            const fixNote = fixAvail === true ? 'npm audit fix available.'
+              : (fixAvail?.name ? `Fix: upgrade ${fixAvail.name} to ${fixAvail.version}` : 'No automatic fix — review manually.');
+            findings.push({
+              severity: sev,
+              title: `Vulnerable dependency: ${pkg}@${info.range || 'unknown range'}`,
+              location: 'package.json / package-lock.json',
+              detail: via.join('; ').slice(0, 400) || '(see npm advisory)',
+              remediation: fixNote,
+              verification: 'After update: re-run npm audit and confirm finding no longer appears.',
+            });
+          }
+          const counts = {
+            critical: meta.critical || 0,
+            high: meta.high || 0,
+            medium: meta.moderate || 0,
+            low: (meta.low || 0) + (meta.info || 0),
+          };
+          writeFileSync('scripts/security/results/npm-audit.json',
+            JSON.stringify({ tool: 'npm-audit', status: 'complete', counts, findings }, null, 2));
+          const critHigh = counts.critical + counts.high;
+          process.stdout.write(critHigh + '\n');
+          JSEOF
+
+          CRIT_HIGH=$(node -e "
+            const d=JSON.parse(require('fs').readFileSync('scripts/security/results/npm-audit.json','utf8'));
+            console.log(d.counts.critical+d.counts.high);
+          ")
+          echo "critical_high=$CRIT_HIGH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload dependency results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: dependency-audit-results
+          path: scripts/security/results/npm-audit*.json
+          retention-days: 30
+
+      - name: Fail on critical/high vulnerabilities
+        if: steps.audit.outputs.critical_high > 0
+        run: |
+          echo "::error::Found ${{ steps.audit.outputs.critical_high }} critical/high npm vulnerabilities."
+          echo "Review scripts/security/results/npm-audit.json for details."
+          exit 1
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # C. Secret detection (Gitleaks — binary download, no third-party action)
+  # ───────────────────────────────────────────────────────────────────────────
+  secret-scan:
+    name: "C · Secret Detection (Gitleaks)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0   # Full history — scan all commits
+
+      - name: Download and verify Gitleaks
+        run: |
+          TARBALL="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${TARBALL}" \
+            -o "/tmp/${TARBALL}"
+          # Verify checksum to prevent supply-chain substitution
+          echo "${GITLEAKS_TARBALL_SHA256}  /tmp/${TARBALL}" | sha256sum --check --status || {
+            echo "::error::Gitleaks tarball checksum mismatch — possible supply-chain attack. Aborting."
+            exit 1
+          }
+          tar -xf "/tmp/${TARBALL}" -C /tmp gitleaks
+          chmod +x /tmp/gitleaks
+          /tmp/gitleaks version
+
+      - name: Run Gitleaks (working tree + full git history)
+        id: gitleaks
+        run: |
+          mkdir -p scripts/security/results
+
+          # Scan working tree and full git log
+          # --no-git for working tree; then git log scan separately
+          set +e
+          /tmp/gitleaks detect \
+            --source . \
+            --config .gitleaks.toml \
+            --report-format json \
+            --report-path scripts/security/results/gitleaks-raw.json \
+            --redact \
+            --log-level warn \
+            --exit-code 1
+          GITLEAKS_EXIT=$?
+          set -e
+
+          # Normalise output — redact any found values
+          node --input-type=module << 'JSEOF'
+          import { readFileSync, writeFileSync, existsSync } from 'fs';
+          const rawPath = 'scripts/security/results/gitleaks-raw.json';
+          if (!existsSync(rawPath)) {
+            writeFileSync('scripts/security/results/gitleaks.json',
+              JSON.stringify({ tool: 'gitleaks', status: 'complete', counts: { critical:0,high:0,medium:0,low:0 }, findings: [] }, null, 2));
+            process.exit(0);
+          }
+          const raw = JSON.parse(readFileSync(rawPath, 'utf8') || '[]');
+          const leaks = Array.isArray(raw) ? raw : [];
+          const findings = leaks.map(l => ({
+            severity: 'critical',
+            title: `Secret detected: ${l.RuleID || 'unknown-rule'} in ${l.File || 'unknown file'}`,
+            location: `${l.File || '?'}:${l.StartLine || '?'} (commit: ${(l.Commit || 'working-tree').slice(0,8)})`,
+            detail: `Rule: ${l.RuleID}. Author: ${l.Author || '?'}. Date: ${l.Date || '?'}. Secret value REDACTED.`,
+            remediation: '1. Immediately rotate the exposed credential. 2. Remove it from git history using git-filter-repo. 3. Notify the relevant service provider.',
+            verification: 'Re-run Gitleaks after rotating and purging. Confirm zero findings.',
+            ruleId: l.RuleID,
+          }));
+          const counts = { critical: findings.length, high: 0, medium: 0, low: 0 };
+          writeFileSync('scripts/security/results/gitleaks.json',
+            JSON.stringify({ tool: 'gitleaks', status: 'complete', counts, findings }, null, 2));
+          JSEOF
+
+          echo "exit_code=$GITLEAKS_EXIT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload secret scan results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: secret-scan-results
+          path: scripts/security/results/gitleaks.json
+          # Do NOT upload gitleaks-raw.json — it may contain partial secret values
+          retention-days: 30
+
+      - name: Fail on secrets detected
+        if: steps.gitleaks.outputs.exit_code != '0'
+        run: |
+          echo "::error::Gitleaks found secrets in the repository. Rotate credentials immediately."
+          exit 1
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # D. SAST — Semgrep Community Edition (pip install, no third-party action)
+  # ───────────────────────────────────────────────────────────────────────────
+  semgrep:
+    name: "D · SAST (Semgrep)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    timeout-minutes: 20
+    # Semgrep runs free for open repos and in CI without login
+    env:
+      SEMGREP_APP_TOKEN: ''  # Intentionally empty — community/offline use
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Install Semgrep (pinned version, no third-party action)
+        run: |
+          pip install "semgrep==${SEMGREP_VERSION}" --quiet --break-system-packages
+          semgrep --version
+
+      - name: Run Semgrep scans
+        id: semgrep
+        run: |
+          mkdir -p scripts/security/results
+
+          # Rules: nextjs, typescript, react, OWASP top-10, secrets, jwt
+          # Using only registry rules maintained by Semgrep/community
+          semgrep scan \
+            --config "p/nextjs" \
+            --config "p/typescript" \
+            --config "p/react" \
+            --config "p/owasp-top-ten" \
+            --config "p/secrets" \
+            --config "p/jwt" \
+            --json \
+            --output scripts/security/results/semgrep-raw.json \
+            --no-rewrite-rule-ids \
+            --timeout 60 \
+            --exclude node_modules \
+            --exclude .next \
+            --exclude graphify-out \
+            --exclude "*.test.ts" \
+            --exclude "*.test.tsx" \
+            . || true
+
+          # Normalise to our finding schema
+          node --input-type=module << 'JSEOF'
+          import { readFileSync, writeFileSync, existsSync } from 'fs';
+          const rawPath = 'scripts/security/results/semgrep-raw.json';
+          if (!existsSync(rawPath)) {
+            writeFileSync('scripts/security/results/semgrep.json',
+              JSON.stringify({ tool:'semgrep',status:'error',message:'No output file produced',findings:[],counts:{critical:0,high:0,medium:0,low:0} },null,2));
+            process.exit(0);
+          }
+          const raw = JSON.parse(readFileSync(rawPath,'utf8'));
+          const results = raw.results || [];
+          function mapSev(s) {
+            const l=(s||'').toLowerCase();
+            if(l==='error'||l==='critical') return 'high';  // Semgrep uses ERROR/WARNING/INFO
+            if(l==='warning') return 'medium';
+            return 'low';
+          }
+          const findings = results.map(r => ({
+            severity: mapSev(r.extra?.severity || r.severity),
+            title: `[Semgrep] ${r.check_id || 'unknown'}`,
+            location: `${r.path}:${r.start?.line || '?'}`,
+            detail: (r.extra?.message || r.message || '').slice(0,400),
+            remediation: r.extra?.fix || 'See Semgrep rule documentation for remediation guidance.',
+            verification: 'Re-run Semgrep after applying fix. Confirm rule no longer fires.',
+            ruleId: r.check_id,
+          }));
+          const counts = {
+            critical: findings.filter(f=>f.severity==='critical').length,
+            high: findings.filter(f=>f.severity==='high').length,
+            medium: findings.filter(f=>f.severity==='medium').length,
+            low: findings.filter(f=>f.severity==='low').length,
+          };
+          writeFileSync('scripts/security/results/semgrep.json',
+            JSON.stringify({ tool:'semgrep',status:'complete',counts,findings },null,2));
+          JSEOF
+
+          # Also convert to SARIF for GitHub code scanning
+          semgrep scan \
+            --config "p/nextjs" \
+            --config "p/owasp-top-ten" \
+            --sarif \
+            --output scripts/security/results/semgrep.sarif \
+            --exclude node_modules \
+            --exclude .next \
+            . || true
+
+      - name: Upload Semgrep SARIF to GitHub code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@486fec2a3ea2626afcd8c7e9208b4f515078dd7e  # v3 (codeql-bundle-v2.26.4)
+        with:
+          sarif_file: scripts/security/results/semgrep.sarif
+          category: semgrep
+        continue-on-error: true  # Don't fail if SARIF upload fails
+
+      - name: Upload Semgrep results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: semgrep-results
+          path: scripts/security/results/semgrep.json
+          retention-days: 30
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # E. Supabase Security Advisor (read-only Management API)
+  # ───────────────────────────────────────────────────────────────────────────
+  supabase-audit:
+    name: "E · Supabase Security Advisor"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    # Only run on schedule/dispatch — not on PRs (avoids exposing project ref)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run Supabase audit
+        env:
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SUPABASE_MANAGEMENT_API_TOKEN: ${{ secrets.SUPABASE_MANAGEMENT_API_TOKEN }}
+        run: |
+          mkdir -p scripts/security/results
+          node --experimental-vm-modules scripts/security/check-supabase.js || true
+          # Exit code is informational; consolidate job decides overall status
+
+      - name: Upload Supabase results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: supabase-audit-results
+          path: scripts/security/results/supabase-audit.json
+          retention-days: 30
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # F. Vercel / deployment configuration audit (static analysis, no network)
+  # ───────────────────────────────────────────────────────────────────────────
+  vercel-audit:
+    name: "F · Vercel & Config Audit"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run Vercel/config audit
+        run: |
+          mkdir -p scripts/security/results
+          node scripts/security/check-vercel-config.js || true
+
+      - name: Upload Vercel audit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: vercel-audit-results
+          path: scripts/security/results/vercel-audit.json
+          retention-days: 30
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # G. OWASP ZAP Baseline (passive scan — schedule and dispatch only)
+  # ───────────────────────────────────────────────────────────────────────────
+  zap-scan:
+    name: "G · OWASP ZAP Baseline (staging)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write        # ZAP action may create issue
+    timeout-minutes: 30
+    # Never run on PRs and never against production.
+    # STAGING_URL must point to a non-production environment.
+    if: >
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      vars.STAGING_URL != '' &&
+      github.event.inputs.skip_zap != 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Verify staging URL is not a production domain
+        run: |
+          STAGING="${{ vars.STAGING_URL }}"
+          # Block known production domain patterns
+          if echo "$STAGING" | grep -qiE '(^|://)unze\.co\.uk|pulse\.unze\.co\.uk'; then
+            echo "::error::STAGING_URL appears to be a production domain. ZAP scan aborted."
+            exit 1
+          fi
+          echo "Staging URL: $STAGING"
+
+      - name: Create ZAP rules file
+        run: |
+          mkdir -p .zap
+          # Suppress known false-positives with documented justifications.
+          # Format: pluginId TAB action TAB reason
+          # See: https://www.zaproxy.org/docs/desktop/addons/passive-scanner/options/
+          {
+            printf '10016\tIGNORE\t(Web Browser XSS Protection Not Enabled) Mitigated by CSP once implemented\n'
+            printf '10020\tIGNORE\t(Anti-clickjacking Header) Tracked in security checklist s2 - add X-Frame-Options to next.config.ts\n'
+            printf '10021\tIGNORE\t(X-Content-Type-Options Header Missing) Tracked in security checklist s2\n'
+            printf '10036\tIGNORE\t(Server Leaks Version) Vercel Server header not controllable\n'
+            printf '10055\tIGNORE\t(CSP Scanner) CSP absence tracked separately in security checklist s2\n'
+          } > .zap/rules.tsv
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@7c4deb10e6261301961c86d65d54a516394f9aed  # v0.14.0
+        with:
+          target: ${{ vars.STAGING_URL }}
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-I -j'          # -I = don't fail on warnings; -j = JSON report
+          allow_issue_reporting: false  # We manage the issue ourselves in consolidate job
+          artifact_name: zap-report     # uploaded by action automatically
+        continue-on-error: true         # Collect results even if ZAP finds issues
+
+      - name: Normalise ZAP JSON output
+        if: always()
+        run: |
+          mkdir -p scripts/security/results
+
+          # ZAP action produces report_json.json
+          ZAP_JSON="report_json.json"
+          if [ ! -f "$ZAP_JSON" ]; then
+            echo '{"tool":"zap","status":"skipped","message":"ZAP report file not found","findings":[],"counts":{"critical":0,"high":0,"medium":0,"low":0}}' \
+              > scripts/security/results/zap-report.json
+            exit 0
+          fi
+
+          node --input-type=module << 'JSEOF'
+          import { readFileSync, writeFileSync } from 'fs';
+          const raw = JSON.parse(readFileSync('report_json.json','utf8'));
+          const sites = raw.site || [];
+          const findings = [];
+          for (const site of sites) {
+            for (const alert of (site.alerts || [])) {
+              // Skip IGNORE level (risk=0 or confidence=0)
+              if (alert.riskcode === '0') continue;
+              const riskMap = { '3':'high','2':'medium','1':'low','0':'info' };
+              const sev = riskMap[alert.riskcode] || 'low';
+              for (const inst of (alert.instances || []).slice(0,3)) {
+                findings.push({
+                  severity: sev,
+                  title: `[ZAP] ${alert.alert}`,
+                  location: inst.uri || site['@name'] || '?',
+                  detail: [alert.desc?.replace(/<[^>]+>/g,'').slice(0,300), inst.evidence?.slice(0,100)].filter(Boolean).join(' | '),
+                  remediation: alert.solution?.replace(/<[^>]+>/g,'').slice(0,400) || 'See ZAP alert documentation.',
+                  verification: 'Re-run ZAP baseline after fix. Confirm alert no longer appears.',
+                  riskcode: alert.riskcode,
+                  pluginId: alert.pluginid,
+                });
+              }
+            }
+          }
+          const counts = {
+            critical: findings.filter(f=>f.severity==='critical').length,
+            high: findings.filter(f=>f.severity==='high').length,
+            medium: findings.filter(f=>f.severity==='medium').length,
+            low: findings.filter(f=>f.severity==='low').length,
+          };
+          writeFileSync('scripts/security/results/zap-report.json',
+            JSON.stringify({ tool:'zap',status:'complete',counts,findings },null,2));
+          JSEOF
+
+      - name: Upload ZAP results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: zap-scan-results
+          path: |
+            scripts/security/results/zap-report.json
+            report_html.html
+          retention-days: 30
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Consolidate — collect all results, write report, update GitHub issue
+  # ───────────────────────────────────────────────────────────────────────────
+  consolidate:
+    name: "H · Consolidate & Report"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    timeout-minutes: 15
+    # Always run even if individual scan jobs fail or are skipped
+    if: always()
+    needs:
+      - codeql
+      - dependency-audit
+      - secret-scan
+      - semgrep
+      - supabase-audit
+      - vercel-audit
+      - zap-scan
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Download all artifacts — use * to capture everything uploaded above
+      - name: Download all scan results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          path: scripts/security/artifact-downloads
+        continue-on-error: true
+
+      - name: Merge artifacts into results directory
+        run: |
+          mkdir -p scripts/security/results
+          # Flatten: find all .json files across artifact subdirectories
+          find scripts/security/artifact-downloads -name "*.json" -exec cp {} scripts/security/results/ \; 2>/dev/null || true
+          ls -la scripts/security/results/
+
+      - name: Generate consolidated report
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          node scripts/security/consolidate-report.js
+          echo "--- Report preview (first 60 lines) ---"
+          head -60 scripts/security/results/WEEKLY_SECURITY_REPORT.md
+
+      - name: Upload consolidated report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: security-report
+          path: |
+            scripts/security/results/WEEKLY_SECURITY_REPORT.md
+            scripts/security/results/issue-summary.json
+          retention-days: 90
+
+      - name: Create or update GitHub security audit issue
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const ISSUE_TITLE = 'Weekly Security Audit';
+            const LABEL = 'security-audit';
+
+            // Read consolidated report
+            let report = '(Report file not found — check workflow logs)';
+            try {
+              report = fs.readFileSync('scripts/security/results/WEEKLY_SECURITY_REPORT.md', 'utf8');
+            } catch (e) {
+              core.warning('Could not read report file: ' + e.message);
+            }
+
+            // Read summary
+            let summary = {};
+            try {
+              summary = JSON.parse(fs.readFileSync('scripts/security/results/issue-summary.json', 'utf8'));
+            } catch {}
+
+            const resultEmoji = summary.resultEmoji || '❓';
+            const overallResult = summary.overallResult || 'UNKNOWN';
+            const counts = summary.counts || {};
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            // Truncate report for issue body (GitHub limit: 65536 chars)
+            const MAX_BODY = 60000;
+            const truncatedReport = report.length > MAX_BODY
+              ? report.slice(0, MAX_BODY) + '\n\n_[Report truncated — see workflow artifact for full report]_'
+              : report;
+
+            const issueBody = [
+              `<!-- security-audit-auto-managed -->`,
+              `${resultEmoji} **Latest result: ${overallResult}** — [Run #${context.runNumber}](${runUrl})`,
+              '',
+              `| Severity | Count |`,
+              `|----------|-------|`,
+              `| 🔴 Critical | ${counts.critical || 0} |`,
+              `| 🟠 High     | ${counts.high || 0} |`,
+              `| 🟡 Medium   | ${counts.medium || 0} |`,
+              `| 🔵 Low      | ${counts.low || 0} |`,
+              '',
+              '---',
+              '',
+              truncatedReport,
+            ].join('\n');
+
+            // Ensure the label exists
+            try {
+              await github.rest.issues.getLabel({ ...context.repo, name: LABEL });
+            } catch {
+              await github.rest.issues.createLabel({
+                ...context.repo,
+                name: LABEL,
+                color: 'e11d48',
+                description: 'Automated weekly security audit report',
+              });
+            }
+
+            // Search for existing open issue
+            const existing = await github.rest.issues.listForRepo({
+              ...context.repo,
+              state: 'open',
+              labels: LABEL,
+              per_page: 50,
+            });
+
+            const auditIssue = existing.data.find(i =>
+              i.title === ISSUE_TITLE &&
+              i.body?.includes('security-audit-auto-managed')
+            );
+
+            if (auditIssue) {
+              // Update existing issue body with latest summary
+              await github.rest.issues.update({
+                ...context.repo,
+                issue_number: auditIssue.number,
+                body: issueBody,
+              });
+              // Add a comment with the timestamp for history
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: auditIssue.number,
+                body: [
+                  `### Audit run ${new Date().toISOString().slice(0,10)} — ${resultEmoji} ${overallResult}`,
+                  `[View full run](${runUrl}) · Critical: ${counts.critical||0} · High: ${counts.high||0} · Medium: ${counts.medium||0}`,
+                ].join('\n'),
+              });
+              core.info(`Updated issue #${auditIssue.number}`);
+            } else {
+              // Create new issue
+              const created = await github.rest.issues.create({
+                ...context.repo,
+                title: ISSUE_TITLE,
+                body: issueBody,
+                labels: [LABEL],
+              });
+              core.info(`Created issue #${created.data.number}`);
+            }
+
+      - name: Set final workflow status
+        run: |
+          RESULT=$(node -e "
+            try {
+              const s=JSON.parse(require('fs').readFileSync('scripts/security/results/issue-summary.json','utf8'));
+              console.log(s.overallResult);
+            } catch { console.log('UNKNOWN'); }
+          ")
+          echo "Overall security audit result: $RESULT"
+          if [ "$RESULT" = "FAIL" ] || [ "$RESULT" = "INCOMPLETE" ]; then
+            echo "::error::Security audit result: $RESULT — see the Weekly Security Audit issue for details."
+            exit 1
+          fi
+

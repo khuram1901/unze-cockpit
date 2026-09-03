@@ -1,3 +1,9 @@
+// PUBLIC ROUTE — OAuth callback, must be reachable by Google.
+// Google redirects the browser here after consent. No session exists
+// at this point so requireAuth() cannot be used.
+// Security: only GOOGLE_INTEGRATION_EMAIL may complete the flow —
+// any other Google account is rejected before any token is stored.
+
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { encrypt } from "../../../lib/crypto";

@@ -168,16 +168,20 @@ async function createTaskFromTelegram(opts: {
 // ── Webhook (Telegram POSTs updates here) ────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  // Verify the request is from Telegram using the secret token we set at
-  // webhook registration time. If TELEGRAM_WEBHOOK_SECRET is set, the header
-  // must match. This prevents arbitrary POSTs from creating tasks.
+  // Verify the request is from Telegram using the webhook secret token
+  // set when calling setWebhook (https://core.telegram.org/bots/api#setwebhook).
+  // TELEGRAM_WEBHOOK_SECRET MUST be configured — the webhook is rejected
+  // (500 misconfiguration) if it is absent, rather than silently accepted.
+  // This prevents arbitrary HTTP clients from injecting fake task messages.
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (secret) {
-    const header = request.headers.get("x-telegram-bot-api-secret-token") || "";
-    const a = Buffer.from(header), b = Buffer.from(secret);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-      return new Response("Forbidden", { status: 403 });
-    }
+  if (!secret) {
+    console.error("[telegram] TELEGRAM_WEBHOOK_SECRET is not set — rejecting request. Set the secret and re-register the webhook.");
+    return new Response("Webhook secret not configured", { status: 500 });
+  }
+  const header = request.headers.get("x-telegram-bot-api-secret-token") || "";
+  const a = Buffer.from(header), b = Buffer.from(secret);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   let payload: unknown;

@@ -1,3 +1,10 @@
+// PUBLIC ROUTE — webhook receiver, must be reachable by Meta.
+// GET: verifies the hub challenge using WHATSAPP_VERIFY_TOKEN.
+// POST: verifies every delivery with HMAC-SHA256 over WHATSAPP_APP_SECRET
+//   (x-hub-signature-256 header, timing-safe compare). Requests with
+//   a missing or bad signature are rejected 401 before any processing.
+//   WHATSAPP_APP_SECRET must be set — POST returns 500 if absent.
+
 import { NextRequest } from "next/server";
 import crypto from "crypto";
 import { createServiceClient } from "../../../lib/supabase-server";
