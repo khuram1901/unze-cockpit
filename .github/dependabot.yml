@@ -1,0 +1,49 @@
+# Dependabot configuration for Unze Dashboard
+# Updates are opened as PRs — do NOT configure auto-merge.
+# Review every dependency update manually before merging.
+version: 2
+updates:
+  # npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      # Ignore major Next.js updates — test manually
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Batch minor/patch updates to reduce noise
+      typescript-types:
+        patterns:
+          - "@types/*"
+        update-types:
+          - "minor"
+          - "patch"
+      supabase:
+        patterns:
+          - "@supabase/*"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(actions)"

@@ -1,0 +1,94 @@
+# .gitleaks.toml — Gitleaks configuration for Unze Dashboard
+# Only project-specific additions to the built-in ruleset.
+# Built-in rules (1000+ patterns) remain active.
+# Values are NEVER logged — use --redact flag when running.
+
+title = "Unze Dashboard Gitleaks Config"
+
+[extend]
+# Extend the official Gitleaks default ruleset
+useDefault = true
+
+# ─── Project-specific rules ───────────────────────────────────────────────────
+
+[[rules]]
+id = "supabase-service-role-key"
+description = "Supabase service_role key (bypasses all RLS)"
+regex = '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9+/=._-]+\.[A-Za-z0-9+/=._-]+'''
+tags = ["supabase", "jwt", "service-role", "critical"]
+# All long JWTs look the same; refine with entropy + keyword context
+[rules.allowlist]
+description = "Allow anon key (public by design)"
+regexes = [
+  # anon keys contain "role\":\"anon" in the payload — exclude them
+  # (Gitleaks doesn't decode JWT; rely on the entropy + context check below)
+]
+
+[[rules]]
+id = "supabase-anon-key-in-server-context"
+description = "Supabase anon key used in a server-only file (should use NEXT_PUBLIC_)"
+regex = '''(?i)(service_role|service-role)['":\s]+[A-Za-z0-9\-._~+/]+=*'''
+tags = ["supabase", "credential"]
+[rules.allowlist]
+paths = [
+  # Allow in migration files (they document policy names, not keys)
+  '''supabase/.*\.sql''',
+  # Allow in the security audit scripts themselves (they reference the name, not the value)
+  '''scripts/security/.*''',
+  '''.claude/.*''',
+  '''docs/.*''',
+]
+
+[[rules]]
+id = "vercel-token"
+description = "Vercel API token"
+regex = '''(?i)vercel[_\-]?(api[_\-]?)?token['":\s=]+[A-Za-z0-9]{24,}'''
+tags = ["vercel", "credential"]
+
+[[rules]]
+id = "flowhcm-api-key"
+description = "FlowHCM API key"
+regex = '''(?i)flowhcm[_\-]?api[_\-]?key['":\s=]+[A-Za-z0-9\-_]{16,}'''
+tags = ["flowhcm", "credential"]
+
+[[rules]]
+id = "folderit-credential"
+description = "Folderit API credential"
+regex = '''(?i)folderit[_\-]?(api[_\-]?key|token|secret)['":\s=]+[A-Za-z0-9\-_]{16,}'''
+tags = ["folderit", "credential"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''sk-ant-[A-Za-z0-9\-_]{40,}'''
+tags = ["anthropic", "llm", "critical"]
+
+[[rules]]
+id = "telegram-bot-token"
+description = "Telegram Bot token"
+regex = '''\d{9,11}:[A-Za-z0-9_\-]{35}'''
+tags = ["telegram", "bot"]
+
+# ─── Allowlist — known safe patterns ─────────────────────────────────────────
+
+[allowlist]
+description = "Global allowlist for Unze Dashboard"
+# Files that legitimately reference credential names (not values)
+paths = [
+  '''\.env\.example''',
+  '''docs/security/README\.md''',
+  '''docs/security/SECURITY_CHECKLIST\.md''',
+  '''.claude/.*''',
+  '''scripts/security/.*''',
+  '''CLAUDE\.md''',
+  '''BLUEPRINT\.md''',
+]
+# Commit hashes that have been reviewed and accepted (add manually after triage)
+commits = []
+# Regex patterns that are known false-positives
+regexes = [
+  # Morningstar API tokens (public identifiers, not secrets)
+  '''klr5zyak8x|9vehuxllxs|bzxpplv0mi''',
+  # Placeholder/example values in documentation
+  '''(?i)(your[-_]?key|example[-_]?key|placeholder|replace[-_]?me|<key>|<token>)''',
+]

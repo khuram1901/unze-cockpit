@@ -1,0 +1,69 @@
+{
+  "tool": "vercel-config-audit",
+  "timestamp": "2026-09-03T09:12:40.873Z",
+  "counts": {
+    "critical": 0,
+    "high": 2,
+    "medium": 5,
+    "low": 1,
+    "pass": 20
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "title": "Missing X-Frame-Options header",
+      "location": "next.config.ts",
+      "detail": "No X-Frame-Options or frame-ancestors CSP directive detected. Pages can be embedded in iframes, enabling clickjacking.",
+      "remediation": "Add 'X-Frame-Options: DENY' in next.config.ts headers()."
+    },
+    {
+      "severity": "medium",
+      "title": "Missing HSTS header",
+      "location": "next.config.ts",
+      "detail": "Strict-Transport-Security not set — browsers may fall back to HTTP on first visit.",
+      "remediation": "Add 'Strict-Transport-Security: max-age=63072000; includeSubDomains; preload'."
+    },
+    {
+      "severity": "medium",
+      "title": "Missing X-Content-Type-Options header",
+      "location": "next.config.ts",
+      "detail": "MIME-type sniffing not disabled — some browsers may interpret files as executable.",
+      "remediation": "Add 'X-Content-Type-Options: nosniff'."
+    },
+    {
+      "severity": "low",
+      "title": "Missing Referrer-Policy header",
+      "location": "next.config.ts",
+      "detail": "No Referrer-Policy — full referrer URLs may leak to third-party requests.",
+      "remediation": "Add 'Referrer-Policy: strict-origin-when-cross-origin'."
+    },
+    {
+      "severity": "medium",
+      "title": "No Content Security Policy",
+      "location": "next.config.ts",
+      "detail": "No CSP header detected. XSS attacks lack a defence-in-depth layer.",
+      "remediation": "Define a CSP after auditing all inline scripts and external sources."
+    },
+    {
+      "severity": "medium",
+      "title": "No middleware.ts detected",
+      "location": "middleware.ts (missing)",
+      "detail": "Authentication is enforced per-route rather than at the middleware layer. A new route added without requireAuth() would be publicly accessible.",
+      "remediation": "Consider adding a Next.js middleware that validates the session for all /app/* routes as a defence-in-depth layer, in addition to per-route requireAuth()."
+    },
+    {
+      "severity": "high",
+      "title": "10 API route(s) may lack authentication",
+      "location": "app/api/auth/change-password/route.ts, app/api/auth/reset-password/route.ts, app/api/fx/gbp-pkr/route.ts, app/api/fx/multi/route.ts, app/api/google/auth/route.ts, app/api/google/auth-notifications/route.ts, app/api/google/callback/route.ts, app/api/google/callback-notifications/route.ts, app/api/telegram/webhook/route.ts, app/api/whatsapp/webhook/route.ts",
+      "detail": "These routes export HTTP handlers but do not appear to call requireAuth() or check CRON_SECRET:\napp/api/auth/change-password/route.ts\napp/api/auth/reset-password/route.ts\napp/api/fx/gbp-pkr/route.ts\napp/api/fx/multi/route.ts\napp/api/google/auth/route.ts\napp/api/google/auth-notifications/route.ts\napp/api/google/callback/route.ts\napp/api/google/callback-notifications/route.ts\napp/api/telegram/webhook/route.ts\napp/api/whatsapp/webhook/route.ts",
+      "remediation": "Add requireAuth(request) as the first call in every handler. If public, document why."
+    },
+    {
+      "severity": "medium",
+      "title": "SUPABASE_SERVICE_ROLE_KEY used in GitHub Actions workflow",
+      "location": ".github/workflows/fetch-pension-prices.yml",
+      "detail": "The service role key bypasses all RLS policies. If the GitHub Actions secret is compromised, an attacker has unrestricted database access.",
+      "remediation": "Create a narrowly scoped Postgres role with only INSERT/UPDATE on `pension_fund_prices` and use its credentials instead. See docs/security/SECURITY_CHECKLIST.md."
+    }
+  ]
+}
