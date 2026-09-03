@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 30/08/2026 (Phase 4 tech debt: stock/folderit/P&L aggregation moved into RPCs — migrations 224-228; see CHANGELOG 2026-08-30 evening).
+> **This is the source of truth.** Read before touching any code. Last updated: 03/09/2026 (Security hardening: HTTP response headers, API auth guards, webhook lockdown, pension writer RPC, GitHub Actions SHA pinning — see CHANGELOG 2026-09-03).
 >
 > Previous update: 16/08/2026 (tax consultant access rule centralised as `TAX_CONSULTANT_EMAIL` in permissions.ts — was hardcoded in four separate client files; the exemption itself moved into `canViewDepartment()` and is now subject to Access Matrix overrides; `useRequireCapability` and `useRequireDepartment` refactored onto a shared `useAuthGuard()`).
 >
@@ -32,6 +32,68 @@
 **Phase 3 (pending):** migrate Finance/Admin/Production pages off hardcoded 'UTPL'/'IFPL' strings (32 files) onto `company_id` + master names, module by module.
 
 ---
+
+---
+
+## 03/09/2026 — Security hardening (complete)
+
+All recommendations from the internal security audit applied and committed.
+
+### HTTP Security Headers (`next.config.ts`)
+Applied to every response via `headers()`:
+| Header | Value |
+|--------|-------|
+| `Content-Security-Policy` | Phase 1 (unsafe-inline/unsafe-eval allowed; Phase 2 tightening deferred) — connect-src includes Supabase, Google, Frankfurter, Open Exchange Rates |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` (2-year HSTS) |
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `frame-ancestors` / `frame-src` | `'none'` (clickjacking eliminated) |
+
+### API Route Auth (`requireAuth`)
+- `app/api/auth/change-password/route.ts` — now calls `requireAuth()` before any password operation
+- `app/profile/page.tsx` — switched to `authFetch()` so JWT is sent with change-password requests
+- All intentionally public routes documented with `// PUBLIC ROUTE —` comment blocks
+
+### Webhook Hardening
+- **Telegram** (`app/api/telegram/webhook/route.ts`) — `TELEGRAM_WEBHOOK_SECRET` is now mandatory; returns 500 if not set, 403 on mismatch
+- **WhatsApp** — HMAC-SHA256 validation over `WHATSAPP_APP_SECRET` was already mandatory; confirmed correct
+
+### Pension Fund Price Ingestion (`.github/workflows/fetch-pension-prices.yml`)
+Replaced `SERVICE_ROLE_KEY` (bypasses RLS) with a narrow `SECURITY DEFINER` function:
+- Function: `public.ingest_pension_price(p_isin, p_price, p_price_date, p_source, p_secret)` — live in Supabase
+- Secret stored in **Supabase Vault** (`pension_writer_secret`) — not in env vars
+- GitHub workflow uses `SUPABASE_ANON_KEY` + `PENSION_WRITER_SECRET` (GitHub Secrets) — no SERVICE_ROLE_KEY
+- Wrong secret → `ERROR 42501`; correct secret → upserts into `pension_fund_prices` (column: `price_gbp`)
+- `GRANT EXECUTE TO anon; REVOKE FROM public`
+
+### GitHub Actions SHA Pinning (`.github/workflows/weekly-security-audit.yml`)
+All third-party actions pinned to immutable commit SHAs:
+| Action | Tag | Commit SHA |
+|--------|-----|-----------|
+| `github/codeql-action/{init,autobuild,analyze,upload-sarif}` | v3 | `486fec2a3ea2626afcd8c7e9208b4f515078dd7e` |
+| `actions/upload-artifact` | v4 | `ea165f8d65b6e75b540449e92b4886f43607fa02` |
+| `actions/download-artifact` | v4 | `d3f86a106a0bac45b974a628896c90dbdf5c8093` |
+| `actions/setup-node` | v4 | `49933ea5288caeca8642d1e84afbd3f7d6820020` |
+| `zaproxy/action-baseline` | v0.14.0 | `7c4deb10e6261301961c86d65d54a516394f9aed` |
+| Gitleaks binary | v8.21.2 | SHA256 `5bc41815...` (linux_x64.tar.gz) |
+| `actions/checkout` | v4.2.2 | `11bd71901bbe5b1630ceea73d27597364c9af683` (pre-existing) |
+| `actions/github-script` | v7.0.1 | `60a0d83039c74a4aee543508d2ffcb1c3799cdea` (pre-existing) |
+
+### Files Added (committed to main)
+- `.github/dependabot.yml` — weekly automated dependency updates (npm + GitHub Actions)
+- `.gitleaks.toml` — secret scanning configuration
+- `.github/workflows/weekly-security-audit.yml` — CodeQL, Gitleaks, Semgrep, ZAP, Supabase advisor, weekly on Monday 06:00 UTC
+- `docs/security/README.md` + `SECURITY_CHECKLIST.md`
+- `scripts/security/` — consolidate-report.js, check-supabase.js, check-vercel-config.js
+- `supabase/239_pension_writer_function.sql` — documents the SECURITY DEFINER function design
+
+### Known Limitations / Deferred
+- **Middleware auth** — proper Next.js middleware requires cookie-based sessions (`@supabase/ssr`). App uses localStorage. Deferred to a future migration.
+- **CSP Phase 2** — tightening (remove unsafe-inline/unsafe-eval) requires nonce or hash-based CSP. Deferred — needs careful testing.
+- **FX routes** (`/api/fx/gbp-pkr`, `/api/fx/multi`) — intentionally public (data is public exchange rates; callers are server components with no session).
+- **Google OAuth routes** — intentionally public (browser `<a href>` navigation cannot send Authorization headers; identity enforced in callback via `GOOGLE_INTEGRATION_EMAIL`).
+
 
 ## 1. Project Metadata
 

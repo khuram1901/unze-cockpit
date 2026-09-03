@@ -4,6 +4,28 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-09-03 — Security hardening (full audit implementation)
+
+**HTTP security headers (`next.config.ts`):** Added 5 response headers to every route: `Content-Security-Policy` (Phase 1 — unsafe-inline/unsafe-eval permitted; connect-src covers Supabase, Google, Frankfurter, Open Exchange Rates; frame-ancestors/frame-src none), `Strict-Transport-Security` (2-year HSTS + preload), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`. Original redirect (`/executive → /home`) and `serverExternalPackages: ["pdf-parse"]` preserved.
+
+**API auth guards:** `app/api/auth/change-password/route.ts` now calls `requireAuth()` before any password operation. `app/profile/page.tsx` switched to `authFetch()` so the session JWT is actually sent. 8 intentionally public routes documented with `// PUBLIC ROUTE —` comment blocks explaining the deliberate design decision (FX data, Google OAuth initiation, WhatsApp/Telegram/reset-password).
+
+**Telegram webhook hardening (`app/api/telegram/webhook/route.ts`):** `TELEGRAM_WEBHOOK_SECRET` is now mandatory — returns HTTP 500 if not configured, HTTP 403 on mismatch. Previously the check was silently skipped if the env var was absent, accepting all requests.
+
+**Pension fund writer — eliminate SERVICE_ROLE_KEY:** The GitHub Actions workflow (`fetch-pension-prices.yml`) previously used `SERVICE_ROLE_KEY` (bypasses all RLS). Replaced with: (1) a `SECURITY DEFINER` Postgres function `public.ingest_pension_price()` that reads a pre-shared secret from Supabase Vault (`pension_writer_secret`), validates inputs, and upserts into `pension_fund_prices.price_gbp`; (2) workflow now uses `SUPABASE_ANON_KEY` + `PENSION_WRITER_SECRET` GitHub Secret. Wrong secret → permission denied; correct secret → upsert. Vault secret ID: `e7bfd1fc-8e78-4f52-9e67-cfdea4e06b95`. SQL in `supabase/239_pension_writer_function.sql`.
+
+**GitHub Actions SHA pinning (`weekly-security-audit.yml`):** All 17 `FIXME:PIN` placeholders resolved to immutable commit SHAs — CodeQL v3 (`486fec2a`), upload-artifact v4 (`ea165f8d`), download-artifact v4 (`d3f86a10`), setup-node v4 (`49933ea5`), zaproxy/action-baseline v0.14.0 (`7c4deb10`). Gitleaks binary checksum corrected to `5bc41815...` (linux_x64.tar.gz, v8.21.2). Header comment updated from FIXME warning to ✅ COMPLETE.
+
+**Security audit infrastructure added:** `.github/dependabot.yml` (weekly npm + Actions updates), `.gitleaks.toml`, `.github/workflows/weekly-security-audit.yml` (CodeQL / Gitleaks / Semgrep / ZAP / Supabase advisor — runs Monday 06:00 UTC), `docs/security/`, `scripts/security/`.
+
+**Vercel:** Ignored Build Step configured to skip `dependabot/*` branches (prevents noisy failed preview deploys).
+
+**GitHub Secrets added:** `SUPABASE_ANON_KEY`, `PENSION_WRITER_SECRET`.
+
+**Commits:** `bba69d8` (security fixes), `e30792c` (audit infrastructure).
+
+---
+
 ## 2026-08-30 (night) — HR tab filters, payroll month history, HR Records, Group HR designs
 
 **Filters everywhere (migration 233):** People filters by company/department/station (cards + directory both respond); Payroll gets a month picker (every month FlowHCM has data for — currently Jun–Aug 2026; the list grows as data arrives) plus company/department/location drill-down; Movement gets a Custom-dates range (DateInput) plus company/department; Attendance gets company/station beside its date picker. New `get_hr_filter_options()` feeds all dropdowns in one round-trip; shared `HRFilterBar` component caches them across tabs. Note in UI: gross salaries are a live snapshot — FlowHCM keeps no salary history. **Live HR Data → HR Records:** renamed, Employees chip removed (People tab is the directory), 11 modules grouped into Pay / Statutory / Movement rows, default Salary Setup. **Group HR dashboard designs** published as a design canvas (two directions: Executive Brief vs Company Scoreboard) for Khuram to pick from — the new page will be separate and access-gated (HR-manager pages unchanged). Verified live in browser: IFPL filter → 549 active matching SQL; payroll month picker + per-company splits live; HR Records grouping live.
