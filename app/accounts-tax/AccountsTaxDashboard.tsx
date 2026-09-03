@@ -9,6 +9,7 @@ import TaxComplianceSummary from "./TaxComplianceSummary";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
 import { useUserCtx } from "../lib/useUserCtx";
+import { useRequireCapability } from "../lib/useRouteGuard";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -189,6 +190,8 @@ export default function AccountsTaxDashboard() {
   const router = useRouter();
   const isMobile = useMobile();
   const toast = useToast();
+  const { checking } = useRequireCapability("can_view_dept_tax_accounts");
+  if (checking) return null;
 
   const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [canManage, setCanManage] = useState(false);

@@ -863,14 +863,11 @@ async function syncTaxAdjustments(db: ReturnType<typeof createServiceClient>) {
 // ── Main handler ───────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  // Allow Vercel cron (CRON_SECRET) OR any authenticated request (no secret = open for manual triggers)
+  // Require CRON_SECRET — only Vercel Cron or a manual call with the secret may trigger a sync.
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const authHeader = request.headers.get("authorization") ?? "";
-    // Accept either the cron secret OR a valid Supabase Bearer token (non-empty)
-    if (authHeader !== `Bearer ${secret}` && !authHeader.startsWith("Bearer ey")) {
-      return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-    }
+  const authHeader = request.headers.get("authorization") ?? "";
+  if (!secret || authHeader !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
   // Check FlowHCM is configured
