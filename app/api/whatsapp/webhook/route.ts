@@ -64,11 +64,23 @@ function parseDueDate(raw: string): string | null {
     .replace(/\b(?:at\s+)?\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi, "")  // HH:MM or HH:MM am/pm
     .replace(/\b(?:at\s+)?\d{1,2}\s*(?:am|pm)\b/gi, "")           // H am/pm
     .replace(/\bat\s+\d{1,2}\b/gi, "")                              // "at 9"
-    .replace(/^(due|by|on|next)\s+/g, "")
+    .replace(/^(due|by|on|next|coming)\s+/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
   const today = pktToday();
   if (!s) return null;
+  if (s === "this week" || s === "week") {
+    const d = new Date(today);
+    const daysToFri = ((5 - d.getUTCDay()) + 7) % 7 || 7;
+    d.setUTCDate(d.getUTCDate() + daysToFri);
+    return iso(d);
+  }
+  if (s === "next week") {
+    const d = new Date(today);
+    const daysToFri = ((5 - d.getUTCDay()) + 7) % 7 + 7;
+    d.setUTCDate(d.getUTCDate() + daysToFri);
+    return iso(d);
+  }
   if (s === "today" || s === "eod") return iso(today);
   if (s === "tomorrow" || s === "tmrw") { const d = new Date(today); d.setUTCDate(d.getUTCDate() + 1); return iso(d); }
   // Weekday name (full, 3-letter, or unambiguous prefix ≥3 chars) → next occurrence
@@ -129,7 +141,7 @@ function extractDue(text: string): { description: string; due: string | null } {
     }
   }
   // Pass 2: bare date keywords — today, tomorrow, tmrw, weekday names, DD/MM
-  const bare = /\b(today|eod|tomorrow|tmrw|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|\d{1,2}[\/-]\d{1,2})\b/gi;
+  const bare = /\b(today|eod|tomorrow|tmrw|this\s+week|next\s+week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|\d{1,2}[\/-]\d{1,2})\b/gi;
   let bareMatch: RegExpExecArray | null = null;
   while ((m = bare.exec(text)) !== null) bareMatch = m;
   if (bareMatch) {
