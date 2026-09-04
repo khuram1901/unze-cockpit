@@ -302,7 +302,7 @@ function GroupView({
                     onMouseLeave={e => (e.currentTarget.style.background = "")}
                   >
                     <td style={{ ...tdS, fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE }}>
-                      {e.employee_code || "—"}
+                      {d.employee_code || "—"}
                     </td>
                     <td style={{ ...tdS, fontWeight: 600 }}>{d.department}</td>
                     <td style={{ ...tdS, color: COLOURS.SLATE, fontSize: "12px" }}>{d.company}</td>
@@ -349,7 +349,7 @@ function GroupView({
                     onMouseLeave={ev => (ev.currentTarget.style.background = "")}
                   >
                     <td style={{ ...tdS, fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE }}>
-                      {e.employee_code || "—"}
+                      {d.employee_code || "—"}
                     </td>
                     <td style={tdS}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
