@@ -148,17 +148,25 @@ export default function HRPeople() {
         <Metric label="Historic leavers"  value={loading ? "…" : (overview?.total_leavers ?? 0).toLocaleString("en-GB")} colour={COLOURS.SLATE} />
       </div>
 
-      {/* Company chips */}
+      {/* Company chips — click to filter */}
       {overview && (
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
-          {overview.by_company.map(c => (
-            <span key={c.code} style={{
-              fontSize: "12px", padding: "4px 10px", borderRadius: RADII.PILL,
-              backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, color: COLOURS.INK_700,
-            }}>
-              <strong style={{ color: COLOURS.NAVY }}>{c.name}</strong> {c.active}
-            </span>
-          ))}
+          {overview.by_company.map(c => {
+            const coId = (filterOpts?.companies ?? []).find(co => co.code === c.code)?.id ?? "";
+            const active = company === coId && !!coId;
+            return (
+              <span key={c.code} onClick={() => handleCompanyChange(active ? "" : coId)}
+                style={{
+                  fontSize: "12px", padding: "4px 10px", borderRadius: RADII.PILL, cursor: "pointer",
+                  backgroundColor: active ? COLOURS.NAVY : COLOURS.CARD_ALT,
+                  border: `1px solid ${active ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                  color: active ? "#fff" : COLOURS.INK_700,
+                  transition: "background 0.15s",
+                }}>
+                <strong style={{ color: active ? "#fff" : COLOURS.NAVY }}>{c.name}</strong> {c.active}
+              </span>
+            );
+          })}
         </div>
       )}
 
