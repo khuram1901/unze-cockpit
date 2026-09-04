@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { isAdmin } from "../../../lib/admin-config";
 
 // Only Admin/CEO can manage dividends (same tier as investments access).
 async function requireInvestmentAdmin(
@@ -8,7 +9,7 @@ async function requireInvestmentAdmin(
   email: string
 ): Promise<true | Response> {
   const lc = email.toLowerCase();
-  if (lc === "khuram1901@gmail.com" || lc === "k.saleem@unzegroup.com") return true;
+  if (isAdmin(email)) return true;
   const { data: m } = await supabase
     .from("members")
     .select("role")
@@ -29,7 +30,7 @@ async function requireInvestmentViewer(
   email: string
 ): Promise<true | Response> {
   const lc = email.toLowerCase();
-  if (lc === "khuram1901@gmail.com" || lc === "k.saleem@unzegroup.com") return true;
+  if (isAdmin(email)) return true;
   const { data: m } = await supabase
     .from("members")
     .select("role")

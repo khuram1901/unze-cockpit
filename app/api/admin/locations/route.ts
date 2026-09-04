@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { isAdmin } from "../../../lib/admin-config";
 
-const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 
 // Check if caller is allowed to manage locations (admin emails OR DB permission)
 async function checkCanManage(auth: { email: string }, supabase: ReturnType<typeof createServiceClient>) {
-  if (ADMIN_EMAILS.includes(auth.email.toLowerCase())) return true;
+  if (isAdmin(auth.email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members").select("id").eq("email", auth.email).single();
   if (!member) return false;

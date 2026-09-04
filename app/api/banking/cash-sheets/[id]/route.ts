@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../lib/supabase-server";
 import { requireAuth } from "../../../../lib/api-auth";
 import {
+import { isAdmin } from "../../../../lib/admin-config";
   UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID,
 } from "../../../../lib/constants";
 
@@ -16,15 +17,13 @@ const COMPANY_ID_MAP: Record<string, string> = {
 };
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
-
-const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 const RESTAURANT_COMPANIES = ["BRNH", "HD", "KKJ"];
 
 async function checkBankingAccess(
   email: string,
   supabase: ReturnType<typeof createServiceClient>,
 ): Promise<boolean> {
-  if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
+  if (isAdmin(email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members")
     .select("id")
@@ -45,7 +44,7 @@ async function checkReadAccess(
   supabase: ReturnType<typeof createServiceClient>,
   company?: string,
 ): Promise<boolean> {
-  if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
+  if (isAdmin(email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members")
     .select("id")

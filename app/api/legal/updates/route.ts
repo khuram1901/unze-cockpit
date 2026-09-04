@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { isAdmin } from "../../../lib/admin-config";
 
 // Who can add updates: admin + admin_ops + admin_entry (field team)
 async function checkCanUpdate(auth: { email: string }, supabase: ReturnType<typeof createServiceClient>) {
-  const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
-  if (ADMIN_EMAILS.includes(auth.email.toLowerCase())) return true;
+    if (isAdmin(auth.email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members").select("id, role, department").eq("email", auth.email).maybeSingle();
   if (!member) return false;

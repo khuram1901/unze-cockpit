@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
 import { useRequireCapability } from "../lib/useRouteGuard";
@@ -23,7 +22,6 @@ function companyName(id: string) {
 }
 
 export default function BackupsPage() {
-  const router = useRouter();
   const { show: showToast, element: toastElement } = useToast();
   const { checking } = useRequireCapability("system_backups");
 
@@ -31,11 +29,14 @@ export default function BackupsPage() {
   const [backups, setBackups] = useState<Backup[]>([]);
   const [driveFolderLink, setDriveFolderLink] = useState<string | null>(null);
   const [loadingBackups, setLoadingBackups] = useState(false);
+  const [backupsError, setBackupsError] = useState<string | null>(null);
   const [runningBackup, setRunningBackup] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   const [docs, setDocs] = useState<ArchivedDoc[]>([]);
+  const [docsTotal, setDocsTotal] = useState<number | null>(null);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [docsError, setDocsError] = useState<string | null>(null);
   const [docTypeFilter, setDocTypeFilter] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
 
@@ -54,13 +55,21 @@ export default function BackupsPage() {
   // Reload docs when filters change
   const loadDocs = useCallback(async () => {
     setLoadingDocs(true);
-    const params = new URLSearchParams();
-    if (docTypeFilter) params.set("docType", docTypeFilter);
-    if (companyFilter) params.set("companyId", companyFilter);
-    const res = await authFetch(`/api/admin/list-documents?${params.toString()}`);
-    const json = await res.json();
-    setDocs(json.documents || []);
-    setLoadingDocs(false);
+    setDocsError(null);
+    try {
+      const params = new URLSearchParams();
+      if (docTypeFilter) params.set("docType", docTypeFilter);
+      if (companyFilter) params.set("companyId", companyFilter);
+      const res = await authFetch(`/api/admin/list-documents?${params.toString()}`);
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const json = await res.json();
+      setDocs(json.documents || []);
+      setDocsTotal(json.total ?? null);
+    } catch (err) {
+      setDocsError(err instanceof Error ? err.message : "Failed to load documents");
+    } finally {
+      setLoadingDocs(false);
+    }
   }, [docTypeFilter, companyFilter]);
 
   useEffect(() => {
@@ -72,11 +81,18 @@ export default function BackupsPage() {
   // ── Data loaders ───────────────────────────────────────────────────
   async function loadBackups() {
     setLoadingBackups(true);
-    const res = await authFetch("/api/admin/list-backups");
-    const json = await res.json();
-    setBackups(json.backups || []);
-    setDriveFolderLink(json.driveFolderLink || null);
-    setLoadingBackups(false);
+    setBackupsError(null);
+    try {
+      const res = await authFetch("/api/admin/list-backups");
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const json = await res.json();
+      setBackups(json.backups || []);
+      setDriveFolderLink(json.driveFolderLink || null);
+    } catch (err) {
+      setBackupsError(err instanceof Error ? err.message : "Failed to load backups");
+    } finally {
+      setLoadingBackups(false);
+    }
   }
 
   // ── Actions ────────────────────────────────────────────────────────
@@ -157,8 +173,6 @@ export default function BackupsPage() {
     );
   }
 
-  if (checking) return null;
-
   const skeletonRow = (
     <div style={{ height: "44px", borderRadius: RADII.SM, backgroundColor: COLOURS.HAIRLINE, marginBottom: "8px", animation: "pulse 1.5s ease-in-out infinite" }} />
   );
@@ -203,6 +217,10 @@ export default function BackupsPage() {
 
           {loadingBackups ? (
             <div style={{ marginBottom: "20px" }}>{skeletonRow}{skeletonRow}{skeletonRow}</div>
+          ) : backupsError ? (
+            <div style={{ border: `1px solid #EDB5B2`, borderRadius: RADII.CARD, padding: "14px", backgroundColor: "#FEF2F2", color: COLOURS.RED, marginBottom: "20px", fontSize: "13px" }}>
+              Could not load backups: {backupsError}
+            </div>
           ) : backups.length === 0 ? (
             <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "14px", backgroundColor: "white", color: COLOURS.SLATE, textAlign: "center", marginBottom: "20px" }}>
               No backups yet.
@@ -240,7 +258,11 @@ export default function BackupsPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
             <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em" }}>📄 Source Documents</span>
             <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
-            <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>{docs.length} archived</span>
+            <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>
+              {docsTotal !== null && docsTotal > docs.length
+                ? `${docs.length} of ${docsTotal} archived`
+                : `${docs.length} archived`}
+            </span>
           </div>
 
           <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
@@ -259,6 +281,10 @@ export default function BackupsPage() {
 
           {loadingDocs ? (
             <div>{skeletonRow}{skeletonRow}{skeletonRow}{skeletonRow}</div>
+          ) : docsError ? (
+            <div style={{ border: `1px solid #EDB5B2`, borderRadius: RADII.CARD, padding: "14px", backgroundColor: "#FEF2F2", color: COLOURS.RED, fontSize: "13px" }}>
+              Could not load documents: {docsError}
+            </div>
           ) : docs.length === 0 ? (
             <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "14px", backgroundColor: "white", color: COLOURS.SLATE, textAlign: "center" }}>
               No archived source documents match this filter.

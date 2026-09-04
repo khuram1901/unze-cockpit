@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
+import path from "path";
 import { google } from "googleapis";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { safeDecrypt, encrypt } from "../../../lib/crypto";
+import { isAdmin, BACKUP_OWNER } from "../../../lib/admin-config";
 
 const BACKUPS_BUCKET = "backups";
-const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
-const BACKUP_OWNER = "k.saleem@unzegroup.com";
 const DRIVE_FOLDER_NAME = "Unze Cockpit Backups";
 
 async function getDriveLinks(supabase: ReturnType<typeof createServiceClient>): Promise<{
@@ -74,7 +74,7 @@ async function getDriveLinks(supabase: ReturnType<typeof createServiceClient>): 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
-  if (!ADMIN_EMAILS.includes(auth.email.toLowerCase())) {
+  if (!isAdmin(auth.email)) {
     return Response.json({ error: "Admin only" }, { status: 403 });
   }
 
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
-  if (!ADMIN_EMAILS.includes(auth.email.toLowerCase())) {
+  if (!isAdmin(auth.email)) {
     return Response.json({ error: "Admin only" }, { status: 403 });
   }
 
@@ -112,6 +112,13 @@ export async function POST(request: NextRequest) {
   const filename = body.filename as string | undefined;
   if (!filename) {
     return Response.json({ error: "filename is required" }, { status: 400 });
+  }
+
+  // Validate filename to prevent path traversal
+  const safeFilename = path.basename(filename);
+  const SAFE_FILENAME = /^[\w\-\.]+\.(json\.gz|gz|json)$/;
+  if (safeFilename !== filename || !SAFE_FILENAME.test(safeFilename)) {
+    return Response.json({ error: "Invalid filename" }, { status: 400 });
   }
 
   const supabase = createServiceClient();

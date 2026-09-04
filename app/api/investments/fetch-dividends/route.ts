@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { isAdmin } from "../../../lib/admin-config";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 

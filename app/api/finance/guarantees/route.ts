@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { isAdmin } from "../../../lib/admin-config";
 
 // Mirrors canViewGuarantees() from permissions.ts — Admin/CEO + Finance/Ops managers
 async function resolveGuaranteePerms(supabase: ReturnType<typeof createServiceClient>, email: string) {
   const lc = email.toLowerCase();
-  const isAdminByEmail = lc === "khuram1901@gmail.com" || lc === "k.saleem@unzegroup.com";
+  const isAdminByEmail = isAdmin(email);
   const { data: m } = await supabase
     .from("members")
     .select("role, department")

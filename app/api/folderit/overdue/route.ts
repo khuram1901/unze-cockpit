@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { isAdmin } from "../../../lib/admin-config";
 
 // Admin/CEO only — cross-company list of documents that have been sitting
 // (unfiled, or pending approval) for 7+ days, for the alert banner at the

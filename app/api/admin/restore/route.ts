@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
+import path from "path";
 import zlib from "zlib";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { BACKUP_TABLES } from "../../../lib/backup-tables";
 import { requireAuth } from "../../../lib/api-auth";
+import { isAdmin } from "../../../lib/admin-config";
 
 const BACKUPS_BUCKET = "backups";
-const ADMIN_EMAIL = "khuram1901@gmail.com";
 
 // Tables without a single "id" primary key need their natural/composite key
 // for upsert conflict resolution.
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
   if (!isCronAuth) {
     const auth = await requireAuth(request);
     if (auth instanceof Response) return auth;
-    if (auth.email.toLowerCase() !== ADMIN_EMAIL) {
+    if (!isAdmin(auth.email)) {
       return Response.json({ error: "Admin only" }, { status: 403 });
     }
   }
@@ -51,6 +52,16 @@ export async function POST(request: NextRequest) {
 
   if (!body.filename && !body.backup) {
     return Response.json({ error: "Provide either { filename } (a backup in Storage) or { backup } (inline JSON)" }, { status: 400 });
+  }
+
+  // Validate filename to prevent path traversal: strip directory components and
+  // confirm only safe characters and a known extension remain.
+  if (body.filename) {
+    const safe = path.basename(body.filename);
+    const SAFE_FILENAME = /^[\w\-\.]+\.(json\.gz|gz|json)$/;
+    if (safe !== body.filename || !SAFE_FILENAME.test(safe)) {
+      return Response.json({ error: "Invalid filename" }, { status: 400 });
+    }
   }
 
   const supabase = createServiceClient();

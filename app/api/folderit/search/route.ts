@@ -3,6 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { canViewFolderitHr } from "../../../lib/permissions";
 import { loadFolderitUserCtx } from "../_shared";
+import { isAdmin } from "../../../lib/admin-config";
 
 type InboxRow = { file_uid: string; name: string | null; account_name: string | null; created_at: string | null };
 type HrRow = { file_uid: string; name: string | null; category_name: string | null; folder_path: string | null; created_at: string | null };
@@ -31,18 +32,18 @@ export async function GET(request: NextRequest) {
     db.from("members").select("company_id").eq("email", email).maybeSingle(),
   ]);
 
-  const isAdmin = email === "khuram1901@gmail.com" || ctx.role === "Admin" || ctx.role === "CEO";
+  const isAdminUser = isAdmin(email) || ctx.role === "Admin" || ctx.role === "CEO";
   const ownCompanyUuid: string | null = memberRow.data?.company_id ?? null;
 
   // A non-admin with no company_id on their member row must never fall
   // through to "no filter" (that would mean searching every company's
   // inbox) — they just get no inbox results at all. Only an explicit
   // isAdmin grants the NULL/"all companies" search.
-  const canSearchInbox = isAdmin || !!ownCompanyUuid;
+  const canSearchInbox = isAdminUser || !!ownCompanyUuid;
 
   const [inboxRes, hrRes] = await Promise.all([
     canSearchInbox
-      ? db.rpc("search_folderit_inbox", { p_query: q, p_company_uuid: isAdmin ? null : ownCompanyUuid })
+      ? db.rpc("search_folderit_inbox", { p_query: q, p_company_uuid: isAdminUser ? null : ownCompanyUuid })
       : Promise.resolve({ data: [] as InboxRow[], error: null }),
     canViewFolderitHr(ctx)
       ? db.rpc("search_folderit_hr_files", { p_query: q })

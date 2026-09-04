@@ -3,6 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { canViewFolderitHr } from "../../../lib/permissions";
 import { loadFolderitUserCtx } from "../_shared";
+import { isAdmin } from "../../../lib/admin-config";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);

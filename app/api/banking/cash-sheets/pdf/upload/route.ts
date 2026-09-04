@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../../lib/supabase-server";
 import { requireAuth } from "../../../../../lib/api-auth";
+import { isAdmin } from "../../../../../lib/admin-config";
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
 
@@ -8,8 +9,7 @@ async function checkBankingAccess(
   email: string,
   supabase: ReturnType<typeof createServiceClient>,
 ): Promise<boolean> {
-  const ADMIN = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
-  if (ADMIN.includes(email.toLowerCase())) return true;
+  if (isAdmin(email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members")
     .select("id")

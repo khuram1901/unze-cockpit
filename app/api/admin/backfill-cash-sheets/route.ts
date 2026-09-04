@@ -3,6 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import {
+import { isAdmin } from "../../../lib/admin-config";
   UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID,
 } from "../../../lib/constants";
 
@@ -18,7 +19,6 @@ import {
 //
 // Body: { limit?: number, dryRun?: boolean }
 
-const ADMIN = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 
 const ID_TO_CODE: Record<string, "UTPL" | "IFPL" | "BRNH" | "HD" | "KKJ"> = {
   [UTPL_COMPANY_ID]: "UTPL",
@@ -39,7 +39,7 @@ type WorkItem = {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
-  if (!ADMIN.includes(auth.email.toLowerCase())) {
+  if (!isAdmin(auth.email.toLowerCase())) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
