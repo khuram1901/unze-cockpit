@@ -212,7 +212,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [bulkCompanyId, setBulkCompanyId] = useState("");
   const [bulkOwnerId, setBulkOwnerId] = useState("");
   const [bulkApplying, setBulkApplying] = useState(false);
-  const [bulkMembers, setBulkMembers] = useState<{ id: string; name: string; email: string | null; department: string | null; business_unit: string | null }[]>([]);
+  const [bulkMembers, setBulkMembers] = useState<{ id: string; name: string; email: string | null; department: string | null; business_unit: string | null; employee_code: string | null }[]>([]);
+  const [emailToCode, setEmailToCode] = useState<Map<string, string>>(new Map());
 
   const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "CEO" || currentRole === "Executive");
 
@@ -329,7 +330,12 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).then(({ data }) => setCompanies(data || []));
     supabase.from("department_owners").select("department_name").order("department_name").then(({ data }) => setAllDepartments((data || []).map((d) => d.department_name)));
     supabase.rpc("get_tasks_department_breakdown").then(({ data, error }) => { if (!error) setDeptBreakdown(data || []); });
-    supabase.from("members").select("id, name, email, department, business_unit").eq("is_active", true).order("name").then(({ data }) => setBulkMembers(data || []));
+    supabase.from("members").select("id, name, email, department, business_unit, employee_code").eq("is_active", true).order("name").then(({ data }) => {
+      setBulkMembers(data || []);
+      const codeMap = new Map<string, string>();
+      for (const m of (data || [])) { if (m.email && m.employee_code) codeMap.set(m.email, m.employee_code); }
+      setEmailToCode(codeMap);
+    });
   }, []);
 
   // Re-run the KPI RPC whenever the Company filter changes, so the KPI
@@ -429,7 +435,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       if (subtaskFilter === "complete" && !(total > 0 && done === total)) return false;
       if (subtaskFilter === "none" && total > 0) return false;
     }
-    if (searchQuery.trim() && !t.description.toLowerCase().includes(searchQuery.trim().toLowerCase())) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const matchDesc = t.description.toLowerCase().includes(q);
+      const matchName = (t.assigned_to || "").toLowerCase().includes(q);
+      const matchCode = t.assigned_to_email ? (emailToCode.get(t.assigned_to_email) || "").toLowerCase().includes(q) : false;
+      if (!matchDesc && !matchName && !matchCode) return false;
+    }
     return true;
   });
 
@@ -908,6 +920,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               <span title={otherAssignees.length > 0 ? `Also: ${otherAssignees.join(", ")}` : undefined}>
                 <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>To:</span>{" "}
                 <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>{task.assigned_to || "Unassigned"}</span>
+                {task.assigned_to_email && emailToCode.get(task.assigned_to_email) && (
+                  <span style={{ fontSize: "10px", color: COLOURS.SLATE }}> [{emailToCode.get(task.assigned_to_email)}]</span>
+                )}
                 {otherAssignees.length > 0 && <span style={{ color: COLOURS.SLATE }}> +{otherAssignees.length}</span>}
               </span>
               {(() => {
@@ -1725,6 +1740,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           memberPhones={memberPhones}
           meetingTitles={meetingTitles}
           companies={companies}
+          emailToCode={emailToCode}
           onChanged={refreshAll}
         />
       )}

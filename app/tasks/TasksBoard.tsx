@@ -71,6 +71,7 @@ export default function TasksBoard({
   memberPhones,
   meetingTitles,
   companies,
+  emailToCode,
   onChanged,
 }: {
   tasks: Task[];
@@ -82,6 +83,7 @@ export default function TasksBoard({
   memberPhones: Record<string, string>;
   meetingTitles?: Record<string, string>;
   companies?: { id: string; name: string; short_code: string | null }[];
+  emailToCode?: Map<string, string>;
   onChanged: () => void;
 }) {
   const toast = useToast();
@@ -240,7 +242,12 @@ export default function TasksBoard({
                           <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginBottom: "5px" }}>→ {t.stage}</div>
                         )}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "11px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.assigned_to || "Unassigned"}</span>
+                          <span style={{ fontSize: "11px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {t.assigned_to || "Unassigned"}
+                            {t.assigned_to_email && emailToCode?.get(t.assigned_to_email) && (
+                              <span style={{ fontSize: "9.5px", marginLeft: "4px", opacity: 0.7 }}>[{emailToCode.get(t.assigned_to_email)}]</span>
+                            )}
+                          </span>
                           {t.due_date && (
                             <span style={{ fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", fontSize: "10.5px", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 400, flexShrink: 0 }}>
                               {formatDateUK(t.due_date)}

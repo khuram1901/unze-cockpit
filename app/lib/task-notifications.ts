@@ -18,13 +18,14 @@ export async function notifyTaskAssigned(
 ): Promise<{ skipped?: string } | void> {
   const { data: member } = await supabase
     .from("members")
-    .select("first_name, last_name, name, notify_email, notify_whatsapp, phone_e164")
+    .select("first_name, last_name, name, employee_code, notify_email, notify_whatsapp, phone_e164")
     .eq("email", recipientEmail)
     .maybeSingle();
 
   if (!member?.notify_email) return { skipped: "email notifications disabled" };
 
   const memberName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || recipientEmail;
+  const memberDisplay = member.employee_code ? `${memberName} (${member.employee_code})` : memberName;
 
   const { data: task } = await supabase
     .from("tasks")
@@ -38,7 +39,7 @@ export async function notifyTaskAssigned(
     subject: `[TASK] ${task.description?.slice(0, 60)}`,
     heading: "New Task Assigned to You",
     body: `
-      <p><strong>${memberName}</strong>, you have a new task:</p>
+      <p><strong>${memberDisplay}</strong>, you have a new task:</p>
       <p style="background:#f1f5f9;padding:12px;border-radius:6px;border-left:3px solid #2563eb">
         ${task.description}
       </p>
@@ -52,7 +53,7 @@ export async function notifyTaskAssigned(
     triggerRecordId: taskId,
     recipientName: memberName,
     whatsAppPhone: member.notify_whatsapp ? member.phone_e164 : null,
-    whatsAppMessage: `New task assigned: ${task.description?.slice(0, 100)}. Priority: ${task.priority}. Check the dashboard for details.`,
+    whatsAppMessage: `New task assigned to ${memberDisplay}: ${task.description?.slice(0, 90)}. Priority: ${task.priority}. Check the dashboard for details.`,
   });
 }
 

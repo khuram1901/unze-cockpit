@@ -19,7 +19,7 @@ type Comment = {
 
 type Company = { id: string; name: string; short_code: string };
 type DepartmentOwner = { id: string; department_name: string };
-type MemberLite = { id: string; name: string; email: string | null; department: string | null; business_unit: string | null };
+type MemberLite = { id: string; name: string; email: string | null; department: string | null; business_unit: string | null; employee_code?: string | null };
 
 const PRIORITY_OPTIONS = ["Urgent", "High", "Medium", "Normal", "Low"];
 
@@ -142,7 +142,7 @@ export default function TaskDetailPanel({
       const [companiesRes, deptRes, membersRes, assigneesRes] = await Promise.all([
         supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name"),
         supabase.from("department_owners").select("id, department_name").order("department_name"),
-        supabase.from("members").select("id, name, email, department, business_unit").eq("is_active", true).order("name"),
+        supabase.from("members").select("id, name, email, department, business_unit, employee_code").eq("is_active", true).order("name"),
         supabase.from("task_assignees").select("member_id, member_email").eq("task_id", task.id),
       ]);
       setCompanies(companiesRes.data || []);
@@ -339,6 +339,7 @@ export default function TaskDetailPanel({
                       {initials(m.name)}
                     </span>
                     <span style={{ fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 600 }}>{m.name}</span>
+                    {m.employee_code && <span style={{ fontSize: "10px", color: COLOURS.SLATE }}>{m.employee_code}</span>}
                     {i === 0 && <span style={{ fontSize: "9px", fontWeight: 700, color: COLOURS.BLUE, letterSpacing: "0.04em" }}>PRIMARY</span>}
                   </div>
                 ))}
@@ -348,6 +349,9 @@ export default function TaskDetailPanel({
                       {initials(task.assigned_to)}
                     </span>
                     <span style={{ fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 600 }}>{task.assigned_to}</span>
+                    {task.assigned_to_email && members.find((m) => m.email === task.assigned_to_email)?.employee_code && (
+                      <span style={{ fontSize: "10px", color: COLOURS.SLATE }}>{members.find((m) => m.email === task.assigned_to_email)!.employee_code}</span>
+                    )}
                   </div>
                 )}
               </div>
