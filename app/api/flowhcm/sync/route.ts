@@ -125,10 +125,15 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
     empMap.set(code, {
       employee_code:  code,
       // Smart full name: if EmployeeName is a single word, append FatherName; if already multi-word, use as-is.
+      // Also strip duplicated first word (e.g. "Muhammad Muhammad Akram" → "Muhammad Akram")
+      // — a known FlowHCM data quality issue where EmployeeName repeats the prefix.
       full_name:      (() => {
         const n = (typeof e.EmployeeName === 'string' && e.EmployeeName.trim()) || '';
         const f = (typeof e.FatherName   === 'string' && e.FatherName.trim())   || '';
-        return n ? (n.includes(' ') ? n : (f ? n + ' ' + f : n)) : null;
+        let name = n ? (n.includes(' ') ? n : (f ? n + ' ' + f : n)) : null;
+        // Deduplicate: "Muhammad Muhammad Akram" → "Muhammad Akram"
+        if (name) name = name.replace(/^(\S+)\s+\1\s+/i, '$1 ').trim();
+        return name || null;
       })(),
       father_name:    (typeof e.FatherName === 'string' && e.FatherName.trim()) || null,
       designation:    e.DesignationName && e.DesignationName !== "--" ? e.DesignationName : null,
