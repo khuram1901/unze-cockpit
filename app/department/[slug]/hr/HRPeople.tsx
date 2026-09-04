@@ -55,6 +55,22 @@ export default function HRPeople() {
   const [station, setStation]       = useState("");
   const filterOpts = useHRFilterOptions();
 
+  // Cascade: when company changes, clear dependent filters
+  const handleCompanyChange = (v: string) => {
+    setCompany(v);
+    setDepartment("");
+    setStation("");
+  };
+
+  // Cascade: visible departments/stations based on selected company
+  const selectedCo = company ? (filterOpts?.companies ?? []).find(c => c.id === company) : null;
+  const visibleDepts = selectedCo
+    ? (filterOpts?.departments ?? []).filter(d => (selectedCo.department_ids ?? []).includes(d.id))
+    : (filterOpts?.departments ?? []);
+  const visibleStations = selectedCo
+    ? (selectedCo.stations ?? [])
+    : (filterOpts?.stations ?? []);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -107,12 +123,12 @@ export default function HRPeople() {
     <div>
       {/* Filters */}
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "14px" }}>
-        <FilterSelect label="All companies" value={company} onChange={setCompany}
+        <FilterSelect label="All companies" value={company} onChange={handleCompanyChange}
           options={(filterOpts?.companies ?? []).map(co => ({ value: co.id, label: co.name }))} />
         <FilterSelect label="All departments" value={department} onChange={setDepartment}
-          options={(filterOpts?.departments ?? []).map(d => ({ value: d.id, label: d.name }))} />
+          options={visibleDepts.map(d => ({ value: d.id, label: d.name }))} />
         <FilterSelect label="All stations" value={station} onChange={setStation}
-          options={(filterOpts?.stations ?? []).map(s => ({ value: s, label: s }))} />
+          options={visibleStations.map(s => ({ value: s, label: s }))} />
         {(company || department || station) && (
           <button onClick={() => { setCompany(""); setDepartment(""); setStation(""); }} style={{
             padding: "8px 12px", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE,
@@ -140,7 +156,7 @@ export default function HRPeople() {
               fontSize: "12px", padding: "4px 10px", borderRadius: RADII.PILL,
               backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, color: COLOURS.INK_700,
             }}>
-              <strong style={{ color: COLOURS.NAVY }}>{c.code}</strong> {c.active}
+              <strong style={{ color: COLOURS.NAVY }}>{c.name}</strong> {c.active}
             </span>
           ))}
         </div>

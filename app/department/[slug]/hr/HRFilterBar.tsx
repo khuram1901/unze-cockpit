@@ -11,7 +11,7 @@ import { authFetch } from "../../../lib/supabase";
 import { COLOURS, RADII } from "../../../lib/SharedUI";
 
 export type HRFilterOptions = {
-  companies: { id: string; name: string; code: string | null }[];
+  companies: { id: string; name: string; code: string | null; department_ids: string[]; stations: string[] }[];
   departments: { id: string; name: string }[];
   stations: string[];
   locations: { id: string; name: string }[];
