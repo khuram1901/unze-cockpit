@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase, loadMyPermissions } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, SectionTitle, CountCard, SkeletonRows, inputStyle, labelStyle, cardGrid } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
-import { canEditReceivables, isAdminTier, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canEditReceivables, isAdminTier, widgetVisible } from "../lib/permissions";
 import { useUserCtx } from "../lib/useUserCtx";
 
 type Stage = { id: string; stage_order: number; stage_name: string; working_day_budget: number };
@@ -120,6 +120,13 @@ export default function ReceivablesPage() {
   const { ctx: widgetCtx } = useUserCtx();
   const wv = (key: string, defaultVisible: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
 
+  // Derive edit/admin flags from the already-loaded context — no extra network call.
+  useEffect(() => {
+    if (!widgetCtx) return;
+    setCanEdit(canEditReceivables(widgetCtx));
+    setIsAdmin(isAdminTier(widgetCtx));
+  }, [widgetCtx]);
+
   const [editBillId, setEditBillId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ utility: "", amount: "", date_submitted: "", invoice_ref: "", ic_ref: "", grn_ref: "", notes: "", bill_type: "Normal" });
   const [savingEdit, setSavingEdit] = useState(false);
@@ -164,20 +171,6 @@ export default function ReceivablesPage() {
 
   async function loadData() {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    const email = user?.email || "";
-
-    if (email) {
-      const { data: member } = await supabase.from("members").select("id, role, department, company").eq("email", email).single();
-      if (member) {
-        let overrides: PermOverrides | null = null;
-        const p = await loadMyPermissions();
-        if (p) overrides = p as PermOverrides;
-        const ctx: UserCtx = { email, role: member.role, department: member.department, company: member.company, overrides };
-        setCanEdit(canEditReceivables(ctx));
-        setIsAdmin(isAdminTier(ctx));
-      }
-    }
 
     const [stagesRes, billsRes, collectedRes, plantsRes, ragRes, agingTotalsRes, agingByCustomerRes, collectedByPlantRes] = await Promise.all([
       supabase.from("receivable_stages").select("id, stage_order, stage_name, working_day_budget").order("stage_order"),

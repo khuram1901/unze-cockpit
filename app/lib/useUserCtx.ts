@@ -1,14 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { UserCtxContext } from "./AuthWrapper";
 import { supabase, loadMyPermissions, loadMyWidgetOverrides } from "./supabase";
 import type { UserCtx, PermOverrides, WidgetOverrides } from "./permissions";
 
 export function useUserCtx(): { ctx: UserCtx | null; loading: boolean } {
+  const ctxValue = useContext(UserCtxContext);
   const [ctx, setCtx] = useState<UserCtx | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Fast path — AuthWrapper has already loaded everything; just read from context.
   useEffect(() => {
+    if (ctxValue === null) return;
+    setCtx(ctxValue.userCtx);
+    setLoading(false);
+  }, [ctxValue]);
+
+  // Slow path — rendered outside AuthWrapper (e.g. standalone pages / tests).
+  useEffect(() => {
+    if (ctxValue !== null) return; // context available — fast path handles it
     let active = true;
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -35,7 +46,7 @@ export function useUserCtx(): { ctx: UserCtx | null; loading: boolean } {
     }
     load();
     return () => { active = false; };
-  }, []);
+  }, [ctxValue]);
 
   return { ctx, loading };
 }

@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, createContext } from "react";
-import { supabase, loadMyPermissions, ensureFreshSession, pendingSessionRefresh } from "./supabase";
+import { supabase, loadMyPermissions, loadMyWidgetOverrides, ensureFreshSession, pendingSessionRefresh } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
 import ChatPanel from "./ChatPanel";
 import FloatingTaskButton from "./FloatingTaskButton";
-import { canSeeAllTasks, canCreateAssignments, isSecondaryCEO, myIdentityEmails, type UserCtx, type PermOverrides } from "./permissions";
+import { canSeeAllTasks, canCreateAssignments, isSecondaryCEO, myIdentityEmails, type UserCtx, type PermOverrides, type WidgetOverrides } from "./permissions";
 import { COLOURS } from "./SharedUI";
 
 type Member = {
@@ -165,13 +165,14 @@ export default function AuthWrapper({
       setEmail(user.email ?? null);
       // Parallelise member lookup + permissions — cuts one sequential round-trip
       // off every initial page load. Both calls are independent of each other.
-      const [{ data: memberData }, permData] = await Promise.all([
+      const [{ data: memberData }, permData, widgetData] = await Promise.all([
         supabase
           .from("members")
           .select("id, name, first_name, last_name, role, department, company, photo_url")
           .eq("email", user.email)
           .single(),
         loadMyPermissions(session.access_token),
+        loadMyWidgetOverrides(session.access_token),
       ]);
       if (memberData) {
         setMember(memberData);
@@ -183,6 +184,7 @@ export default function AuthWrapper({
           department: memberData.department,
           company: memberData.company,
           overrides,
+          widgetOverrides: widgetData ? (widgetData as WidgetOverrides) : null,
         });
       }
       setLoading(false);
