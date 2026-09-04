@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, loadMyPermissions } from "./supabase";
 import {
@@ -14,6 +14,7 @@ import {
   isPrivileged, isAdminTier, isMainAdmin,
   type UserCtx, type PermOverrides,
 } from "./permissions";
+import { UserCtxContext } from "./AuthWrapper";
 
 type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
@@ -94,13 +95,28 @@ function useAuthGuard(
   guardKey: string,
 ): { checking: boolean; ctx: UserCtx | null } {
   const router = useRouter();
+  // Fast path: AuthWrapper has already loaded the session; read it from context
+  // so this hook costs zero extra network round-trips on every page navigation.
+  const ctxValue = useContext(UserCtxContext);
+
   const [checking, setChecking] = useState(true);
   const [ctx, setCtx] = useState<UserCtx | null>(null);
 
   const allowRef = useRef(allow);
   useEffect(() => { allowRef.current = allow; });
 
+  // Fast path — fires when context is available (inside AuthWrapper)
   useEffect(() => {
+    if (ctxValue === null) return; // not inside AuthWrapper — slow path handles it
+    if (!ctxValue.userCtx) { router.replace("/login"); return; }
+    if (!allowRef.current(ctxValue.userCtx)) { router.replace("/welcome"); return; }
+    setCtx(ctxValue.userCtx);
+    setChecking(false);
+  }, [ctxValue, router]);
+
+  // Slow path — independent load when rendered outside AuthWrapper
+  useEffect(() => {
+    if (ctxValue !== null) return; // fast path handles it
     let active = true;
     async function check() {
       // getSession() reads from localStorage — no network call.
@@ -123,7 +139,7 @@ function useAuthGuard(
       if (active) router.replace("/login");
     });
     return () => { active = false; };
-  }, [guardKey, router]);
+  }, [guardKey, router, ctxValue]);
 
   return { checking, ctx };
 }

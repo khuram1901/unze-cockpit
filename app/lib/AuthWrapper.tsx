@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, createContext } from "react";
 import { supabase, loadMyPermissions, ensureFreshSession, pendingSessionRefresh } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
@@ -21,6 +21,15 @@ type Member = {
 };
 
 const { SLATE } = COLOURS;
+
+// ── Shared user context — consumed by useRequireCapability so pages skip re-fetching ──
+export type UserCtxContextValue = {
+  userCtx: UserCtx | null;
+  userEmail: string | null;
+  member: Member | null;
+};
+export const UserCtxContext = createContext<UserCtxContextValue | null>(null);
+
 
 function displayName(member: Member | null, email: string | null) {
   if (!member) return email || "User";
@@ -405,6 +414,7 @@ export default function AuthWrapper({
     : SLATE;
 
   return (
+    <UserCtxContext.Provider value={{ userCtx, userEmail: email, member }}>
     <>
       {idleCountdown !== null && (
         <div style={{ position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 3000, background: "#fff", border: "1.5px solid #B4791F", borderRadius: 12, boxShadow: "0 8px 30px rgba(15,23,32,0.25)", padding: "12px 18px", display: "flex", alignItems: "center", gap: 14 }}>
@@ -456,5 +466,6 @@ export default function AuthWrapper({
         <FloatingTaskButton />
       )}
     </>
+    </UserCtxContext.Provider>
   );
 }

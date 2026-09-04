@@ -4,6 +4,25 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.3 — 2026-09-04 (minor bump)
+
+**restore HR Performance tab**
+
+---
+
+
+## v4.2 — 2026-09-04 (minor bump)
+
+**restore Performance tab to HR dashboard**
+
+- Restored HRPerformance.tsx (task-based performance scoring by dept/employee)
+- Restored app/api/hr/performance/route.ts (get_performance_summary RPC wrapper)
+- Re-added Performance tab to HRDashboard.tsx (between Attendance and T&D)
+- RPC uses tasks table — was never dependent on the dropped performance_evaluations table
+
+---
+
+
 ## v4.1 — 2026-09-04 (minor bump)
 
 **automatic version tracking system**
