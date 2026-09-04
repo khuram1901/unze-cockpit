@@ -124,8 +124,13 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
     if (!code) continue;
     empMap.set(code, {
       employee_code:  code,
-      // Use EmployeeName only — FatherName is the father's name in FlowHCM, not a surname.
-      full_name:      (typeof e.EmployeeName === 'string' && e.EmployeeName.trim()) || null,
+      // Smart full name: if EmployeeName is a single word, append FatherName; if already multi-word, use as-is.
+      full_name:      (() => {
+        const n = (typeof e.EmployeeName === 'string' && e.EmployeeName.trim()) || '';
+        const f = (typeof e.FatherName   === 'string' && e.FatherName.trim())   || '';
+        return n ? (n.includes(' ') ? n : (f ? n + ' ' + f : n)) : null;
+      })(),
+      father_name:    (typeof e.FatherName === 'string' && e.FatherName.trim()) || null,
       designation:    e.DesignationName && e.DesignationName !== "--" ? e.DesignationName : null,
       department:     e.DepartmentName  && e.DepartmentName  !== "--" ? e.DepartmentName  : null,
       sub_department: e.SubDepName      && e.SubDepName      !== "--" ? e.SubDepName      : null,
