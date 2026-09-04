@@ -4,6 +4,13 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.1 — 2026-09-04 (minor bump)
+
+**automatic version tracking system**
+
+---
+
+
 ## 2026-09-03 — Security hardening (full audit implementation)
 
 **HTTP security headers (`next.config.ts`):** Added 5 response headers to every route: `Content-Security-Policy` (Phase 1 — unsafe-inline/unsafe-eval permitted; connect-src covers Supabase, Google, Frankfurter, Open Exchange Rates; frame-ancestors/frame-src none), `Strict-Transport-Security` (2-year HSTS + preload), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`. Original redirect (`/executive → /home`) and `serverExternalPackages: ["pdf-parse"]` preserved.
@@ -1517,4 +1524,3 @@ Permission model (migration 027):
 - Receivables: 2 full-table fetches → 3 RPC calls returning ~10 rows each
 
 **Verification:** All RPC outputs cross-checked against raw table data — all matched. No data loss.
-
