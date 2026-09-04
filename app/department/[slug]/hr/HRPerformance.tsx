@@ -283,7 +283,7 @@ function GroupView({
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead><tr>
-                <th style={thS}>Code</th>
+                <th style={thS}>#</th>
                 <th style={thS}>Department</th>
                 <th style={thS}>Company</th>
                 <th style={{ ...thS, textAlign: "right" }}>Tasks</th>
@@ -301,8 +301,13 @@ function GroupView({
                     onMouseEnter={e => (e.currentTarget.style.background = COLOURS.CARD_ALT)}
                     onMouseLeave={e => (e.currentTarget.style.background = "")}
                   >
-                    <td style={{ ...tdS, fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE }}>
-                      {d.employee_code || "—"}
+                    <td style={{ ...tdS, color: COLOURS.SLATE, width: "32px" }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: "22px", height: "22px", borderRadius: "50%", fontSize: "11px", fontWeight: 700,
+                        background: i < 3 ? STATUS_CONFIG.star.bg : COLOURS.CARD_ALT,
+                        color: i < 3 ? STATUS_CONFIG.star.color : COLOURS.SLATE,
+                      }}>{i + 1}</span>
                     </td>
                     <td style={{ ...tdS, fontWeight: 600 }}>{d.department}</td>
                     <td style={{ ...tdS, color: COLOURS.SLATE, fontSize: "12px" }}>{d.company}</td>

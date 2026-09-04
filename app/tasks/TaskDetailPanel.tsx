@@ -349,9 +349,10 @@ export default function TaskDetailPanel({
                       {initials(task.assigned_to)}
                     </span>
                     <span style={{ fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 600 }}>{task.assigned_to}</span>
-                    {task.assigned_to_email && members.find((m) => m.email === task.assigned_to_email)?.employee_code && (
-                      <span style={{ fontSize: "10px", color: COLOURS.SLATE }}>{members.find((m) => m.email === task.assigned_to_email)!.employee_code}</span>
-                    )}
+                    {task.assigned_to_email && (() => {
+                      const code = members.find((m) => m.email === task.assigned_to_email)?.employee_code;
+                      return code ? <span style={{ fontSize: "10px", color: COLOURS.SLATE }}>{code}</span> : null;
+                    })()}
                   </div>
                 )}
               </div>
