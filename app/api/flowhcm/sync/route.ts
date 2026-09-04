@@ -124,11 +124,8 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
     if (!code) continue;
     empMap.set(code, {
       employee_code:  code,
-      // Build full name from EmployeeName (first name) + FatherName (surname in FlowHCM).
-      // Trim each part and join with a single space; fall back gracefully if either is absent.
-      full_name:      [e.EmployeeName, e.FatherName]
-                        .map((v: unknown) => (typeof v === 'string' ? v.trim() : ''))
-                        .filter(Boolean).join(' ') || null,
+      // Use EmployeeName only — FatherName is the father's name in FlowHCM, not a surname.
+      full_name:      (typeof e.EmployeeName === 'string' && e.EmployeeName.trim()) || null,
       designation:    e.DesignationName && e.DesignationName !== "--" ? e.DesignationName : null,
       department:     e.DepartmentName  && e.DepartmentName  !== "--" ? e.DepartmentName  : null,
       sub_department: e.SubDepName      && e.SubDepName      !== "--" ? e.SubDepName      : null,
