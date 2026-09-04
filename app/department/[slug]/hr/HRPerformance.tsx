@@ -363,9 +363,9 @@ function GroupView({
                           background: STATUS_CONFIG[e.status].bg, color: STATUS_CONFIG[e.status].color,
                           display: "flex", alignItems: "center", justifyContent: "center",
                           fontSize: "11px", fontWeight: 700,
-                        }}>{initials(e.name)}</div>
+                        }}>{initials(e.emp_name)}</div>
                         <div>
-                          <div style={{ fontWeight: 600, color: COLOURS.NAVY }}>{e.name}</div>
+                          <div style={{ fontWeight: 600, color: COLOURS.NAVY }}>{e.emp_name}</div>
                           {e.employee_code && <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{e.employee_code}</div>}
                         </div>
                       </div>
@@ -538,8 +538,8 @@ function CompanyView({
                     </td>
                     <td style={tdS}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div style={{ width: "30px", height: "30px", borderRadius: "50%", flexShrink: 0, background: STATUS_CONFIG[e.status].bg, color: STATUS_CONFIG[e.status].color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700 }}>{initials(e.name)}</div>
-                        <div><div style={{ fontWeight: 600 }}>{e.name}</div>{e.employee_code && <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{e.employee_code}</div>}</div>
+                        <div style={{ width: "30px", height: "30px", borderRadius: "50%", flexShrink: 0, background: STATUS_CONFIG[e.status].bg, color: STATUS_CONFIG[e.status].color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700 }}>{initials(e.emp_name)}</div>
+                        <div><div style={{ fontWeight: 600 }}>{e.emp_name}</div>{e.employee_code && <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{e.employee_code}</div>}</div>
                       </div>
                     </td>
                     <td style={{ ...tdS, fontSize: "12px", color: COLOURS.SLATE }}>{e.department}</td>
@@ -675,8 +675,8 @@ function DeptView({
                     </td>
                     <td style={tdS}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div style={{ width: "30px", height: "30px", borderRadius: "50%", flexShrink: 0, background: STATUS_CONFIG[e.status].bg, color: STATUS_CONFIG[e.status].color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700 }}>{initials(e.name)}</div>
-                        <div><div style={{ fontWeight: 600 }}>{e.name}</div>{e.employee_code && <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{e.employee_code}</div>}</div>
+                        <div style={{ width: "30px", height: "30px", borderRadius: "50%", flexShrink: 0, background: STATUS_CONFIG[e.status].bg, color: STATUS_CONFIG[e.status].color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700 }}>{initials(e.emp_name)}</div>
+                        <div><div style={{ fontWeight: 600 }}>{e.emp_name}</div>{e.employee_code && <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{e.employee_code}</div>}</div>
                       </div>
                     </td>
                     <td style={tdR}>{e.total_tasks}</td>
