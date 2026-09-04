@@ -124,11 +124,11 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
     if (!code) continue;
     empMap.set(code, {
       employee_code:  code,
-      // EmployeeName only carries the first name. Do NOT use AccountTitle as a
-      // fallback — bank accounts can be titled to family members, so it can
-      // show the wrong person's name. First name only until FlowHCM exposes
-      // a proper full-name field.
-      full_name:      e.EmployeeName ?? null,
+      // Build full name from EmployeeName (first name) + FatherName (surname in FlowHCM).
+      // Trim each part and join with a single space; fall back gracefully if either is absent.
+      full_name:      [e.EmployeeName, e.FatherName]
+                        .map((v: unknown) => (typeof v === 'string' ? v.trim() : ''))
+                        .filter(Boolean).join(' ') || null,
       designation:    e.DesignationName && e.DesignationName !== "--" ? e.DesignationName : null,
       department:     e.DepartmentName  && e.DepartmentName  !== "--" ? e.DepartmentName  : null,
       sub_department: e.SubDepName      && e.SubDepName      !== "--" ? e.SubDepName      : null,
@@ -170,6 +170,10 @@ async function syncEmployees(db: ReturnType<typeof createServiceClient>) {
     // logged in flw_lifecycle_events; lifecycle_exempt members untouched.
     const { error: lifeErr } = await db.rpc("sync_member_lifecycle");
     if (lifeErr) console.error("sync_member_lifecycle:", lifeErr.message);
+
+    // Push corrected full names from flw_employees → members.name (migration 232).
+    const { error: nameErr } = await db.rpc("sync_member_names_from_flw");
+    if (nameErr) console.error("sync_member_names_from_flw:", nameErr.message);
   }
 
   await logSync(db, "employees", "success", rows.length, Date.now() - t0);

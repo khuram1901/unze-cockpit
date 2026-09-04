@@ -3,601 +3,849 @@
 import { useCallback, useEffect, useState } from "react";
 import { authFetch } from "../../../lib/supabase";
 import { COLOURS, RADII, SectionTitle, SkeletonRows } from "../../../lib/SharedUI";
-import { useMobile } from "../../../lib/useMobile";
 import EmployeeDetailPanel from "./EmployeeDetailPanel";
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type StatusKey = "star" | "on_track" | "at_risk" | "needs_help";
+
+type CompanyStrip = {
+  company:         string;
+  efficiency_score:number;
+  total_tasks:     number;
+  overdue_count:   number;
+  stuck_count:     number;
+  submitted_count: number;
+};
 
 type DeptRow = {
   department:      string;
-  company_id:      string;
-  company_name:    string;
-  total:           number;
-  completed:       number;
-  on_time:         number;
-  late:            number;
-  overdue:         number;
-  employee_credit: number;
-  completion_pct:  number | null;
-  ontime_pct:      number | null;
+  company?:        string;
+  total_tasks:     number;
+  on_time_count:   number;
+  overdue_count:   number;
+  stuck_count:     number;
+  efficiency_score:number;
+  status:          StatusKey;
 };
 
 type EmpRow = {
   email:           string;
   name:            string;
   department:      string;
-  company_id:      string;
-  company_name:    string;
-  total:           number;
-  completed:       number;
-  on_time:         number;
-  late:            number;
-  overdue:         number;
-  employee_credit: number;
-  completion_pct:  number | null;
-  ontime_pct:      number | null;
+  company?:        string;
+  employee_code:   string;
+  total_tasks:     number;
+  self_gen_count:  number;
+  on_time_count:   number;
+  submitted_count: number;
+  overdue_count:   number;
+  stuck_count:     number;
+  efficiency_score:number;
+  status:          StatusKey;
 };
 
-type MgrRow = {
-  email:           string;
-  name:            string;
-  pending_review:  number;
-  tasks_completed: number;
-  tasks_assigned:  number;
+type StuckTask = {
+  task_id:      string;
+  task_name:    string;
+  emp_name:     string;
+  employee_code:string;
+  department?:  string;
+  status:       string;
+  stuck_reason: string | null;
+  due_date:     string;
+  days_overdue: number;
 };
 
-type Totals = {
-  total_assigned:     number;
-  total_completed:    number;
-  total_on_time:      number;
-  total_overdue:      number;
-  total_submitted:    number;
-  avg_completion_pct: number | null;
-  avg_ontime_pct:     number | null;
+type OverviewData = {
+  period_days: number;
+  companies:   CompanyStrip[];
+  kpis: {
+    group_efficiency: number;
+    total_overdue:    number;
+    total_stuck:      number;
+    total_awaiting:   number;
+    total_tasks:      number;
+  };
+  departments: DeptRow[];
+  employees:   EmpRow[];
 };
 
-type PerfData = {
-  period_days:  number;
-  totals:       Totals;
+type CompanyData = {
+  period_days:   number;
+  company:       string;
+  all_companies: CompanyStrip[];
+  kpis: {
+    efficiency_score: number;
+    total_tasks:      number;
+    total_overdue:    number;
+    total_stuck:      number;
+    total_awaiting:   number;
+    total_employees:  number;
+  };
   departments:  DeptRow[];
   employees:    EmpRow[];
-  managers:     MgrRow[];
+  stuck_tasks:  StuckTask[];
 };
 
-const PERIOD_OPTIONS = [
-  { label: "Last 30 days",  value: 30  },
-  { label: "Last 90 days",  value: 90  },
-  { label: "Last 180 days", value: 180 },
-] as const;
+type DeptData = {
+  period_days: number;
+  department:  string;
+  company:     string;
+  kpis: {
+    total_tasks:      number;
+    self_gen_count:   number;
+    on_time_count:    number;
+    submitted_count:  number;
+    overdue_count:    number;
+    stuck_count:      number;
+    total_employees:  number;
+    efficiency_score: number;
+  };
+  task_breakdown: {
+    on_time:   number;
+    late:      number;
+    submitted: number;
+    overdue:   number;
+    stuck:     number;
+    running:   number;
+    self_gen:  number;
+  };
+  employees:   EmpRow[];
+  stuck_tasks: StuckTask[];
+};
 
-// System accounts that should never appear as managers or employees
-const SYSTEM_ACCOUNTS = ["meeting minutes", "recurring template", "system", "auto"];
+// ── Design helpers ─────────────────────────────────────────────────────────────
 
-function isSystemAccount(name: string): boolean {
-  return SYSTEM_ACCOUNTS.some(s => name.toLowerCase().includes(s));
+const STATUS_CONFIG: Record<StatusKey, { icon: string; label: string; color: string; bg: string }> = {
+  star:       { icon: "⭐", label: "Star",      color: "#0F7B5F", bg: "#E7F2ED" },
+  on_track:   { icon: "✓",  label: "On track",  color: "#0F7B5F", bg: "#E7F2ED" },
+  at_risk:    { icon: "⚠",  label: "At risk",   color: "#B4791F", bg: "#FBF1DE" },
+  needs_help: { icon: "🚫", label: "Needs help", color: "#B3261E", bg: "#FEE2E2" },
+};
+
+function effColor(score: number, overdue = 1): string {
+  if (score >= 65 && overdue === 0) return "#0F7B5F";
+  if (score >= 55) return "#0F7B5F";
+  if (score >= 30) return "#B4791F";
+  return "#B3261E";
 }
 
-// ── Merge helpers ─────────────────────────────────────────────────────────────
-
-/** Collapse same-named departments across companies into one row */
-function mergeDepts(rows: DeptRow[]): DeptRow[] {
-  const map = new Map<string, DeptRow>();
-  for (const r of rows) {
-    const existing = map.get(r.department);
-    if (existing) {
-      existing.total           += r.total;
-      existing.completed       += r.completed;
-      existing.on_time         += r.on_time;
-      existing.late            += r.late;
-      existing.overdue         += r.overdue;
-      existing.employee_credit += r.employee_credit;
-      existing.company_name     = ""; // multiple companies
-      existing.completion_pct   = existing.total > 0
-        ? Math.round(existing.completed / existing.total * 100) : null;
-      existing.ontime_pct       = existing.completed > 0
-        ? Math.round(existing.on_time / existing.completed * 100) : null;
-    } else {
-      map.set(r.department, { ...r });
-    }
-  }
-  return Array.from(map.values()).sort((a, b) => b.total - a.total);
-}
-
-/** Collapse same-email employees across companies/departments into one row */
-function mergeEmps(rows: EmpRow[]): EmpRow[] {
-  const map = new Map<string, EmpRow>();
-  for (const r of rows) {
-    if (isSystemAccount(r.name || r.email)) continue;
-    const existing = map.get(r.email);
-    if (existing) {
-      existing.total           += r.total;
-      existing.completed       += r.completed;
-      existing.on_time         += r.on_time;
-      existing.late            += r.late;
-      existing.overdue         += r.overdue;
-      existing.employee_credit += r.employee_credit;
-      existing.completion_pct   = existing.total > 0
-        ? Math.round(existing.completed / existing.total * 100) : null;
-      existing.ontime_pct       = existing.completed > 0
-        ? Math.round(existing.on_time / existing.completed * 100) : null;
-    } else {
-      map.set(r.email, { ...r });
-    }
-  }
-  return Array.from(map.values());
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-function ragColor(pct: number | null, field: "completion" | "ontime"): string {
-  if (pct === null) return COLOURS.SLATE;
-  const [green, amber] = field === "completion" ? [60, 30] : [50, 25];
-  if (pct >= green) return COLOURS.GREEN;
-  if (pct >= amber) return COLOURS.AMBER;
-  return COLOURS.RED;
-}
-
-function ragBg(pct: number | null, field: "completion" | "ontime"): string {
-  if (pct === null) return COLOURS.HAIRLINE;
-  const [green, amber] = field === "completion" ? [60, 30] : [50, 25];
-  if (pct >= green) return COLOURS.SUCCESS_SOFT;
-  if (pct >= amber) return COLOURS.WARNING_SOFT;
-  return COLOURS.DANGER_SOFT;
-}
-
-function initials(name: string): string {
+function initials(name: string) {
   return name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
 }
 
-function shortName(name: string): string {
-  if (name.includes("@")) return name.split("@")[0];
-  return name;
+function StatusBadge({ status }: { status: StatusKey }) {
+  const c = STATUS_CONFIG[status];
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: "3px",
+      fontSize: "11px", fontWeight: 600, padding: "3px 9px",
+      borderRadius: "999px", background: c.bg, color: c.color, whiteSpace: "nowrap",
+    }}>{c.icon} {c.label}</span>
+  );
 }
 
-// ── KPI Card ─────────────────────────────────────────────────────────────────
+function EffBar({ score, status }: { score: number; status: StatusKey }) {
+  const c = STATUS_CONFIG[status].color;
+  const bg = STATUS_CONFIG[status].bg;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: "120px" }}>
+      <div style={{ flex: 1, height: "6px", background: "#F1F3F6", borderRadius: "3px" }}>
+        <div style={{ width: `${score}%`, height: "100%", background: c, borderRadius: "3px" }} />
+      </div>
+      <span style={{
+        fontSize: "11px", fontWeight: 600, color: c, background: bg,
+        padding: "1px 7px", borderRadius: "999px", minWidth: "34px", textAlign: "center",
+      }}>{score}</span>
+    </div>
+  );
+}
 
-function KpiCard({ label, value, sub, valueColor }: {
-  label: string; value: string | number; sub?: string; valueColor?: string;
+const thS: React.CSSProperties = {
+  padding: "8px 12px", textAlign: "left", color: COLOURS.SLATE,
+  fontWeight: 500, fontSize: "11px", textTransform: "uppercase",
+  letterSpacing: "0.05em", background: COLOURS.CARD_ALT,
+  borderBottom: `1px solid ${COLOURS.HAIRLINE}`, whiteSpace: "nowrap",
+};
+const tdS: React.CSSProperties = {
+  padding: "10px 12px", color: COLOURS.NAVY, fontSize: "13px",
+  borderBottom: `1px solid ${COLOURS.HAIRLINE}`, verticalAlign: "middle",
+};
+const tdR: React.CSSProperties = { ...tdS, textAlign: "right" };
+
+function card(extra?: React.CSSProperties): React.CSSProperties {
+  return {
+    background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
+    borderRadius: RADII.CARD, padding: "18px 20px", ...extra,
+  };
+}
+
+function KpiCard({ label, value, sub, color }: {
+  label: string; value: string | number; sub?: string; color?: string;
 }) {
   return (
-    <div style={{
-      background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
-      borderRadius: RADII.CARD, padding: "16px 18px",
-    }}>
-      <div style={{ fontSize: "11px", color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>
-        {label}
-      </div>
-      <div style={{ fontSize: "28px", fontWeight: 600, color: valueColor ?? COLOURS.NAVY, lineHeight: 1 }}>
-        {value}
-      </div>
+    <div style={card()}>
+      <div style={{ fontSize: "11px", color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>{label}</div>
+      <div style={{ fontSize: "30px", fontWeight: 700, color: color ?? COLOURS.NAVY, lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>{sub}</div>}
     </div>
   );
 }
 
-// ── Score bar ─────────────────────────────────────────────────────────────────
+// ── Period selector ────────────────────────────────────────────────────────────
 
-function ScoreBar({ completion, ontime }: { completion: number | null; ontime: number | null }) {
-  const compColor = ragColor(completion, "completion");
-  const bg        = ragBg(completion, "completion");
-  const pct       = completion ?? 0;
-  return (
-    <div style={{ minWidth: "150px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <div style={{ flex: 1, height: "6px", background: COLOURS.TRACK, borderRadius: "3px" }}>
-          <div style={{
-            width: `${pct}%`, height: "100%", background: compColor,
-            borderRadius: "3px", minWidth: pct > 0 ? "4px" : "0",
-          }} />
-        </div>
-        <span style={{
-          display: "inline-block", padding: "2px 8px", borderRadius: "20px",
-          fontSize: "12px", fontWeight: 600, background: bg, color: compColor,
-          minWidth: "42px", textAlign: "center",
-        }}>
-          {completion !== null ? `${completion}%` : "—"}
-        </span>
-      </div>
-      <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px" }}>
-        {ontime !== null
-          ? <span style={{ color: ragColor(ontime, "ontime") }}>{ontime}% on time</span>
-          : <span>no completions yet</span>}
-      </div>
-    </div>
-  );
-}
+const PERIODS = [{ label: "30 days", value: 30 }, { label: "90 days", value: 90 }, { label: "180 days", value: 180 }];
 
-// ── Department table ──────────────────────────────────────────────────────────
+// ── Group view ────────────────────────────────────────────────────────────────
 
-function DeptTable({ rows, loading, deptFilter, setDeptFilter, showCompany }: {
-  rows: DeptRow[]; loading: boolean;
-  deptFilter: string; setDeptFilter: (d: string) => void;
-  showCompany: boolean;
+function GroupView({
+  data, loading, days, setDays,
+  onCompanyClick, onDeptClick, onEmpClick,
+}: {
+  data: OverviewData | null; loading: boolean; days: number; setDays: (d: number) => void;
+  onCompanyClick: (co: string) => void;
+  onDeptClick: (dept: string, co: string) => void;
+  onEmpClick: (email: string) => void;
 }) {
-  const thStyle: React.CSSProperties = {
-    padding: "8px 12px", textAlign: "left", color: COLOURS.SLATE,
-    fontWeight: 500, fontSize: "11px", textTransform: "uppercase",
-    letterSpacing: "0.05em", background: COLOURS.CARD_ALT,
-    borderBottom: `1px solid ${COLOURS.HAIRLINE}`, whiteSpace: "nowrap",
-  };
-  const tdStyle: React.CSSProperties = {
-    padding: "10px 12px", color: COLOURS.NAVY, fontSize: "13px",
-    borderBottom: `1px solid ${COLOURS.HAIRLINE}`, verticalAlign: "middle",
-  };
-  const numTd: React.CSSProperties = { ...tdStyle, color: COLOURS.SLATE, textAlign: "right" };
-
-  if (loading) return <SkeletonRows count={6} />;
-  if (!rows.length) {
-    return <div style={{ color: COLOURS.SLATE, fontSize: "13px", textAlign: "center", padding: "24px" }}>No data for this period.</div>;
-  }
+  const k = data?.kpis;
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Department</th>
-            {showCompany && <th style={thStyle}>Company</th>}
-            <th style={{ ...thStyle, textAlign: "right" }}>Assigned</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Done</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>On time</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Late</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Overdue</th>
-            <th style={{ ...thStyle, minWidth: "180px" }}>Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr
-              key={i}
-              style={{ cursor: "pointer", background: deptFilter === r.department ? COLOURS.TRACK : undefined }}
-              onClick={() => setDeptFilter(deptFilter === r.department ? "" : r.department)}
-            >
-              <td style={{ ...tdStyle, fontWeight: 600 }}>{r.department}</td>
-              {showCompany && <td style={{ ...tdStyle, color: COLOURS.SLATE, fontSize: "12px" }}>{r.company_name}</td>}
-              <td style={numTd}>{r.total}</td>
-              <td style={numTd}>{r.completed}</td>
-              <td style={{ ...numTd, color: COLOURS.GREEN }}>{r.on_time}</td>
-              <td style={{ ...numTd, color: r.late > 0 ? COLOURS.AMBER : COLOURS.SLATE }}>{r.late}</td>
-              <td style={{ ...numTd, color: r.overdue > 0 ? COLOURS.RED : COLOURS.SLATE, fontWeight: r.overdue > 0 ? 600 : 400 }}>{r.overdue}</td>
-              <td style={tdStyle}><ScoreBar completion={r.completion_pct} ontime={r.ontime_pct} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ── Employee spotlight ─────────────────────────────────────────────────────────
-
-function EmpSpotlight({ employees, loading, deptFilter, onSelect }: {
-  employees: EmpRow[]; loading: boolean; deptFilter: string; onSelect: (email: string) => void;
-}) {
-  const filtered = deptFilter
-    ? employees.filter(e => e.department === deptFilter)
-    : employees;
-
-  const top = [...filtered]
-    .filter(e => (e.completion_pct ?? 0) > 0)
-    .sort((a, b) => (b.ontime_pct ?? 0) - (a.ontime_pct ?? 0) || b.completed - a.completed)
-    .slice(0, 5);
-
-  const bottom = [...filtered]
-    .filter(e => e.overdue > 0 || (e.completion_pct ?? 100) < 40)
-    .sort((a, b) => b.overdue - a.overdue || (a.completion_pct ?? 0) - (b.completion_pct ?? 0))
-    .slice(0, 5);
-
-  const rowStyle: React.CSSProperties = {
-    display: "flex", alignItems: "center", gap: "10px",
-    padding: "9px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
-  };
-  const lastRow: React.CSSProperties = { ...rowStyle, borderBottom: "none", paddingBottom: 0 };
-
-  function Avatar({ name, bg, color }: { name: string; bg: string; color: string }) {
-    return (
-      <div style={{
-        width: "34px", height: "34px", borderRadius: "50%", background: bg,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: "12px", fontWeight: 600, color, flexShrink: 0,
-      }}>
-        {initials(name || "?")}
+    <>
+      {/* Toolbar */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "18px", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Period:</span>
+        {PERIODS.map(p => (
+          <button key={p.value} onClick={() => setDays(p.value)} style={{
+            fontSize: "12px", fontWeight: days === p.value ? 700 : 400,
+            padding: "5px 12px", borderRadius: RADII.PILL, cursor: "pointer",
+            background: days === p.value ? COLOURS.NAVY : COLOURS.CARD,
+            color: days === p.value ? "#fff" : COLOURS.SLATE,
+            border: `1px solid ${days === p.value ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+          }}>{p.label}</button>
+        ))}
       </div>
-    );
-  }
 
-  function EmpRow({ emp, isLast, accent }: { emp: EmpRow; isLast: boolean; accent: "green" | "red" }) {
-    const c  = accent === "green" ? COLOURS.GREEN : COLOURS.RED;
-    const bg = accent === "green" ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT;
-    return (
-      <div
-        onClick={() => onSelect(emp.email)}
-        style={{ ...(isLast ? lastRow : rowStyle), cursor: "pointer" }}
-      >
-        <Avatar name={emp.name} bg={bg} color={c} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {shortName(emp.name)}
-          </div>
-          <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
-            {emp.department ?? "—"}
-            {emp.total > 0 && <span style={{ marginLeft: "6px" }}>· {emp.total} tasks</span>}
-          </div>
-          {accent === "red" && emp.overdue > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: "5px", marginTop: "2px" }}>
-              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: COLOURS.RED, flexShrink: 0 }} />
-              <span style={{ fontSize: "11px", color: COLOURS.RED }}>{emp.overdue} overdue</span>
-            </div>
-          )}
+      {/* Company health strip */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: "10px", marginBottom: "18px" }}>
+        {loading
+          ? [1,2,3,4].map(i => <div key={i} style={{ ...card(), minHeight: "100px", opacity: 0.5 }} />)
+          : (data?.companies ?? []).map(co => {
+              const s = (co.efficiency_score >= 65 ? "star" : co.efficiency_score >= 55 ? "on_track" : co.efficiency_score >= 30 ? "at_risk" : "needs_help") as StatusKey;
+              const c = STATUS_CONFIG[s as StatusKey].color;
+              const bg = STATUS_CONFIG[s as StatusKey].bg;
+              return (
+                <div key={co.company} onClick={() => onCompanyClick(co.company)}
+                  style={{ ...card({ cursor: "pointer", transition: "box-shadow .15s" }), position: "relative" }}
+                  onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,.08)")}
+                  onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
+                >
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>{co.company}</div>
+                  <div style={{ fontSize: "34px", fontWeight: 800, color: c, lineHeight: 1 }}>{co.efficiency_score}</div>
+                  <div style={{ fontSize: "10px", color: COLOURS.SLATE, marginTop: "2px", marginBottom: "8px" }}>efficiency</div>
+                  <div style={{ height: "4px", background: "#F1F3F6", borderRadius: "2px", marginBottom: "8px" }}>
+                    <div style={{ width: `${co.efficiency_score}%`, height: "100%", background: c, borderRadius: "2px" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: "10px", fontSize: "11px" }}>
+                    {co.overdue_count > 0 && <span style={{ color: "#B3261E" }}>⚠ {co.overdue_count} overdue</span>}
+                    {co.stuck_count > 0   && <span style={{ color: "#B4791F" }}>🔒 {co.stuck_count} stuck</span>}
+                    {co.overdue_count === 0 && co.stuck_count === 0 && <span style={{ color: c }}>✓ clean</span>}
+                  </div>
+                  <span style={{
+                    position: "absolute", top: "12px", right: "12px", fontSize: "10px",
+                    color: COLOURS.SLATE, background: COLOURS.CARD_ALT,
+                    padding: "2px 7px", borderRadius: "999px", border: `1px solid ${COLOURS.HAIRLINE}`,
+                  }}>tap to drill in ↗</span>
+                </div>
+              );
+            })}
+      </div>
+
+      {/* Group KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: "10px", marginBottom: "18px" }}>
+        <KpiCard label="Group efficiency" value={loading ? "…" : k?.group_efficiency ?? "—"}
+          color={loading ? COLOURS.SLATE : effColor(k?.group_efficiency ?? 0, 1)} />
+        <KpiCard label="Overdue tasks" value={loading ? "…" : k?.total_overdue ?? "—"}
+          color={(k?.total_overdue ?? 0) > 0 ? "#B3261E" : COLOURS.GREEN} />
+        <KpiCard label="Stuck / blocked" value={loading ? "…" : k?.total_stuck ?? "—"}
+          color={(k?.total_stuck ?? 0) > 0 ? "#B4791F" : COLOURS.GREEN} />
+        <KpiCard label="Awaiting sign-off" value={loading ? "…" : k?.total_awaiting ?? "—"}
+          color={(k?.total_awaiting ?? 0) > 0 ? "#B4791F" : COLOURS.SLATE} />
+      </div>
+
+      {/* Department leaderboard */}
+      <div style={{ ...card(), marginBottom: "16px" }}>
+        <SectionTitle title="Department leaderboard — all companies" />
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px", marginTop: "2px" }}>
+          Ranked by efficiency score · click a row to drill into that department
         </div>
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: c }}>
-            {emp.completion_pct !== null ? `${emp.completion_pct}%` : "—"}
+        {loading ? <SkeletonRows count={6} /> : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+              <thead><tr>
+                <th style={thS}>#</th>
+                <th style={thS}>Department</th>
+                <th style={thS}>Company</th>
+                <th style={{ ...thS, textAlign: "right" }}>Tasks</th>
+                <th style={{ ...thS, textAlign: "right" }}>On time</th>
+                <th style={{ ...thS, textAlign: "right" }}>Overdue</th>
+                <th style={{ ...thS, textAlign: "right" }}>Stuck</th>
+                <th style={{ ...thS, minWidth: "140px" }}>Efficiency</th>
+                <th style={thS}>Status</th>
+              </tr></thead>
+              <tbody>
+                {(data?.departments ?? []).map((d, i) => (
+                  <tr key={`${d.company}-${d.department}`}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => onDeptClick(d.department, d.company ?? "")}
+                    onMouseEnter={e => (e.currentTarget.style.background = COLOURS.CARD_ALT)}
+                    onMouseLeave={e => (e.currentTarget.style.background = "")}
+                  >
+                    <td style={{ ...tdS, color: COLOURS.SLATE, width: "32px" }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: "22px", height: "22px", borderRadius: "50%", fontSize: "11px", fontWeight: 700,
+                        background: i < 3 ? STATUS_CONFIG.star.bg : COLOURS.CARD_ALT,
+                        color: i < 3 ? STATUS_CONFIG.star.color : COLOURS.SLATE,
+                      }}>{i + 1}</span>
+                    </td>
+                    <td style={{ ...tdS, fontWeight: 600 }}>{d.department}</td>
+                    <td style={{ ...tdS, color: COLOURS.SLATE, fontSize: "12px" }}>{d.company}</td>
+                    <td style={tdR}>{d.total_tasks}</td>
+                    <td style={{ ...tdR, color: "#0F7B5F" }}>{d.on_time_count}</td>
+                    <td style={{ ...tdR, color: d.overdue_count > 0 ? "#B3261E" : COLOURS.SLATE, fontWeight: d.overdue_count > 0 ? 600 : 400 }}>{d.overdue_count}</td>
+                    <td style={{ ...tdR, color: d.stuck_count > 0 ? "#B4791F" : COLOURS.SLATE }}>{d.stuck_count}</td>
+                    <td style={tdS}><EffBar score={d.efficiency_score} status={d.status} /></td>
+                    <td style={tdS}><StatusBadge status={d.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>
-            {emp.ontime_pct !== null ? `${emp.ontime_pct}% on time` : ""}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const card: React.CSSProperties = {
-    background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
-    borderRadius: RADII.CARD, padding: "16px 18px",
-  };
-
-  if (loading) {
-    return (
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        <div style={card}><SkeletonRows count={4} /></div>
-        <div style={card}><SkeletonRows count={4} /></div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-      <div style={card}>
-        <SectionTitle title="Top performers" style={{ color: COLOURS.GREEN }} />
-        {top.length === 0
-          ? <div style={{ color: COLOURS.SLATE, fontSize: "13px", padding: "16px 0" }}>No data yet.</div>
-          : top.map((e, i) => <EmpRow key={e.email} emp={e} isLast={i === top.length - 1} accent="green" />)}
-      </div>
-      <div style={card}>
-        <SectionTitle title="Needs attention" style={{ color: COLOURS.RED }} />
-        {bottom.length === 0
-          ? <div style={{ color: COLOURS.SLATE, fontSize: "13px", padding: "16px 0" }}>No red flags this period.</div>
-          : bottom.map((e, i) => <EmpRow key={e.email} emp={e} isLast={i === bottom.length - 1} accent="red" />)}
-      </div>
-    </div>
-  );
-}
-
-// ── Submitted tasks awaiting HOD ──────────────────────────────────────────────
-
-function SubmittedAwaitingHOD({ managers, loading }: { managers: MgrRow[]; loading: boolean }) {
-  const real = managers.filter(m => m.pending_review > 0 && !isSystemAccount(m.name || m.email));
-
-  if (loading) return <SkeletonRows count={2} />;
-  if (!real.length) {
-    return (
-      <div style={{ color: COLOURS.SLATE, fontSize: "13px", padding: "8px 0" }}>
-        No submitted tasks are currently waiting for a response.
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
-      {real.map((m, i) => {
-        const isLast = i === real.length - 1;
-        const color  = m.pending_review >= 10 ? COLOURS.RED : m.pending_review >= 3 ? COLOURS.AMBER : COLOURS.SLATE;
-        return (
-          <div key={m.email} style={{
-            display: "flex", alignItems: "center", gap: "12px",
-            padding: "10px 0", borderBottom: isLast ? "none" : `1px solid ${COLOURS.HAIRLINE}`,
-          }}>
-            <div style={{
-              width: "34px", height: "34px", borderRadius: "50%",
-              background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, flexShrink: 0,
-            }}>
-              {initials(m.name || "?")}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>
-                {shortName(m.name)}
-              </div>
-              <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
-                Assigned {m.tasks_assigned} tasks this period
-              </div>
-            </div>
-            <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <div style={{ fontSize: "18px", fontWeight: 700, color }}>
-                {m.pending_review}
-              </div>
-              <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>awaiting review</div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Filter pill ────────────────────────────────────────────────────────────────
-
-function FilterPill({ label, value, options, onChange }: {
-  label: string; value: number | string;
-  options: { label: string; value: number | string }[];
-  onChange: (v: number | string) => void;
-}) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-      <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{label}:</span>
-      <select
-        value={value}
-        onChange={e => onChange(typeof value === "number" ? parseInt(e.target.value, 10) : e.target.value)}
-        style={{
-          fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY,
-          background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
-          borderRadius: RADII.SM, padding: "5px 10px", cursor: "pointer",
-        }}
-      >
-        {options.map(o => <option key={String(o.value)} value={String(o.value)}>{o.label}</option>)}
-      </select>
-    </div>
-  );
-}
-
-// ── Main component ──────────────────────────────────────────────────────────────
-
-export default function HRPerformance() {
-  const isMobile                        = useMobile();
-  const [data,          setData]        = useState<PerfData | null>(null);
-  const [loading,       setLoading]     = useState(true);
-  const [error,         setError]       = useState<string | null>(null);
-  const [days,          setDays]        = useState<number>(90);
-  const [deptFilter,    setDeptFilter]  = useState<string>("");
-  const [compFilter,    setCompFilter]  = useState<string>("all");
-  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
-
-  const load = useCallback(async (d: number) => {
-    setLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/hr/performance?days=${d}`);
-      const json = await res.json() as PerfData;
-      if ("error" in json) throw new Error((json as { error: string }).error);
-      setData(json);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(days); }, [load, days]);
-
-  const rawDepts = data?.departments ?? [];
-  const rawEmps  = data?.employees   ?? [];
-
-  const filteredDepts = compFilter === "all" ? rawDepts : rawDepts.filter(d => d.company_name === compFilter);
-  const filteredEmps  = compFilter === "all" ? rawEmps  : rawEmps.filter(e => e.company_name === compFilter);
-
-  const mergedDeptRows = compFilter === "all" ? mergeDepts(filteredDepts) : filteredDepts;
-  const mergedEmpRows  = mergeEmps(filteredEmps);
-
-  const deptRows = deptFilter ? mergedDeptRows.filter(d => d.department === deptFilter) : mergedDeptRows;
-
-  const companies = Array.from(new Set(rawDepts.map(d => d.company_name).filter(Boolean))).sort();
-
-  const t = data?.totals;
-
-  const kpiGrid: React.CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, minmax(0, 1fr))",
-    gap: "10px", marginBottom: "20px",
-  };
-  const cardStyle: React.CSSProperties = {
-    background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
-    borderRadius: RADII.CARD, padding: "18px 20px",
-  };
-
-  return (
-    <div>
-      {/* ── Toolbar ── */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", marginBottom: "18px" }}>
-        <FilterPill
-          label="Company"
-          value={compFilter}
-          options={[{ label: "All companies", value: "all" }, ...companies.map(c => ({ label: c, value: c }))]}
-          onChange={v => { setCompFilter(String(v)); setDeptFilter(""); }}
-        />
-        <FilterPill
-          label="Period"
-          value={days}
-          options={PERIOD_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
-          onChange={v => setDays(Number(v))}
-        />
-        {deptFilter && (
-          <button
-            onClick={() => setDeptFilter("")}
-            style={{
-              fontSize: "12px", color: COLOURS.SLATE, background: COLOURS.TRACK,
-              border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL,
-              padding: "4px 12px", cursor: "pointer",
-            }}
-          >
-            ✕ {deptFilter}
-          </button>
         )}
       </div>
 
-      {error && <div style={{ color: COLOURS.RED, fontSize: "13px", marginBottom: "16px" }}>{error}</div>}
-
-      {/* ── KPI Cards ── */}
-      <div style={kpiGrid}>
-        <KpiCard
-          label="Avg on-time rate"
-          value={loading ? "…" : t?.avg_ontime_pct != null ? `${t.avg_ontime_pct}%` : "—"}
-          sub={t?.avg_ontime_pct != null && t.avg_ontime_pct < 40 ? "below target" : `last ${days} days`}
-          valueColor={loading ? COLOURS.SLATE : ragColor(t?.avg_ontime_pct ?? null, "ontime")}
-        />
-        <KpiCard
-          label="Avg completion"
-          value={loading ? "…" : t?.avg_completion_pct != null ? `${t.avg_completion_pct}%` : "—"}
-          sub={`${t?.total_assigned ?? "…"} tasks assigned`}
-          valueColor={loading ? COLOURS.SLATE : ragColor(t?.avg_completion_pct ?? null, "completion")}
-        />
-        <KpiCard
-          label="Overdue now"
-          value={loading ? "…" : t?.total_overdue ?? "—"}
-          sub="past due date, not done"
-          valueColor={loading ? COLOURS.SLATE : (t?.total_overdue ?? 0) > 0 ? COLOURS.RED : COLOURS.GREEN}
-        />
-        <KpiCard
-          label="Awaiting sign-off"
-          value={loading ? "…" : t?.total_submitted ?? "—"}
-          sub="submitted by employee"
-          valueColor={loading ? COLOURS.SLATE : (t?.total_submitted ?? 0) > 0 ? COLOURS.AMBER : COLOURS.GREEN}
-        />
-      </div>
-
-      {/* ── Department table ── */}
-      <div style={{ ...cardStyle, marginBottom: "16px" }}>
-        <SectionTitle title={`Department performance${deptFilter ? ` · ${deptFilter}` : ""}`} />
-        <div style={{ marginTop: "4px", fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>
-          Click a row to filter the employee lists below. Score = tasks completed ÷ total assigned.
+      {/* Employee rankings */}
+      <div style={card()}>
+        <SectionTitle title="All employees — ranked by efficiency" />
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px", marginTop: "2px" }}>
+          Click any row to open the employee detail panel
         </div>
-        <DeptTable
-          rows={deptRows}
-          loading={loading}
-          deptFilter={deptFilter}
-          setDeptFilter={setDeptFilter}
-          showCompany={compFilter !== "all"}
+        {loading ? <SkeletonRows count={8} /> : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+              <thead><tr>
+                <th style={thS}>#</th>
+                <th style={thS}>Employee</th>
+                <th style={thS}>Company</th>
+                <th style={thS}>Dept</th>
+                <th style={{ ...thS, textAlign: "right" }}>Tasks</th>
+                <th style={{ ...thS, textAlign: "right", color: "#3B4CCA" }}>Self-gen</th>
+                <th style={{ ...thS, textAlign: "right" }}>Overdue</th>
+                <th style={{ ...thS, textAlign: "right" }}>Stuck</th>
+                <th style={{ ...thS, minWidth: "140px" }}>Efficiency</th>
+                <th style={thS}>Status</th>
+              </tr></thead>
+              <tbody>
+                {(data?.employees ?? []).map((e, i) => (
+                  <tr key={e.email} style={{ cursor: "pointer" }}
+                    onClick={() => onEmpClick(e.email)}
+                    onMouseEnter={ev => (ev.currentTarget.style.background = COLOURS.CARD_ALT)}
+                    onMouseLeave={ev => (ev.currentTarget.style.background = "")}
+                  >
+                    <td style={{ ...tdS, color: COLOURS.SLATE, width: "32px" }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: "22px", height: "22px", borderRadius: "50%", fontSize: "11px", fontWeight: 700,
+                        background: i < 3 ? STATUS_CONFIG.star.bg : COLOURS.CARD_ALT,
+                        color: i < 3 ? STATUS_CONFIG.star.color : COLOURS.SLATE,
+                      }}>{i + 1}</span>
+                    </td>
+                    <td style={tdS}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{
+                          width: "30px", height: "30px", borderRadius: "50%", flexShrink: 0,
+                          background: STATUS_CONFIG[e.status].bg, color: STATUS_CONFIG[e.status].color,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: "11px", fontWeight: 700,
+                        }}>{initials(e.name)}</div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: COLOURS.NAVY }}>{e.name}</div>
+                          {e.employee_code && <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{e.employee_code}</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ ...tdS, fontSize: "12px", color: COLOURS.SLATE }}>{e.company}</td>
+                    <td style={{ ...tdS, fontSize: "12px", color: COLOURS.SLATE }}>{e.department}</td>
+                    <td style={tdR}>
+                      <div style={{ fontWeight: 600 }}>{e.total_tasks}</div>
+                      {e.self_gen_count > 0 && <div style={{ fontSize: "10px", color: "#3B4CCA" }}>{e.self_gen_count} self-gen</div>}
+                    </td>
+                    <td style={{ ...tdR, color: "#3B4CCA" }}>{e.self_gen_count}</td>
+                    <td style={{ ...tdR, color: e.overdue_count > 0 ? "#B3261E" : COLOURS.SLATE, fontWeight: e.overdue_count > 0 ? 600 : 400 }}>{e.overdue_count}</td>
+                    <td style={{ ...tdR, color: e.stuck_count > 0 ? "#B4791F" : COLOURS.SLATE }}>{e.stuck_count}</td>
+                    <td style={tdS}><EffBar score={e.efficiency_score} status={e.status} /></td>
+                    <td style={tdS}><StatusBadge status={e.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Company view ───────────────────────────────────────────────────────────────
+
+function CompanyView({
+  data, loading, days, setDays,
+  onBack, onSwitchCompany, onDeptClick, onEmpClick,
+}: {
+  data: CompanyData | null; loading: boolean; days: number; setDays: (d: number) => void;
+  onBack: () => void; onSwitchCompany: (co: string) => void;
+  onDeptClick: (dept: string, co: string) => void;
+  onEmpClick: (email: string) => void;
+}) {
+  const k = data?.kpis;
+  const eff = k?.efficiency_score ?? 0;
+  const effS = (eff >= 65 ? "star" : eff >= 55 ? "on_track" : eff >= 30 ? "at_risk" : "needs_help") as StatusKey;
+
+  return (
+    <>
+      {/* Breadcrumb */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: "8px", marginBottom: "18px",
+        padding: "10px 14px", background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
+        borderRadius: RADII.CARD, width: "fit-content", fontSize: "13px",
+      }}>
+        <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: "5px", fontWeight: 600, color: "#3B4CCA", background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "13px" }}>← Group</button>
+        <span style={{ color: "#94A3B8" }}>›</span>
+        <span style={{ fontWeight: 700, color: COLOURS.NAVY }}>{data?.company ?? "…"}</span>
+      </div>
+
+      {/* Other companies mini-strip */}
+      {(data?.all_companies?.length ?? 0) > 1 && (
+        <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+          {(data?.all_companies ?? []).map(co => {
+            const isCurrent = co.company === data?.company;
+            const s = (co.efficiency_score >= 65 ? "star" : co.efficiency_score >= 55 ? "on_track" : co.efficiency_score >= 30 ? "at_risk" : "needs_help") as StatusKey;
+            const c = STATUS_CONFIG[s as StatusKey].color;
+            return (
+              <div key={co.company} onClick={() => !isCurrent && onSwitchCompany(co.company)}
+                style={{
+                  padding: "8px 14px", borderRadius: RADII.CARD, fontSize: "12px", fontWeight: 600,
+                  cursor: isCurrent ? "default" : "pointer",
+                  background: isCurrent ? COLOURS.NAVY : COLOURS.CARD,
+                  color: isCurrent ? "#fff" : COLOURS.NAVY,
+                  border: `1px solid ${isCurrent ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                  opacity: isCurrent ? 1 : 0.75,
+                  display: "flex", alignItems: "center", gap: "6px",
+                }}
+              >
+                {co.company}
+                <span style={{ fontWeight: 700, color: isCurrent ? "#fff" : c }}>{co.efficiency_score}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Period toggle */}
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "16px" }}>
+        {PERIODS.map(p => (
+          <button key={p.value} onClick={() => setDays(p.value)} style={{
+            fontSize: "12px", fontWeight: days === p.value ? 700 : 400,
+            padding: "4px 10px", borderRadius: RADII.PILL, cursor: "pointer",
+            background: days === p.value ? COLOURS.NAVY : COLOURS.CARD,
+            color: days === p.value ? "#fff" : COLOURS.SLATE,
+            border: `1px solid ${days === p.value ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+          }}>{p.label}</button>
+        ))}
+      </div>
+
+      {/* Company KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "10px", marginBottom: "18px" }}>
+        <KpiCard label="Efficiency score" value={loading ? "…" : eff} color={STATUS_CONFIG[effS as StatusKey].color} sub={STATUS_CONFIG[effS as StatusKey].label} />
+        <KpiCard label="Total tasks" value={loading ? "…" : k?.total_tasks ?? "—"} sub={`last ${days} days`} />
+        <KpiCard label="Overdue" value={loading ? "…" : k?.total_overdue ?? "—"} color={(k?.total_overdue ?? 0) > 0 ? "#B3261E" : COLOURS.GREEN} />
+        <KpiCard label="Stuck / blocked" value={loading ? "…" : k?.total_stuck ?? "—"} color={(k?.total_stuck ?? 0) > 0 ? "#B4791F" : COLOURS.GREEN} />
+        <KpiCard label="Awaiting sign-off" value={loading ? "…" : k?.total_awaiting ?? "—"} color={COLOURS.AMBER ?? "#B4791F"} />
+        <KpiCard label="Employees" value={loading ? "…" : k?.total_employees ?? "—"} />
+      </div>
+
+      {/* Departments */}
+      <div style={{ ...card(), marginBottom: "16px" }}>
+        <SectionTitle title={`Departments · ${data?.company ?? "…"}`} />
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px", marginTop: "2px" }}>Click a row to drill into that department</div>
+        {loading ? <SkeletonRows count={4} /> : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+              <thead><tr>
+                <th style={thS}>#</th><th style={thS}>Department</th>
+                <th style={{ ...thS, textAlign: "right" }}>Tasks</th>
+                <th style={{ ...thS, textAlign: "right" }}>On time</th>
+                <th style={{ ...thS, textAlign: "right" }}>Overdue</th>
+                <th style={{ ...thS, textAlign: "right" }}>Stuck</th>
+                <th style={{ ...thS, minWidth: "140px" }}>Efficiency</th>
+                <th style={thS}>Status</th>
+              </tr></thead>
+              <tbody>
+                {(data?.departments ?? []).map((d, i) => (
+                  <tr key={d.department} style={{ cursor: "pointer" }}
+                    onClick={() => onDeptClick(d.department, data?.company ?? "")}
+                    onMouseEnter={e => (e.currentTarget.style.background = COLOURS.CARD_ALT)}
+                    onMouseLeave={e => (e.currentTarget.style.background = "")}
+                  >
+                    <td style={{ ...tdS, color: COLOURS.SLATE, width: "32px" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "22px", height: "22px", borderRadius: "50%", fontSize: "11px", fontWeight: 700, background: i < 3 ? STATUS_CONFIG.star.bg : COLOURS.CARD_ALT, color: i < 3 ? STATUS_CONFIG.star.color : COLOURS.SLATE }}>{i + 1}</span>
+                    </td>
+                    <td style={{ ...tdS, fontWeight: 600 }}>{d.department}</td>
+                    <td style={tdR}>{d.total_tasks}</td>
+                    <td style={{ ...tdR, color: "#0F7B5F" }}>{d.on_time_count}</td>
+                    <td style={{ ...tdR, color: d.overdue_count > 0 ? "#B3261E" : COLOURS.SLATE, fontWeight: d.overdue_count > 0 ? 600 : 400 }}>{d.overdue_count}</td>
+                    <td style={{ ...tdR, color: d.stuck_count > 0 ? "#B4791F" : COLOURS.SLATE }}>{d.stuck_count}</td>
+                    <td style={tdS}><EffBar score={d.efficiency_score} status={d.status} /></td>
+                    <td style={tdS}><StatusBadge status={d.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Employees */}
+      <div style={{ ...card(), marginBottom: "16px" }}>
+        <SectionTitle title={`Employees · ${data?.company ?? "…"}`} />
+        {loading ? <SkeletonRows count={6} /> : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+              <thead><tr>
+                <th style={thS}>#</th><th style={thS}>Employee</th><th style={thS}>Dept</th>
+                <th style={{ ...thS, textAlign: "right" }}>Tasks</th>
+                <th style={{ ...thS, textAlign: "right", color: "#3B4CCA" }}>Self-gen</th>
+                <th style={{ ...thS, textAlign: "right" }}>Overdue</th>
+                <th style={{ ...thS, textAlign: "right" }}>Stuck</th>
+                <th style={{ ...thS, minWidth: "140px" }}>Efficiency</th>
+                <th style={thS}>Status</th>
+              </tr></thead>
+              <tbody>
+                {(data?.employees ?? []).map((e, i) => (
+                  <tr key={e.email} style={{ cursor: "pointer" }}
+                    onClick={() => onEmpClick(e.email)}
+                    onMouseEnter={ev => (ev.currentTarget.style.background = COLOURS.CARD_ALT)}
+                    onMouseLeave={ev => (ev.currentTarget.style.background = "")}
+                  >
+                    <td style={{ ...tdS, width: "32px", color: COLOURS.SLATE }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "22px", height: "22px", borderRadius: "50%", fontSize: "11px", fontWeight: 700, background: i < 3 ? STATUS_CONFIG.star.bg : COLOURS.CARD_ALT, color: i < 3 ? STATUS_CONFIG.star.color : COLOURS.SLATE }}>{i + 1}</span>
+                    </td>
+                    <td style={tdS}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{ width: "30px", height: "30px", borderRadius: "50%", flexShrink: 0, background: STATUS_CONFIG[e.status].bg, color: STATUS_CONFIG[e.status].color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700 }}>{initials(e.name)}</div>
+                        <div><div style={{ fontWeight: 600 }}>{e.name}</div>{e.employee_code && <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{e.employee_code}</div>}</div>
+                      </div>
+                    </td>
+                    <td style={{ ...tdS, fontSize: "12px", color: COLOURS.SLATE }}>{e.department}</td>
+                    <td style={tdR}>{e.total_tasks}</td>
+                    <td style={{ ...tdR, color: "#3B4CCA" }}>{e.self_gen_count}</td>
+                    <td style={{ ...tdR, color: e.overdue_count > 0 ? "#B3261E" : COLOURS.SLATE, fontWeight: e.overdue_count > 0 ? 600 : 400 }}>{e.overdue_count}</td>
+                    <td style={{ ...tdR, color: e.stuck_count > 0 ? "#B4791F" : COLOURS.SLATE }}>{e.stuck_count}</td>
+                    <td style={tdS}><EffBar score={e.efficiency_score} status={e.status} /></td>
+                    <td style={tdS}><StatusBadge status={e.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Stuck tasks */}
+      {!loading && (data?.stuck_tasks?.length ?? 0) > 0 && (
+        <div style={card()}>
+          <SectionTitle title={`Stuck tasks · ${data?.company ?? "…"}`} />
+          <div style={{ marginTop: "8px" }}>
+            {(data?.stuck_tasks ?? []).map((t, i) => (
+              <div key={t.task_id} style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "10px 0", borderBottom: i < (data?.stuck_tasks?.length ?? 0) - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none" }}>
+                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#B4791F", marginTop: "5px", flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{t.task_name}</div>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                    {t.emp_name} {t.employee_code ? `· ${t.employee_code}` : ""} {t.department ? `· ${t.department}` : ""}
+                  </div>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Status: {t.status}{t.stuck_reason ? ` · ${t.stuck_reason}` : ""}</div>
+                </div>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#B4791F", background: "#FBF1DE", padding: "2px 8px", borderRadius: "999px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  {t.days_overdue > 0 ? `${t.days_overdue}d overdue` : t.due_date}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Department view ────────────────────────────────────────────────────────────
+
+function DeptView({
+  data, loading, days, setDays,
+  company, onBackGroup, onBackCompany, onEmpClick,
+}: {
+  data: DeptData | null; loading: boolean; days: number; setDays: (d: number) => void;
+  company: string;
+  onBackGroup: () => void; onBackCompany: () => void;
+  onEmpClick: (email: string) => void;
+}) {
+  const k  = data?.kpis;
+  const b  = data?.task_breakdown;
+  const eff = k?.efficiency_score ?? 0;
+  const effS: StatusKey = eff >= 65 ? "star" : eff >= 55 ? "on_track" : eff >= 30 ? "at_risk" : "needs_help";
+
+  const breakdownTiles = [
+    { label: "On time",   value: b?.on_time  ?? 0, color: "#0F7B5F" },
+    { label: "Submitted", value: b?.submitted ?? 0, color: "#3B4CCA" },
+    { label: "Overdue",   value: b?.overdue   ?? 0, color: "#B3261E" },
+    { label: "Stuck",     value: b?.stuck     ?? 0, color: "#B4791F" },
+    { label: "Running",   value: b?.running   ?? 0, color: "#64748B" },
+  ];
+
+  return (
+    <>
+      {/* Breadcrumb */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "18px", padding: "10px 14px", background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, width: "fit-content", fontSize: "13px" }}>
+        <button onClick={onBackGroup} style={{ fontWeight: 600, color: "#3B4CCA", background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "13px" }}>← Group</button>
+        <span style={{ color: "#94A3B8" }}>›</span>
+        <button onClick={onBackCompany} style={{ fontWeight: 600, color: "#3B4CCA", background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "13px" }}>{company}</button>
+        <span style={{ color: "#94A3B8" }}>›</span>
+        <span style={{ fontWeight: 700, color: COLOURS.NAVY }}>{data?.department ?? "…"}</span>
+      </div>
+
+      {/* Period toggle */}
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "16px" }}>
+        {PERIODS.map(p => (
+          <button key={p.value} onClick={() => setDays(p.value)} style={{ fontSize: "12px", fontWeight: days === p.value ? 700 : 400, padding: "4px 10px", borderRadius: RADII.PILL, cursor: "pointer", background: days === p.value ? COLOURS.NAVY : COLOURS.CARD, color: days === p.value ? "#fff" : COLOURS.SLATE, border: `1px solid ${days === p.value ? COLOURS.NAVY : COLOURS.HAIRLINE}` }}>{p.label}</button>
+        ))}
+      </div>
+
+      {/* Dept KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "10px", marginBottom: "16px" }}>
+        <KpiCard label="Efficiency" value={loading ? "…" : eff} color={STATUS_CONFIG[effS].color} sub={STATUS_CONFIG[effS].label} />
+        <KpiCard label="Total tasks" value={loading ? "…" : k?.total_tasks ?? "—"} sub={k?.self_gen_count ? `${k.self_gen_count} self-generated` : undefined} />
+        <KpiCard label="Overdue" value={loading ? "…" : k?.overdue_count ?? "—"} color={(k?.overdue_count ?? 0) > 0 ? "#B3261E" : COLOURS.GREEN} />
+        <KpiCard label="Stuck" value={loading ? "…" : k?.stuck_count ?? "—"} color={(k?.stuck_count ?? 0) > 0 ? "#B4791F" : COLOURS.GREEN} />
+      </div>
+
+      {/* Task breakdown tiles */}
+      {!loading && b && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: "8px", marginBottom: "16px" }}>
+          {breakdownTiles.map(t => (
+            <div key={t.label} style={{ ...card({ padding: "12px 14px", textAlign: "center" }) }}>
+              <div style={{ fontSize: "22px", fontWeight: 700, color: t.color }}>{t.value}</div>
+              <div style={{ fontSize: "10px", color: COLOURS.SLATE, marginTop: "3px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Employee table */}
+      <div style={{ ...card(), marginBottom: "16px" }}>
+        <SectionTitle title={`${data?.department ?? "…"} — All employees`} />
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px", marginTop: "2px" }}>Click any row to open the employee detail panel</div>
+        {loading ? <SkeletonRows count={5} /> : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+              <thead><tr>
+                <th style={thS}>#</th><th style={thS}>Employee</th>
+                <th style={{ ...thS, textAlign: "right" }}>Tasks</th>
+                <th style={{ ...thS, textAlign: "right", color: "#0F7B5F" }}>On time</th>
+                <th style={{ ...thS, textAlign: "right", color: "#3B4CCA" }}>Self-gen</th>
+                <th style={{ ...thS, textAlign: "right", color: "#B3261E" }}>Overdue</th>
+                <th style={{ ...thS, textAlign: "right", color: "#B4791F" }}>Stuck</th>
+                <th style={{ ...thS, minWidth: "140px" }}>Efficiency</th>
+                <th style={thS}>Status</th>
+              </tr></thead>
+              <tbody>
+                {(data?.employees ?? []).map((e, i) => (
+                  <tr key={e.email} style={{ cursor: "pointer" }}
+                    onClick={() => onEmpClick(e.email)}
+                    onMouseEnter={ev => (ev.currentTarget.style.background = COLOURS.CARD_ALT)}
+                    onMouseLeave={ev => (ev.currentTarget.style.background = "")}
+                  >
+                    <td style={{ ...tdS, width: "32px", color: COLOURS.SLATE }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "22px", height: "22px", borderRadius: "50%", fontSize: "11px", fontWeight: 700, background: i < 3 ? STATUS_CONFIG.star.bg : COLOURS.CARD_ALT, color: i < 3 ? STATUS_CONFIG.star.color : COLOURS.SLATE }}>{i + 1}</span>
+                    </td>
+                    <td style={tdS}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{ width: "30px", height: "30px", borderRadius: "50%", flexShrink: 0, background: STATUS_CONFIG[e.status].bg, color: STATUS_CONFIG[e.status].color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700 }}>{initials(e.name)}</div>
+                        <div><div style={{ fontWeight: 600 }}>{e.name}</div>{e.employee_code && <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{e.employee_code}</div>}</div>
+                      </div>
+                    </td>
+                    <td style={tdR}>{e.total_tasks}</td>
+                    <td style={{ ...tdR, color: "#0F7B5F" }}>{e.on_time_count}</td>
+                    <td style={{ ...tdR, color: "#3B4CCA" }}>{e.self_gen_count}</td>
+                    <td style={{ ...tdR, color: e.overdue_count > 0 ? "#B3261E" : COLOURS.SLATE, fontWeight: e.overdue_count > 0 ? 600 : 400 }}>{e.overdue_count}</td>
+                    <td style={{ ...tdR, color: e.stuck_count > 0 ? "#B4791F" : COLOURS.SLATE }}>{e.stuck_count}</td>
+                    <td style={tdS}><EffBar score={e.efficiency_score} status={e.status} /></td>
+                    <td style={tdS}><StatusBadge status={e.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Stuck tasks */}
+      {!loading && (data?.stuck_tasks?.length ?? 0) > 0 && (
+        <div style={card()}>
+          <SectionTitle title={`Stuck tasks · ${data?.department ?? "…"}`} />
+          <div style={{ marginTop: "8px" }}>
+            {(data?.stuck_tasks ?? []).map((t, i) => (
+              <div key={t.task_id} style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "10px 0", borderBottom: i < (data?.stuck_tasks?.length ?? 0) - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none" }}>
+                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#B4791F", marginTop: "5px", flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{t.task_name}</div>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>{t.emp_name}{t.employee_code ? ` · ${t.employee_code}` : ""} · Due {t.due_date}</div>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Status: {t.status}{t.stuck_reason ? ` · ${t.stuck_reason}` : ""}</div>
+                </div>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#B4791F", background: "#FBF1DE", padding: "2px 8px", borderRadius: "999px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  {t.days_overdue > 0 ? `${t.days_overdue}d` : "today"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Root component ─────────────────────────────────────────────────────────────
+
+type ViewKind = "group" | "company" | "department";
+
+export default function HRPerformance() {
+  const [view,            setView]           = useState<ViewKind>("group");
+  const [selectedCompany, setSelectedCompany]= useState<string>("");
+  const [selectedDept,    setSelectedDept]   = useState<string>("");
+  const [days,            setDays]           = useState(90);
+
+  const [overviewData, setOverviewData] = useState<OverviewData | null>(null);
+  const [companyData,  setCompanyData]  = useState<CompanyData  | null>(null);
+  const [deptData,     setDeptData]     = useState<DeptData     | null>(null);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState<string | null>(null);
+
+  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
+
+  // ── Loaders ──
+
+  const loadOverview = useCallback(async (d: number) => {
+    setLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/hr/performance/overview?days=${d}`);
+      const json = await res.json();
+      if (json?.error) throw new Error(json.error);
+      setOverviewData(json as OverviewData);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed to load"); }
+    finally { setLoading(false); }
+  }, []);
+
+  const loadCompany = useCallback(async (co: string, d: number) => {
+    setLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/hr/performance/company?company=${encodeURIComponent(co)}&days=${d}`);
+      const json = await res.json();
+      if (json?.error) throw new Error(json.error);
+      setCompanyData(json as CompanyData);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed to load"); }
+    finally { setLoading(false); }
+  }, []);
+
+  const loadDept = useCallback(async (dept: string, co: string, d: number) => {
+    setLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/hr/performance/department?department=${encodeURIComponent(dept)}&company=${encodeURIComponent(co)}&days=${d}`);
+      const json = await res.json();
+      if (json?.error) throw new Error(json.error);
+      setDeptData(json as DeptData);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed to load"); }
+    finally { setLoading(false); }
+  }, []);
+
+  // ── Effects ──
+
+  useEffect(() => {
+    if (view === "group")      loadOverview(days);
+  }, [view, days, loadOverview]);
+
+  useEffect(() => {
+    if (view === "company" && selectedCompany) loadCompany(selectedCompany, days);
+  }, [view, selectedCompany, days, loadCompany]);
+
+  useEffect(() => {
+    if (view === "department" && selectedDept && selectedCompany) loadDept(selectedDept, selectedCompany, days);
+  }, [view, selectedDept, selectedCompany, days, loadDept]);
+
+  // ── Navigation ──
+
+  function goCompany(co: string) {
+    setSelectedCompany(co);
+    setCompanyData(null);
+    setView("company");
+  }
+
+  function goDept(dept: string, co: string) {
+    setSelectedDept(dept);
+    if (co && co !== selectedCompany) setSelectedCompany(co);
+    setDeptData(null);
+    setView("department");
+  }
+
+  function goGroup() {
+    setView("group");
+    setSelectedCompany("");
+    setSelectedDept("");
+  }
+
+  function goBackToCompany() {
+    setView("company");
+    setSelectedDept("");
+    setDeptData(null);
+  }
+
+  return (
+    <div>
+      {error && <div style={{ color: "#B3261E", fontSize: "13px", marginBottom: "16px", padding: "10px 14px", background: "#FEE2E2", borderRadius: RADII.CARD }}>{error}</div>}
+
+      {view === "group" && (
+        <GroupView
+          data={overviewData} loading={loading} days={days} setDays={setDays}
+          onCompanyClick={goCompany} onDeptClick={goDept} onEmpClick={setSelectedEmail}
         />
-      </div>
+      )}
 
-      {/* ── Employee spotlight ── */}
-      <div style={{ marginBottom: "16px" }}>
-        <SectionTitle title={`Employee spotlight${deptFilter ? ` · ${deptFilter}` : ""}`} />
-        <div style={{ marginTop: "10px" }}>
-          <EmpSpotlight employees={mergedEmpRows} loading={loading} deptFilter={deptFilter} onSelect={setSelectedEmail} />
-        </div>
-      </div>
+      {view === "company" && (
+        <CompanyView
+          data={companyData} loading={loading} days={days} setDays={setDays}
+          onBack={goGroup} onSwitchCompany={goCompany}
+          onDeptClick={goDept} onEmpClick={setSelectedEmail}
+        />
+      )}
 
-      {/* ── Submitted tasks awaiting HOD ── */}
-      <div style={cardStyle}>
-        <SectionTitle title="Submitted tasks awaiting response" />
-        <div style={{ marginTop: "4px", fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>
-          Employees have submitted these tasks for review. The number shows how many are sitting with each manager, unresponded.
-        </div>
-        <SubmittedAwaitingHOD managers={data?.managers ?? []} loading={loading} />
-      </div>
+      {view === "department" && (
+        <DeptView
+          data={deptData} loading={loading} days={days} setDays={setDays}
+          company={selectedCompany}
+          onBackGroup={goGroup} onBackCompany={goBackToCompany}
+          onEmpClick={setSelectedEmail}
+        />
+      )}
 
-      {/* Employee detail panel */}
       {selectedEmail && (
         <EmployeeDetailPanel
           email={selectedEmail}
