@@ -191,7 +191,6 @@ export default function AccountsTaxDashboard() {
   const isMobile = useMobile();
   const toast = useToast();
   const { checking } = useRequireCapability("dept_tax_accounts");
-  if (checking) return null;
 
   const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [canManage, setCanManage] = useState(false);
@@ -667,6 +666,7 @@ export default function AccountsTaxDashboard() {
 
   if (!userCtx && !loading) return null;
 
+  if (checking) return null;
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden", backgroundColor: CANVAS, fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
       {toast.element}
