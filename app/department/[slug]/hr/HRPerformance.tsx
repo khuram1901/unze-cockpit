@@ -31,7 +31,7 @@ type DeptRow = {
 
 type EmpRow = {
   email:           string;
-  name:            string;
+  emp_name:        string;
   department:      string;
   company?:        string;
   employee_code:   string;
