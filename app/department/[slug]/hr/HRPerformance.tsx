@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { authFetch } from "../../../lib/supabase";
 import { COLOURS, RADII, SectionTitle, SkeletonRows } from "../../../lib/SharedUI";
 import { useMobile } from "../../../lib/useMobile";
+import EmployeeDetailPanel from "./EmployeeDetailPanel";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,13 +47,13 @@ type MgrRow = {
 };
 
 type Totals = {
-  total_assigned:    number;
-  total_completed:   number;
-  total_on_time:     number;
-  total_overdue:     number;
-  total_submitted:   number;
+  total_assigned:     number;
+  total_completed:    number;
+  total_on_time:      number;
+  total_overdue:      number;
+  total_submitted:    number;
   avg_completion_pct: number | null;
-  avg_ontime_pct:    number | null;
+  avg_ontime_pct:     number | null;
 };
 
 type PerfData = {
@@ -69,12 +70,67 @@ const PERIOD_OPTIONS = [
   { label: "Last 180 days", value: 180 },
 ] as const;
 
+// System accounts that should never appear as managers or employees
+const SYSTEM_ACCOUNTS = ["meeting minutes", "recurring template", "system", "auto"];
+
+function isSystemAccount(name: string): boolean {
+  return SYSTEM_ACCOUNTS.some(s => name.toLowerCase().includes(s));
+}
+
+// ── Merge helpers ─────────────────────────────────────────────────────────────
+
+/** Collapse same-named departments across companies into one row */
+function mergeDepts(rows: DeptRow[]): DeptRow[] {
+  const map = new Map<string, DeptRow>();
+  for (const r of rows) {
+    const existing = map.get(r.department);
+    if (existing) {
+      existing.total           += r.total;
+      existing.completed       += r.completed;
+      existing.on_time         += r.on_time;
+      existing.late            += r.late;
+      existing.overdue         += r.overdue;
+      existing.employee_credit += r.employee_credit;
+      existing.company_name     = ""; // multiple companies
+      existing.completion_pct   = existing.total > 0
+        ? Math.round(existing.completed / existing.total * 100) : null;
+      existing.ontime_pct       = existing.completed > 0
+        ? Math.round(existing.on_time / existing.completed * 100) : null;
+    } else {
+      map.set(r.department, { ...r });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+/** Collapse same-email employees across companies/departments into one row */
+function mergeEmps(rows: EmpRow[]): EmpRow[] {
+  const map = new Map<string, EmpRow>();
+  for (const r of rows) {
+    if (isSystemAccount(r.name || r.email)) continue;
+    const existing = map.get(r.email);
+    if (existing) {
+      existing.total           += r.total;
+      existing.completed       += r.completed;
+      existing.on_time         += r.on_time;
+      existing.late            += r.late;
+      existing.overdue         += r.overdue;
+      existing.employee_credit += r.employee_credit;
+      existing.completion_pct   = existing.total > 0
+        ? Math.round(existing.completed / existing.total * 100) : null;
+      existing.ontime_pct       = existing.completed > 0
+        ? Math.round(existing.on_time / existing.completed * 100) : null;
+    } else {
+      map.set(r.email, { ...r });
+    }
+  }
+  return Array.from(map.values());
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function ragColor(pct: number | null, field: "completion" | "ontime"): string {
   if (pct === null) return COLOURS.SLATE;
-  // Thresholds: completion ≥60% green, ≥30% amber, else red
-  //             ontime    ≥50% green, ≥25% amber, else red
   const [green, amber] = field === "completion" ? [60, 30] : [50, 25];
   if (pct >= green) return COLOURS.GREEN;
   if (pct >= amber) return COLOURS.AMBER;
@@ -90,30 +146,23 @@ function ragBg(pct: number | null, field: "completion" | "ontime"): string {
 }
 
 function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
+  return name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
 }
 
 function shortName(name: string): string {
-  // If it looks like an email, use the part before @
   if (name.includes("@")) return name.split("@")[0];
   return name;
 }
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
 
-function KpiCard({
-  label, value, sub, valueColor,
-}: { label: string; value: string | number; sub?: string; valueColor?: string }) {
+function KpiCard({ label, value, sub, valueColor }: {
+  label: string; value: string | number; sub?: string; valueColor?: string;
+}) {
   return (
     <div style={{
-      background:   COLOURS.CARD,
-      border:       `1px solid ${COLOURS.HAIRLINE}`,
-      borderRadius: RADII.CARD,
-      padding:      "16px 18px",
+      background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
+      borderRadius: RADII.CARD, padding: "16px 18px",
     }}>
       <div style={{ fontSize: "11px", color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>
         {label}
@@ -121,9 +170,7 @@ function KpiCard({
       <div style={{ fontSize: "28px", fontWeight: 600, color: valueColor ?? COLOURS.NAVY, lineHeight: 1 }}>
         {value}
       </div>
-      {sub && (
-        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>{sub}</div>
-      )}
+      {sub && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>{sub}</div>}
     </div>
   );
 }
@@ -135,35 +182,22 @@ function ScoreBar({ completion, ontime }: { completion: number | null; ontime: n
   const bg        = ragBg(completion, "completion");
   const pct       = completion ?? 0;
   return (
-    <div style={{ minWidth: "160px" }}>
-      {/* Bar */}
+    <div style={{ minWidth: "150px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <div style={{
-          flex: 1, height: "6px", background: COLOURS.TRACK, borderRadius: "3px",
-        }}>
+        <div style={{ flex: 1, height: "6px", background: COLOURS.TRACK, borderRadius: "3px" }}>
           <div style={{
-            width:        `${pct}%`,
-            height:       "100%",
-            background:   compColor,
-            borderRadius: "3px",
-            minWidth:     pct > 0 ? "4px" : "0",
+            width: `${pct}%`, height: "100%", background: compColor,
+            borderRadius: "3px", minWidth: pct > 0 ? "4px" : "0",
           }} />
         </div>
         <span style={{
-          display:      "inline-block",
-          padding:      "2px 8px",
-          borderRadius: "20px",
-          fontSize:     "12px",
-          fontWeight:   600,
-          background:   bg,
-          color:        compColor,
-          minWidth:     "42px",
-          textAlign:    "center",
+          display: "inline-block", padding: "2px 8px", borderRadius: "20px",
+          fontSize: "12px", fontWeight: 600, background: bg, color: compColor,
+          minWidth: "42px", textAlign: "center",
         }}>
           {completion !== null ? `${completion}%` : "—"}
         </span>
       </div>
-      {/* On-time sub-label */}
       <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px" }}>
         {ontime !== null
           ? <span style={{ color: ragColor(ontime, "ontime") }}>{ontime}% on time</span>
@@ -175,32 +209,26 @@ function ScoreBar({ completion, ontime }: { completion: number | null; ontime: n
 
 // ── Department table ──────────────────────────────────────────────────────────
 
-function DeptTable({ rows, loading, deptFilter, setDeptFilter }: {
-  rows:          DeptRow[];
-  loading:       boolean;
-  deptFilter:    string;
-  setDeptFilter: (d: string) => void;
+function DeptTable({ rows, loading, deptFilter, setDeptFilter, showCompany }: {
+  rows: DeptRow[]; loading: boolean;
+  deptFilter: string; setDeptFilter: (d: string) => void;
+  showCompany: boolean;
 }) {
   const thStyle: React.CSSProperties = {
     padding: "8px 12px", textAlign: "left", color: COLOURS.SLATE,
     fontWeight: 500, fontSize: "11px", textTransform: "uppercase",
     letterSpacing: "0.05em", background: COLOURS.CARD_ALT,
-    borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
-    whiteSpace: "nowrap",
+    borderBottom: `1px solid ${COLOURS.HAIRLINE}`, whiteSpace: "nowrap",
   };
   const tdStyle: React.CSSProperties = {
     padding: "10px 12px", color: COLOURS.NAVY, fontSize: "13px",
     borderBottom: `1px solid ${COLOURS.HAIRLINE}`, verticalAlign: "middle",
   };
-  const numStyle: React.CSSProperties = { ...tdStyle, color: COLOURS.SLATE, textAlign: "right" };
+  const numTd: React.CSSProperties = { ...tdStyle, color: COLOURS.SLATE, textAlign: "right" };
 
   if (loading) return <SkeletonRows count={6} />;
   if (!rows.length) {
-    return (
-      <div style={{ color: COLOURS.SLATE, fontSize: "13px", textAlign: "center", padding: "24px" }}>
-        No data for this period.
-      </div>
-    );
+    return <div style={{ color: COLOURS.SLATE, fontSize: "13px", textAlign: "center", padding: "24px" }}>No data for this period.</div>;
   }
 
   return (
@@ -209,7 +237,7 @@ function DeptTable({ rows, loading, deptFilter, setDeptFilter }: {
         <thead>
           <tr>
             <th style={thStyle}>Department</th>
-            <th style={thStyle}>Company</th>
+            {showCompany && <th style={thStyle}>Company</th>}
             <th style={{ ...thStyle, textAlign: "right" }}>Assigned</th>
             <th style={{ ...thStyle, textAlign: "right" }}>Done</th>
             <th style={{ ...thStyle, textAlign: "right" }}>On time</th>
@@ -226,12 +254,12 @@ function DeptTable({ rows, loading, deptFilter, setDeptFilter }: {
               onClick={() => setDeptFilter(deptFilter === r.department ? "" : r.department)}
             >
               <td style={{ ...tdStyle, fontWeight: 600 }}>{r.department}</td>
-              <td style={{ ...tdStyle, color: COLOURS.SLATE, fontSize: "12px" }}>{r.company_name}</td>
-              <td style={numStyle}>{r.total}</td>
-              <td style={numStyle}>{r.completed}</td>
-              <td style={{ ...numStyle, color: COLOURS.GREEN }}>{r.on_time}</td>
-              <td style={{ ...numStyle, color: r.late > 0 ? COLOURS.AMBER : COLOURS.SLATE }}>{r.late}</td>
-              <td style={{ ...numStyle, color: r.overdue > 0 ? COLOURS.RED : COLOURS.SLATE, fontWeight: r.overdue > 0 ? 600 : 400 }}>{r.overdue}</td>
+              {showCompany && <td style={{ ...tdStyle, color: COLOURS.SLATE, fontSize: "12px" }}>{r.company_name}</td>}
+              <td style={numTd}>{r.total}</td>
+              <td style={numTd}>{r.completed}</td>
+              <td style={{ ...numTd, color: COLOURS.GREEN }}>{r.on_time}</td>
+              <td style={{ ...numTd, color: r.late > 0 ? COLOURS.AMBER : COLOURS.SLATE }}>{r.late}</td>
+              <td style={{ ...numTd, color: r.overdue > 0 ? COLOURS.RED : COLOURS.SLATE, fontWeight: r.overdue > 0 ? 600 : 400 }}>{r.overdue}</td>
               <td style={tdStyle}><ScoreBar completion={r.completion_pct} ontime={r.ontime_pct} /></td>
             </tr>
           ))}
@@ -243,18 +271,20 @@ function DeptTable({ rows, loading, deptFilter, setDeptFilter }: {
 
 // ── Employee spotlight ─────────────────────────────────────────────────────────
 
-function EmpSpotlight({ employees, loading, deptFilter }: {
-  employees:  EmpRow[];
-  loading:    boolean;
-  deptFilter: string;
+function EmpSpotlight({ employees, loading, deptFilter, onSelect }: {
+  employees: EmpRow[]; loading: boolean; deptFilter: string; onSelect: (email: string) => void;
 }) {
   const filtered = deptFilter
-    ? employees.filter((e) => e.department === deptFilter)
+    ? employees.filter(e => e.department === deptFilter)
     : employees;
 
-  const top     = [...filtered].sort((a, b) => (b.ontime_pct ?? 0) - (a.ontime_pct ?? 0)).slice(0, 5);
-  const bottom  = [...filtered]
-    .filter((e) => e.overdue > 0 || (e.completion_pct ?? 100) < 40)
+  const top = [...filtered]
+    .filter(e => (e.completion_pct ?? 0) > 0)
+    .sort((a, b) => (b.ontime_pct ?? 0) - (a.ontime_pct ?? 0) || b.completed - a.completed)
+    .slice(0, 5);
+
+  const bottom = [...filtered]
+    .filter(e => e.overdue > 0 || (e.completion_pct ?? 100) < 40)
     .sort((a, b) => b.overdue - a.overdue || (a.completion_pct ?? 0) - (b.completion_pct ?? 0))
     .slice(0, 5);
 
@@ -262,9 +292,9 @@ function EmpSpotlight({ employees, loading, deptFilter }: {
     display: "flex", alignItems: "center", gap: "10px",
     padding: "9px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
   };
-  const lastRowStyle: React.CSSProperties = { ...rowStyle, borderBottom: "none", paddingBottom: 0 };
+  const lastRow: React.CSSProperties = { ...rowStyle, borderBottom: "none", paddingBottom: 0 };
 
-  function AvatarBadge({ name, bg, color }: { name: string; bg: string; color: string }) {
+  function Avatar({ name, bg, color }: { name: string; bg: string; color: string }) {
     return (
       <div style={{
         width: "34px", height: "34px", borderRadius: "50%", background: bg,
@@ -277,16 +307,22 @@ function EmpSpotlight({ employees, loading, deptFilter }: {
   }
 
   function EmpRow({ emp, isLast, accent }: { emp: EmpRow; isLast: boolean; accent: "green" | "red" }) {
-    const compColor = accent === "green" ? COLOURS.GREEN : COLOURS.RED;
-    const compBg    = accent === "green" ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT;
+    const c  = accent === "green" ? COLOURS.GREEN : COLOURS.RED;
+    const bg = accent === "green" ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT;
     return (
-      <div style={isLast ? lastRowStyle : rowStyle}>
-        <AvatarBadge name={emp.name} bg={compBg} color={compColor} />
+      <div
+        onClick={() => onSelect(emp.email)}
+        style={{ ...(isLast ? lastRow : rowStyle), cursor: "pointer" }}
+      >
+        <Avatar name={emp.name} bg={bg} color={c} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {shortName(emp.name)}
           </div>
-          <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{emp.department}</div>
+          <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+            {emp.department ?? "—"}
+            {emp.total > 0 && <span style={{ marginLeft: "6px" }}>· {emp.total} tasks</span>}
+          </div>
           {accent === "red" && emp.overdue > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "5px", marginTop: "2px" }}>
               <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: COLOURS.RED, flexShrink: 0 }} />
@@ -295,7 +331,7 @@ function EmpSpotlight({ employees, loading, deptFilter }: {
           )}
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: compColor }}>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: c }}>
             {emp.completion_pct !== null ? `${emp.completion_pct}%` : "—"}
           </div>
           <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>
@@ -322,60 +358,67 @@ function EmpSpotlight({ employees, loading, deptFilter }: {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-      {/* Top performers */}
       <div style={card}>
         <SectionTitle title="Top performers" style={{ color: COLOURS.GREEN }} />
-        {top.length === 0 ? (
-          <div style={{ color: COLOURS.SLATE, fontSize: "13px", padding: "16px 0" }}>
-            {deptFilter ? `No data for ${deptFilter} yet.` : "No data yet."}
-          </div>
-        ) : (
-          top.map((e, i) => <EmpRow key={e.email} emp={e} isLast={i === top.length - 1} accent="green" />)
-        )}
+        {top.length === 0
+          ? <div style={{ color: COLOURS.SLATE, fontSize: "13px", padding: "16px 0" }}>No data yet.</div>
+          : top.map((e, i) => <EmpRow key={e.email} emp={e} isLast={i === top.length - 1} accent="green" />)}
       </div>
-
-      {/* Needs attention */}
       <div style={card}>
         <SectionTitle title="Needs attention" style={{ color: COLOURS.RED }} />
-        {bottom.length === 0 ? (
-          <div style={{ color: COLOURS.SLATE, fontSize: "13px", padding: "16px 0" }}>
-            No red flags this period.
-          </div>
-        ) : (
-          bottom.map((e, i) => <EmpRow key={e.email} emp={e} isLast={i === bottom.length - 1} accent="red" />)
-        )}
+        {bottom.length === 0
+          ? <div style={{ color: COLOURS.SLATE, fontSize: "13px", padding: "16px 0" }}>No red flags this period.</div>
+          : bottom.map((e, i) => <EmpRow key={e.email} emp={e} isLast={i === bottom.length - 1} accent="red" />)}
       </div>
     </div>
   );
 }
 
-// ── Manager review strip ───────────────────────────────────────────────────────
+// ── Submitted tasks awaiting HOD ──────────────────────────────────────────────
 
-function ManagerStrip({ managers, loading }: { managers: MgrRow[]; loading: boolean }) {
-  const card: React.CSSProperties = {
-    background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`,
-    borderRadius: RADII.SM, padding: "12px 14px",
-  };
+function SubmittedAwaitingHOD({ managers, loading }: { managers: MgrRow[]; loading: boolean }) {
+  const real = managers.filter(m => m.pending_review > 0 && !isSystemAccount(m.name || m.email));
 
   if (loading) return <SkeletonRows count={2} />;
-  if (!managers.length) return null;
+  if (!real.length) {
+    return (
+      <div style={{ color: COLOURS.SLATE, fontSize: "13px", padding: "8px 0" }}>
+        No submitted tasks are currently waiting for a response.
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
-      {managers.map((m) => {
-        const pendingColor = m.pending_review > 5 ? COLOURS.RED : m.pending_review > 0 ? COLOURS.AMBER : COLOURS.GREEN;
+    <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+      {real.map((m, i) => {
+        const isLast = i === real.length - 1;
+        const color  = m.pending_review >= 10 ? COLOURS.RED : m.pending_review >= 3 ? COLOURS.AMBER : COLOURS.SLATE;
         return (
-          <div key={m.email} style={card}>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {shortName(m.name)}
+          <div key={m.email} style={{
+            display: "flex", alignItems: "center", gap: "12px",
+            padding: "10px 0", borderBottom: isLast ? "none" : `1px solid ${COLOURS.HAIRLINE}`,
+          }}>
+            <div style={{
+              width: "34px", height: "34px", borderRadius: "50%",
+              background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, flexShrink: 0,
+            }}>
+              {initials(m.name || "?")}
             </div>
-            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "6px" }}>{m.email}</div>
-            <div style={{ fontSize: "22px", fontWeight: 700, color: pendingColor }}>
-              {m.pending_review}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>
+                {shortName(m.name)}
+              </div>
+              <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                Assigned {m.tasks_assigned} tasks this period
+              </div>
             </div>
-            <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>pending sign-off</div>
-            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
-              {m.tasks_completed} completed assigned
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontSize: "18px", fontWeight: 700, color }}>
+                {m.pending_review}
+              </div>
+              <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>awaiting review</div>
             </div>
           </div>
         );
@@ -386,12 +429,9 @@ function ManagerStrip({ managers, loading }: { managers: MgrRow[]; loading: bool
 
 // ── Filter pill ────────────────────────────────────────────────────────────────
 
-function FilterPill({
-  label, value, options, onChange,
-}: {
-  label:    string;
-  value:    number | string;
-  options:  { label: string; value: number | string }[];
+function FilterPill({ label, value, options, onChange }: {
+  label: string; value: number | string;
+  options: { label: string; value: number | string }[];
   onChange: (v: number | string) => void;
 }) {
   return (
@@ -399,16 +439,14 @@ function FilterPill({
       <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{label}:</span>
       <select
         value={value}
-        onChange={(e) => onChange(typeof value === "number" ? parseInt(e.target.value, 10) : e.target.value)}
+        onChange={e => onChange(typeof value === "number" ? parseInt(e.target.value, 10) : e.target.value)}
         style={{
           fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY,
           background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
           borderRadius: RADII.SM, padding: "5px 10px", cursor: "pointer",
         }}
       >
-        {options.map((o) => (
-          <option key={String(o.value)} value={String(o.value)}>{o.label}</option>
-        ))}
+        {options.map(o => <option key={String(o.value)} value={String(o.value)}>{o.label}</option>)}
       </select>
     </div>
   );
@@ -417,24 +455,24 @@ function FilterPill({
 // ── Main component ──────────────────────────────────────────────────────────────
 
 export default function HRPerformance() {
-  const isMobile                  = useMobile();
-  const [data,       setData]     = useState<PerfData | null>(null);
-  const [loading,    setLoading]  = useState(true);
-  const [error,      setError]    = useState<string | null>(null);
-  const [days,       setDays]     = useState<number>(90);
-  const [deptFilter, setDeptFilter] = useState<string>("");
-  const [compFilter, setCompFilter] = useState<string>("all");
+  const isMobile                        = useMobile();
+  const [data,          setData]        = useState<PerfData | null>(null);
+  const [loading,       setLoading]     = useState(true);
+  const [error,         setError]       = useState<string | null>(null);
+  const [days,          setDays]        = useState<number>(90);
+  const [deptFilter,    setDeptFilter]  = useState<string>("");
+  const [compFilter,    setCompFilter]  = useState<string>("all");
+  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
 
   const load = useCallback(async (d: number) => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const res  = await authFetch(`/api/hr/performance?days=${d}`);
       const json = await res.json() as PerfData;
       if ("error" in json) throw new Error((json as { error: string }).error);
       setData(json);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load performance data");
+      setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setLoading(false);
     }
@@ -442,32 +480,29 @@ export default function HRPerformance() {
 
   useEffect(() => { load(days); }, [load, days]);
 
-  // Client-side filters
-  const allDepts  = data?.departments ?? [];
-  const companies = Array.from(new Set(allDepts.map((d) => d.company_name))).sort();
-  const depts = (compFilter === "all" ? allDepts : allDepts.filter((d) => d.company_name === compFilter))
-    .filter((d) => !deptFilter || d.department === deptFilter);
+  const rawDepts = data?.departments ?? [];
+  const rawEmps  = data?.employees   ?? [];
 
-  const allEmps   = data?.employees ?? [];
-  const emps      = compFilter === "all" ? allEmps : allEmps.filter((e) => e.company_name === compFilter);
+  const filteredDepts = compFilter === "all" ? rawDepts : rawDepts.filter(d => d.company_name === compFilter);
+  const filteredEmps  = compFilter === "all" ? rawEmps  : rawEmps.filter(e => e.company_name === compFilter);
+
+  const mergedDeptRows = compFilter === "all" ? mergeDepts(filteredDepts) : filteredDepts;
+  const mergedEmpRows  = mergeEmps(filteredEmps);
+
+  const deptRows = deptFilter ? mergedDeptRows.filter(d => d.department === deptFilter) : mergedDeptRows;
+
+  const companies = Array.from(new Set(rawDepts.map(d => d.company_name).filter(Boolean))).sort();
 
   const t = data?.totals;
-
-  const avgCompPct = t?.avg_completion_pct ?? null;
-  const avgOntime  = t?.avg_ontime_pct ?? null;
 
   const kpiGrid: React.CSSProperties = {
     display: "grid",
     gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, minmax(0, 1fr))",
-    gap: "10px",
-    marginBottom: "20px",
+    gap: "10px", marginBottom: "20px",
   };
-
   const cardStyle: React.CSSProperties = {
-    background:   COLOURS.CARD,
-    border:       `1px solid ${COLOURS.HAIRLINE}`,
-    borderRadius: RADII.CARD,
-    padding:      "18px 20px",
+    background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
+    borderRadius: RADII.CARD, padding: "18px 20px",
   };
 
   return (
@@ -477,14 +512,14 @@ export default function HRPerformance() {
         <FilterPill
           label="Company"
           value={compFilter}
-          options={[{ label: "All companies", value: "all" }, ...companies.map((c) => ({ label: c, value: c }))]}
-          onChange={(v) => { setCompFilter(String(v)); setDeptFilter(""); }}
+          options={[{ label: "All companies", value: "all" }, ...companies.map(c => ({ label: c, value: c }))]}
+          onChange={v => { setCompFilter(String(v)); setDeptFilter(""); }}
         />
         <FilterPill
           label="Period"
           value={days}
-          options={PERIOD_OPTIONS.map((o) => ({ label: o.label, value: o.value }))}
-          onChange={(v) => setDays(Number(v))}
+          options={PERIOD_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+          onChange={v => setDays(Number(v))}
         />
         {deptFilter && (
           <button
@@ -500,34 +535,32 @@ export default function HRPerformance() {
         )}
       </div>
 
-      {error && (
-        <div style={{ color: COLOURS.RED, fontSize: "13px", marginBottom: "16px" }}>{error}</div>
-      )}
+      {error && <div style={{ color: COLOURS.RED, fontSize: "13px", marginBottom: "16px" }}>{error}</div>}
 
       {/* ── KPI Cards ── */}
       <div style={kpiGrid}>
         <KpiCard
           label="Avg on-time rate"
-          value={loading ? "…" : avgOntime !== null ? `${avgOntime}%` : "—"}
-          sub={avgOntime !== null && avgOntime < 40 ? "below target" : undefined}
-          valueColor={loading ? COLOURS.SLATE : ragColor(avgOntime, "ontime")}
+          value={loading ? "…" : t?.avg_ontime_pct != null ? `${t.avg_ontime_pct}%` : "—"}
+          sub={t?.avg_ontime_pct != null && t.avg_ontime_pct < 40 ? "below target" : `last ${days} days`}
+          valueColor={loading ? COLOURS.SLATE : ragColor(t?.avg_ontime_pct ?? null, "ontime")}
         />
         <KpiCard
           label="Avg completion"
-          value={loading ? "…" : avgCompPct !== null ? `${avgCompPct}%` : "—"}
-          sub={`last ${days} days`}
-          valueColor={loading ? COLOURS.SLATE : ragColor(avgCompPct, "completion")}
+          value={loading ? "…" : t?.avg_completion_pct != null ? `${t.avg_completion_pct}%` : "—"}
+          sub={`${t?.total_assigned ?? "…"} tasks assigned`}
+          valueColor={loading ? COLOURS.SLATE : ragColor(t?.avg_completion_pct ?? null, "completion")}
         />
         <KpiCard
           label="Overdue now"
           value={loading ? "…" : t?.total_overdue ?? "—"}
-          sub="past due, not done"
+          sub="past due date, not done"
           valueColor={loading ? COLOURS.SLATE : (t?.total_overdue ?? 0) > 0 ? COLOURS.RED : COLOURS.GREEN}
         />
         <KpiCard
-          label="Awaiting manager"
+          label="Awaiting sign-off"
           value={loading ? "…" : t?.total_submitted ?? "—"}
-          sub="submitted, pending review"
+          sub="submitted by employee"
           valueColor={loading ? COLOURS.SLATE : (t?.total_submitted ?? 0) > 0 ? COLOURS.AMBER : COLOURS.GREEN}
         />
       </div>
@@ -535,36 +568,42 @@ export default function HRPerformance() {
       {/* ── Department table ── */}
       <div style={{ ...cardStyle, marginBottom: "16px" }}>
         <SectionTitle title={`Department performance${deptFilter ? ` · ${deptFilter}` : ""}`} />
-        <div style={{ marginTop: "12px" }}>
-          <DeptTable
-            rows={depts}
-            loading={loading}
-            deptFilter={deptFilter}
-            setDeptFilter={setDeptFilter}
-          />
+        <div style={{ marginTop: "4px", fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+          Click a row to filter the employee lists below. Score = tasks completed ÷ total assigned.
         </div>
-        <div style={{ marginTop: "8px", fontSize: "11px", color: COLOURS.SLATE }}>
-          Click a row to filter the employee lists below. Score = tasks done ÷ total assigned. On-time = done before due date ÷ done.
-        </div>
+        <DeptTable
+          rows={deptRows}
+          loading={loading}
+          deptFilter={deptFilter}
+          setDeptFilter={setDeptFilter}
+          showCompany={compFilter !== "all"}
+        />
       </div>
 
       {/* ── Employee spotlight ── */}
       <div style={{ marginBottom: "16px" }}>
-        <SectionTitle title="Employee spotlight" />
+        <SectionTitle title={`Employee spotlight${deptFilter ? ` · ${deptFilter}` : ""}`} />
         <div style={{ marginTop: "10px" }}>
-          <EmpSpotlight employees={emps} loading={loading} deptFilter={deptFilter} />
+          <EmpSpotlight employees={mergedEmpRows} loading={loading} deptFilter={deptFilter} onSelect={setSelectedEmail} />
         </div>
       </div>
 
-      {/* ── Manager review load ── */}
-      {(data?.managers?.length ?? 0) > 0 && (
-        <div style={cardStyle}>
-          <SectionTitle title="Manager review load" />
-          <div style={{ marginTop: "4px", fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>
-            Tasks submitted by employees, pending sign-off by the assigning manager.
-          </div>
-          <ManagerStrip managers={data?.managers ?? []} loading={loading} />
+      {/* ── Submitted tasks awaiting HOD ── */}
+      <div style={cardStyle}>
+        <SectionTitle title="Submitted tasks awaiting response" />
+        <div style={{ marginTop: "4px", fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+          Employees have submitted these tasks for review. The number shows how many are sitting with each manager, unresponded.
         </div>
+        <SubmittedAwaitingHOD managers={data?.managers ?? []} loading={loading} />
+      </div>
+
+      {/* Employee detail panel */}
+      {selectedEmail && (
+        <EmployeeDetailPanel
+          email={selectedEmail}
+          days={days}
+          onClose={() => setSelectedEmail(null)}
+        />
       )}
     </div>
   );
