@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Version bump — only fires when you ask for it.
+#
+#  [feature]  in commit message → minor bump  (4.0 → 4.1)
+#  [major]    in commit message → major bump  (4.x → 5.0)
+#  nothing    → commit proceeds, version unchanged
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+VERSION_FILE="$REPO_ROOT/version.json"
+CHANGELOG_FILE="$REPO_ROOT/CHANGELOG.md"
+
+# Read staged commit message
+MSG_FILE="$REPO_ROOT/.git/COMMIT_EDITMSG"
+COMMIT_MSG=""
+if [ -f "$MSG_FILE" ]; then
+  COMMIT_MSG=$(cat "$MSG_FILE")
+fi
+
+# Determine bump type
+HAS_MAJOR=$(echo "$COMMIT_MSG" | grep -c '\[major\]' || true)
+HAS_FEATURE=$(echo "$COMMIT_MSG" | grep -cE '\[feature\]|\[feat\]' || true)
+
+if [ "$HAS_MAJOR" -eq 0 ] && [ "$HAS_FEATURE" -eq 0 ]; then
+  # Plain fix / maintenance commit — no version change
+  exit 0
+fi
+
+# Ensure version.json exists
+if [ ! -f "$VERSION_FILE" ]; then
+  echo '{"version":"4.0","date":"","label":""}' > "$VERSION_FILE"
+fi
+
+CURRENT=$(node -e "const v=require('$VERSION_FILE').version; process.stdout.write(v)")
+MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+MINOR=$(echo "$CURRENT" | cut -d. -f2)
+
+if [ "$HAS_MAJOR" -gt 0 ]; then
+  NEW_MAJOR=$((MAJOR + 1))
+  NEW_VERSION="${NEW_MAJOR}.0"
+  BUMP_TYPE="MAJOR"
+else
+  NEW_MINOR=$((MINOR + 1))
+  NEW_VERSION="${MAJOR}.${NEW_MINOR}"
+  BUMP_TYPE="minor"
+fi
+
+TODAY=$(date +%Y-%m-%d)
+
+# Write updated version.json
+node -e "
+const fs = require('fs');
+const v = JSON.parse(fs.readFileSync('$VERSION_FILE', 'utf8'));
+v.version = '$NEW_VERSION';
+v.date = '$TODAY';
+const msg = '$COMMIT_MSG'.replace(/\[major\]|\[feature\]|\[feat\]/g, '').trim().replace(/^\w+:\s*/, '');
+if (msg && msg.length > 4) v.label = msg.slice(0, 80);
+fs.writeFileSync('$VERSION_FILE', JSON.stringify(v, null, 2) + '\n');
+"
+
+# Prepend changelog entry
+HEADER=$(head -5 "$CHANGELOG_FILE" 2>/dev/null || echo "# Changelog")
+REST=$(tail -n +6 "$CHANGELOG_FILE" 2>/dev/null || echo "")
+SHORT_MSG=$(echo "$COMMIT_MSG" | head -1 | sed 's/\[major\]\|\[feature\]\|\[feat\]//g' | xargs)
+
+{
+  echo "$HEADER"
+  echo ""
+  echo "## v${NEW_VERSION} — ${TODAY}"
+  echo ""
+  echo "${SHORT_MSG}"
+  echo ""
+  echo "---"
+  echo ""
+  echo "$REST"
+} > "$CHANGELOG_FILE"
+
+git add "$VERSION_FILE" "$CHANGELOG_FILE"
+
+echo "🔖 Version bumped ${CURRENT} → ${NEW_VERSION} (${BUMP_TYPE})"

@@ -11,6 +11,7 @@ import {
   PageHeader, SectionTitle, displayRole, useConfirm, SkeletonRows,
 } from "../lib/SharedUI";
 import PhotoCropModal from "../lib/PhotoCropModal";
+import versionData from "../../version.json";
 
 const PHOTO_MAX_KB = 150;
 
@@ -1067,6 +1068,12 @@ export default function ProfilePage() {
             </div>
           </>
         )}
+        {/* ── App version badge ───────────────────────────── */}
+        <div style={{ marginTop: "32px", textAlign: "center", paddingBottom: "8px" }}>
+          <span style={{ fontSize: "11px", color: COLOURS.INK_400, fontFamily: "var(--font-mono, monospace)" }}>
+            Unze Dashboard v{versionData.version} &middot; {versionData.date}
+          </span>
+        </div>
       </main>
     </AuthWrapper>
   );
