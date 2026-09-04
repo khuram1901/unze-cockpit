@@ -29,6 +29,7 @@ export type Member = {
   notify_whatsapp: boolean;
   phone_e164: string | null;
   photo_url: string | null;
+  employee_code: string | null;
 };
 
 export type Plant = { id: string; name: string };
