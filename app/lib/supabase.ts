@@ -66,6 +66,23 @@ export async function authFetch(url: string, init?: RequestInit): Promise<Respon
   });
 }
 
+// ── Permission & widget-override in-memory caches ─────────────────────────
+// These caches eliminate duplicate /api/me/permissions and /api/me/widgets
+// calls that fire when multiple hooks (useRouteGuard, useUserCtx, per-page
+// loadData) all call these functions within the same page load.
+// TTL matches the useRouteGuard ctx cache (5 min) so permission changes
+// propagate within one natural refresh cycle.
+const PERM_TTL_MS = 5 * 60 * 1000;
+
+let _permCache: { result: Record<string, unknown> | null; token: string; ts: number } | null = null;
+let _widgetCache: { result: Record<string, boolean> | null; token: string; ts: number } | null = null;
+
+/** Call on logout / session change so stale data is never served. */
+export function clearPermissionCaches() {
+  _permCache = null;
+  _widgetCache = null;
+}
+
 export async function loadMyPermissions(token?: string): Promise<Record<string, unknown> | null> {
   try {
     let accessToken = token;
@@ -74,12 +91,18 @@ export async function loadMyPermissions(token?: string): Promise<Record<string, 
       accessToken = session?.access_token || undefined;
     }
     if (!accessToken) return null;
+    // Return cached result if same token within TTL
+    if (_permCache && _permCache.token === accessToken && Date.now() - _permCache.ts < PERM_TTL_MS) {
+      return _permCache.result;
+    }
     const res = await fetch("/api/me/permissions", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) return null;
     const json = await res.json();
-    return json.overrides || null;
+    const result: Record<string, unknown> | null = json.overrides || null;
+    _permCache = { result, token: accessToken, ts: Date.now() };
+    return result;
   } catch {
     return null;
   }
@@ -93,12 +116,18 @@ export async function loadMyWidgetOverrides(token?: string): Promise<Record<stri
       accessToken = session?.access_token || undefined;
     }
     if (!accessToken) return null;
+    // Return cached result if same token within TTL
+    if (_widgetCache && _widgetCache.token === accessToken && Date.now() - _widgetCache.ts < PERM_TTL_MS) {
+      return _widgetCache.result;
+    }
     const res = await fetch("/api/me/widgets", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) return null;
     const json = await res.json();
-    return json.overrides || null;
+    const result: Record<string, boolean> | null = json.overrides || null;
+    _widgetCache = { result, token: accessToken, ts: Date.now() };
+    return result;
   } catch {
     return null;
   }

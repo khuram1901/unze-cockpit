@@ -184,7 +184,7 @@ function ragColor(pct: number | null) {
   return RED;
 }
 
-export default function InvestmentsPage() {
+function InvestmentsPageInner() {
   const { checking } = useRequireCapability("investments");
   const isMobile = useMobile();
   const dlg = useConfirm();
@@ -759,7 +759,7 @@ export default function InvestmentsPage() {
   const isHistorical = selectedDate < todayISO;
 
   return (
-    <AuthWrapper>
+    <>
       {dlg.element}
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
         <PageHeader />
@@ -1999,7 +1999,7 @@ export default function InvestmentsPage() {
           </div>
         </div>
       </main>
-    </AuthWrapper>
+    </>
   );
 }
 
@@ -2070,3 +2070,11 @@ const miniConfirmBtn: React.CSSProperties = {
   color: "white", border: "none", borderRadius: "4px",
   padding: "3px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
 };
+
+export default function InvestmentsPage() {
+  return (
+    <AuthWrapper>
+      <InvestmentsPageInner />
+    </AuthWrapper>
+  );
+}

@@ -59,7 +59,7 @@ function taskDotColour(status: string) {
   return COLOURS.AMBER;
 }
 
-export default function MyMinutesPageWrapper() {
+function MyMinutesPageInner() {
   return <Suspense fallback={<p>Loading...</p>}><MyMinutesPage /></Suspense>;
 }
 
@@ -339,19 +339,16 @@ function MyMinutesPage() {
 
   if (!loading && meetings.length === 0 && !isAdmin) {
     return (
-      <AuthWrapper>
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
           <PageHeader />
           <div style={{ ...cardStyle, backgroundColor: COLOURS.WARNING_SOFT, fontSize: "13px", color: COLOURS.AMBER }}>
             No meeting minutes found. You will see minutes here once you are added as an attendee to a meeting.
           </div>
         </main>
-      </AuthWrapper>
     );
   }
 
   return (
-    <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <PageHeader />
 
@@ -683,6 +680,13 @@ function MyMinutesPage() {
           </div>
         )}
       </main>
+  );
+}
+
+export default function MyMinutesPageWrapper() {
+  return (
+    <AuthWrapper>
+      <MyMinutesPageInner />
     </AuthWrapper>
   );
 }

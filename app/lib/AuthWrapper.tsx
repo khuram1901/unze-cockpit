@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, createContext } from "react";
-import { supabase, loadMyPermissions, loadMyWidgetOverrides, ensureFreshSession, pendingSessionRefresh } from "./supabase";
+import { supabase, loadMyPermissions, loadMyWidgetOverrides, ensureFreshSession, pendingSessionRefresh, clearPermissionCaches } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
 import ChatPanel from "./ChatPanel";
@@ -107,6 +107,7 @@ export default function AuthWrapper({
         // Let any in-flight token refresh settle first, so its response
         // can't write a new session back after we clear it.
         await pendingSessionRefresh();
+        clearPermissionCaches();
         await supabase.auth.signOut();
         router.push("/login?error=You were signed out after 30 minutes of inactivity.");
       } else if (idleFor >= IDLE_LIMIT_MS - IDLE_WARN_MS) {
@@ -389,6 +390,7 @@ export default function AuthWrapper({
 
   async function handleSignOut() {
     try { localStorage.removeItem("unze:keep-signed-in"); } catch { /* ignore */ }
+    clearPermissionCaches();
     await supabase.auth.signOut();
     router.push("/login");
   }

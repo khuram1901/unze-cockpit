@@ -543,7 +543,7 @@ function ExecHeroBanner({
 
 /* ───────────────────────── Main Page ───────────────────────── */
 
-export default function HomePage() {
+function HomePageInner() {
   const router = useRouter();
   const isMobile = useMobile();
   const { ctx, loading: ctxLoading } = useUserCtx();
@@ -1909,11 +1909,10 @@ export default function HomePage() {
   const progressPct = myTotalMonth > 0 ? Math.round((myCompletedMonth / myTotalMonth) * 100) : 0;
 
   if (!ctxLoading && ctx && isPA(ctx)) {
-    return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary)" }}>Redirecting...</p></main></AuthWrapper>;
+    return <main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary)" }}>Redirecting...</p></main>;
   }
 
   return (
-    <AuthWrapper>
       <main style={{ padding: isMobile ? "16px 20px" : "32px 40px", maxWidth: "100%", minWidth: 0, backgroundColor: CANVAS, fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
 
         {!allLoading && userName && (
@@ -2592,7 +2591,6 @@ export default function HomePage() {
           </div>
         )}
       </main>
-    </AuthWrapper>
   );
 }
 
@@ -4194,5 +4192,13 @@ function HomeSkeleton({ isMobile }: { isMobile: boolean }) {
         </div>
       </div>
     </>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <AuthWrapper>
+      <HomePageInner />
+    </AuthWrapper>
   );
 }

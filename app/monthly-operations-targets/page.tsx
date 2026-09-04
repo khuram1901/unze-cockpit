@@ -36,7 +36,7 @@ function getMonthEnd(m: string) {
   return new Date(y, mo, 0).toISOString().slice(0, 10);
 }
 
-export default function MonthlyOperationsTargetsPage() {
+function MonthlyOperationsTargetsPageInner() {
   const isMobile = useMobile();
   const { checking } = useRequireCapability("operations");
   const [member, setMember] = useState<Member | null>(null);
@@ -176,11 +176,10 @@ export default function MonthlyOperationsTargetsPage() {
   }));
 
   if (checking || loading) {
-    return <AuthWrapper><main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}><p style={{ color: COLOURS.SLATE }}>Checking permissions…</p></main></AuthWrapper>;
+    return <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}><p style={{ color: COLOURS.SLATE }}>Checking permissions…</p></main>;
   }
 
   return (
-    <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
@@ -381,7 +380,6 @@ export default function MonthlyOperationsTargetsPage() {
         <SectionTitle title={`Dispatch Targets — ${formatMonthUK(targetMonth)}`} />
         <TargetsTable targets={dispatchTargets} actuals={dispActuals} mobile={isMobile} />
       </main>
-    </AuthWrapper>
   );
 }
 
@@ -420,5 +418,13 @@ function TargetsTable({ targets, actuals, mobile }: { targets: MonthlyTarget[]; 
         </tbody>
       </table>
     </div>
+  );
+}
+
+export default function MonthlyOperationsTargetsPage() {
+  return (
+    <AuthWrapper>
+      <MonthlyOperationsTargetsPageInner />
+    </AuthWrapper>
   );
 }

@@ -85,7 +85,7 @@ function displayMemberName(member: Member | null, email: string | null) {
   return fullName || member.name || email || "User";
 }
 
-export default function CalendarPage() {
+function CalendarPageInner() {
   const [requests, setRequests] = useState<MeetingRequest[]>([]);
   const [member, setMember] = useState<Member | null>(null);
   const [allMembers, setAllMembers] = useState<Member[]>([]);
@@ -287,7 +287,6 @@ export default function CalendarPage() {
   }
 
   return (
-    <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
           <PageHeader />
@@ -695,7 +694,14 @@ export default function CalendarPage() {
           </>
         )}
       </main>
-    </AuthWrapper>
   );
 }
 
+
+export default function CalendarPage() {
+  return (
+    <AuthWrapper>
+      <CalendarPageInner />
+    </AuthWrapper>
+  );
+}

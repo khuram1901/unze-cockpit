@@ -134,7 +134,7 @@ function BudgetActualInput({ id, initial, onSave }: {
   );
 }
 
-export default function FinancePage() {
+function FinancePageInner() {
   const router = useRouter();
   const isMobile = useMobile();
   const { checking } = useRequireCapability("finance");
@@ -290,16 +290,14 @@ export default function FinancePage() {
 
   if (loading) {
     return (
-      <AuthWrapper>
         <main style={{ padding: "14px 18px", maxWidth: "100%", minWidth: 0 }}>
           <SkeletonRows count={3} height="60px" />
         </main>
-      </AuthWrapper>
     );
   }
 
   return (
-    <AuthWrapper>
+    <>
       {toast.element}
       {dlg.element}
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
@@ -555,9 +553,17 @@ export default function FinancePage() {
           </>
         )}
       </main>
-    </AuthWrapper>
+    </>
   );
 }
 
 const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "4px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", fontSize: "13px", boxSizing: "border-box" };
 const lbl: React.CSSProperties = { display: "block", fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" } as React.CSSProperties;
+
+export default function FinancePage() {
+  return (
+    <AuthWrapper>
+      <FinancePageInner />
+    </AuthWrapper>
+  );
+}
