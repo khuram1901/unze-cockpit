@@ -85,7 +85,7 @@ const scrollNavBtn = (active: boolean): React.CSSProperties => ({
   display: "flex", alignItems: "center", justifyContent: "center",
 });
 
-export default function ReceivablesPage() {
+function ReceivablesInner() {
   const isMobile = useMobile();
   const { checking } = useRequireCapability("receivables");
   const [stages, setStages] = useState<Stage[]>([]);
@@ -411,7 +411,6 @@ export default function ReceivablesPage() {
   if (checking) return null;
 
   return (
-    <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "14px 18px", maxWidth: "100%", minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
           <PageHeader />
@@ -871,6 +870,13 @@ export default function ReceivablesPage() {
           </div>
         )}
       </main>
+  );
+}
+
+export default function ReceivablesPage() {
+  return (
+    <AuthWrapper>
+      <ReceivablesInner />
     </AuthWrapper>
   );
 }
