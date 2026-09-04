@@ -21,7 +21,7 @@ type Overview = {
 };
 
 type Person = {
-  employee_code: string; full_name: string | null; designation: string | null;
+  employee_code: string; display_name: string | null; flw_name: string | null; designation: string | null;
   department: string | null; station: string | null; grade: string | null;
   status: string | null; email: string | null; mobile: string | null;
   joining_date: string | null; is_active: boolean;
@@ -209,7 +209,7 @@ export default function HRPeople() {
             ) : people.map(p => (
               <tr key={p.employee_code}>
                 <td style={td}>{p.employee_code}</td>
-                <td style={{ ...td, fontWeight: 500 }}>{p.full_name ?? "—"}</td>
+                <td style={{ ...td, fontWeight: 500 }}>{p.display_name ?? p.flw_name ?? "—"}</td>
                 <td style={td}>{p.designation ?? "—"}</td>
                 <td style={td}>{p.department ?? "—"}</td>
                 <td style={td}>{p.station ?? "—"}</td>

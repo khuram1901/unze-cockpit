@@ -123,9 +123,11 @@ export async function GET(request: NextRequest) {
       const limit   = Math.min(parseInt(searchParams.get("limit") ?? "100"), 500);
       const offset  = parseInt(searchParams.get("offset") ?? "0");
 
-      let q = db.from("flw_employees")
-        .select("employee_code, full_name, designation, department, station, grade, status, email, mobile, joining_date, company_id, is_active", { count: "exact" })
-        .order("full_name", { ascending: true })
+      // hr_employees_view joins flw_employees with members on employee_code,
+      // preferring members.first_name+last_name as display_name when linked.
+      let q = db.from("hr_employees_view")
+        .select("employee_code, display_name, flw_name, designation, department, station, grade, status, email, mobile, joining_date, company_id, is_active, member_id, member_role, member_photo", { count: "exact" })
+        .order("display_name", { ascending: true })
         .range(offset, offset + limit - 1);
 
       const deptId  = uuidOrNull("department");
@@ -134,7 +136,7 @@ export async function GET(request: NextRequest) {
       if (company) q = q.eq("company_id", company);
       if (deptId) q = q.eq("department_id", deptId);
       if (station) q = q.eq("station", station);
-      if (search) q = q.or(`employee_code.ilike.%${search}%,full_name.ilike.%${search}%,designation.ilike.%${search}%`);
+      if (search) q = q.or(`employee_code.ilike.%${search}%,display_name.ilike.%${search}%,flw_name.ilike.%${search}%,designation.ilike.%${search}%`);
 
       const { data, count, error } = await q;
       if (error) throw new Error(error.message);
