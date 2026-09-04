@@ -92,7 +92,8 @@ export default function HRDashboard() {
       {safeTab === "people"     && <HRPeople />}
       {safeTab === "payroll"    && <HRPayrollInsights />}
       {safeTab === "movement"   && <HRMovement />}
-      {safeTab === "attendance" && <HRAttendance />}
+      {safeTab === "attendance"  && <HRAttendance />}
+      {safeTab === "performance" && <HRPerformance />}
       {safeTab === "td"         && <HRTraining />}
       {safeTab === "tasks"      && <HRTasksLive />}
       {safeTab === "legal"      && <HRLegal />}
