@@ -8,12 +8,20 @@ export async function GET(req: Request) {
 
   const serviceClient = createServiceClient();
 
+  // Single query: join members → member_permissions in one round-trip
+  // instead of two sequential queries (members first, then permissions).
   const { data: member } = await serviceClient
-    .from("members").select("id").eq("email", auth.email).maybeSingle();
+    .from("members")
+    .select("id, member_permissions(*)")
+    .eq("email", auth.email)
+    .maybeSingle();
+
   if (!member) return NextResponse.json({ overrides: null });
 
-  const { data: perms } = await serviceClient
-    .from("member_permissions").select("*").eq("member_id", member.id).maybeSingle();
+  // member_permissions is an array from the embedded select; take first row.
+  const perms = Array.isArray(member.member_permissions)
+    ? (member.member_permissions[0] ?? null)
+    : null;
 
-  return NextResponse.json({ overrides: perms || null });
+  return NextResponse.json({ overrides: perms });
 }

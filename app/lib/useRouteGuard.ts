@@ -117,7 +117,11 @@ function useAuthGuard(
       setCtx(loaded);
       setChecking(false);
     }
-    check();
+    check().catch(() => {
+      // If the auth check itself throws (network failure, unexpected error),
+      // send to login rather than leaving the page stuck on a blank screen.
+      if (active) router.replace("/login");
+    });
     return () => { active = false; };
   }, [guardKey, router]);
 

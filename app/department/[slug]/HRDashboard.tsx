@@ -13,16 +13,18 @@ import HRTraining from "./hr/HRTraining";
 import HRTasksLive from "./hr/HRTasksLive";
 import HRLegal from "./hr/HRLegal";
 import HRFlowData from "./hr/HRFlowData";
+import HRPerformance from "./hr/HRPerformance";
 
 // ─── Tab definitions ────────────────────────────────────────────────────────
 // CEO-level 7-tab layout (30/08/2026). Old tabs backed by permanently-empty
-// tables (Workforce, Insights, Performance, Recruitment, On/Off-boarding,
+// tables (Workforce, Insights, Recruitment, On/Off-boarding,
 // EOBI, OD) removed — live data now comes from FlowHCM via master tables.
 const ALL_HR_TABS = [
   { key: "people",     label: "People",             widgetKey: "hr_tabs.people" },
   { key: "payroll",    label: "Payroll",            widgetKey: "hr_tabs.payroll" },
   { key: "movement",   label: "Workforce Movement", widgetKey: "hr_tabs.movement" },
   { key: "attendance", label: "Attendance",         widgetKey: "hr_tabs.attendance" },
+  { key: "performance", label: "Performance",        widgetKey: "hr_tabs.performance" },
   { key: "td",         label: "T&D Calendar",       widgetKey: "hr_tabs.td" },
   // Tasks and Legal are SEPARATE tabs (Khuram 30/08/2026): legal is managed
   // by a different user, so each needs its own visibility key in the matrix.

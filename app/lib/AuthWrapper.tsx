@@ -154,17 +154,20 @@ export default function AuthWrapper({
       }
       const user = session.user;
       setEmail(user.email ?? null);
-      const { data: memberData } = await supabase
-        .from("members")
-        .select("id, name, first_name, last_name, role, department, company, photo_url")
-        .eq("email", user.email)
-        .single();
+      // Parallelise member lookup + permissions — cuts one sequential round-trip
+      // off every initial page load. Both calls are independent of each other.
+      const [{ data: memberData }, permData] = await Promise.all([
+        supabase
+          .from("members")
+          .select("id, name, first_name, last_name, role, department, company, photo_url")
+          .eq("email", user.email)
+          .single(),
+        loadMyPermissions(session.access_token),
+      ]);
       if (memberData) {
         setMember(memberData);
         setUserPhotoUrl(memberData.photo_url ?? null);
-        let overrides: PermOverrides | null = null;
-        const permData = await loadMyPermissions(session.access_token);
-        if (permData) overrides = permData as PermOverrides;
+        const overrides = permData ? (permData as PermOverrides) : null;
         setUserCtx({
           email: user.email,
           role: memberData.role,
