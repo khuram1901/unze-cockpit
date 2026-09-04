@@ -89,7 +89,7 @@ const kickerStyle: React.CSSProperties = {
   display: "block",
 };
 
-export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = {}) {
+export default function NewTaskForm({ onCreated, prefillDescription = "" }: { onCreated?: () => void; prefillDescription?: string } = {}) {
   const router = useRouter();
   const toast = useToast();
   const today = todayDate();
@@ -98,7 +98,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
   const [departmentOwners, setDepartmentOwners] = useState<DepartmentOwner[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
 
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(prefillDescription);
   const [companyId, setCompanyId] = useState<string>(""); // "" = Group / needs review
   const [companyTouched, setCompanyTouched] = useState(false); // must actively pick, "" is a real choice not a default
   const [project, setProject] = useState("");

@@ -29,6 +29,7 @@ export default function TasksPageClient() {
 
   const [showQuick,      setShowQuick]      = useState(voiceParam || !!textParam);
   const [showFull,       setShowFull]       = useState(false);
+  const [fullPrefill,    setFullPrefill]    = useState("");
   const [autoStartVoice, setAutoStartVoice] = useState(voiceParam);
 
   if (loading) return <p style={{ color: COLOURS.SLATE }}>Loading tasks…</p>;
@@ -40,7 +41,8 @@ export default function TasksPageClient() {
   const canDelete = ctx ? isPrivileged(ctx) : false;
   const impExp    = ctx ? canImportExport(ctx) : false;
 
-  function openFull() {
+  function openFull(prefill = "") {
+    setFullPrefill(prefill);
     setShowQuick(false);
     setShowFull(true);
   }
@@ -86,7 +88,7 @@ export default function TasksPageClient() {
       {/* ── Full form modal ──────────────────────────────────────────── */}
       {canCreate && (
         <Modal open={showFull} onClose={() => setShowFull(false)}>
-          <NewTaskForm onCreated={() => setShowFull(false)} />
+          <NewTaskForm onCreated={() => setShowFull(false)} prefillDescription={fullPrefill} />
         </Modal>
       )}
 

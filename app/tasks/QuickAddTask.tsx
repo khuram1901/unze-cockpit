@@ -103,7 +103,7 @@ export default function QuickAddTask({
   prefillText = "",
 }: {
   onCreated?: () => void;
-  onMoreOptions?: () => void;
+  onMoreOptions?: (description: string) => void;
   autoStartVoice?: boolean;
   prefillText?: string;
 }) {
@@ -676,7 +676,7 @@ export default function QuickAddTask({
                 borderRadius: RADII.SM, padding: "7px 10px",
               }}>
                 ⚠ Company not set for {selected.name} yet.{" "}
-                <button type="button" onClick={onMoreOptions} style={{
+                <button type="button" onClick={() => onMoreOptions?.(description)} style={{
                   background: "none", border: "none", padding: 0,
                   color: COLOURS.AMBER, fontWeight: 600, cursor: "pointer",
                   textDecoration: "underline", fontSize: "11px",
@@ -689,7 +689,7 @@ export default function QuickAddTask({
         {/* ── Footer ────────────────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
           {!isListening ? (
-            <button type="button" onClick={onMoreOptions} style={{
+            <button type="button" onClick={() => onMoreOptions?.(description)} style={{
               background: "none", border: "none", padding: 0,
               fontSize: "12px", color: COLOURS.SLATE,
               cursor: "pointer", textDecoration: "underline",
