@@ -270,7 +270,7 @@ export default function MembersManager() {
       }
     }
     const { data } = await supabase.from("members")
-      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, manager_id, position_title, is_active, notify_email, notify_whatsapp, phone_e164, photo_url")
+      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, manager_id, position_title, is_active, notify_email, notify_whatsapp, phone_e164, photo_url, employee_code")
       .order("first_name", { ascending: true });
     if (data) setMembers(data);
 

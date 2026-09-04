@@ -55,6 +55,7 @@ export type DrawerMember = {
   notify_whatsapp: boolean;
   phone_e164: string | null;
   photo_url: string | null;
+  employee_code: string | null;
 };
 
 export type DrawerPlant = { id: string; name: string };
@@ -1034,6 +1035,9 @@ export default function MemberDrawer({
               </Field>
               <Field label="Position title" value={member.position_title || ""}
                 onChange={(v) => onUpdate(member.id, { position_title: v || null })}
+                disabled={!canEdit} />
+              <Field label="FlowHCM Employee ID" value={member.employee_code || ""}
+                onChange={(v) => onUpdate(member.id, { employee_code: v || null })}
                 disabled={!canEdit} />
             </div>
 
