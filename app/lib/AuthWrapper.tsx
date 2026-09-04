@@ -178,7 +178,15 @@ export default function AuthWrapper({
       if (memberData) {
         setMember(memberData);
         setUserPhotoUrl(memberData.photo_url ?? null);
-        const overrides = permData ? (permData as PermOverrides) : null;
+        // If permissions returned null (transient API failure), retry once after
+        // a short delay before falling back to null. Without overrides, banking
+        // and other override-gated pages break for users who have explicit grants.
+        let resolvedPermData = permData;
+        if (!resolvedPermData) {
+          await new Promise((r) => setTimeout(r, 1500));
+          resolvedPermData = await loadMyPermissions(session.access_token);
+        }
+        const overrides = resolvedPermData ? (resolvedPermData as PermOverrides) : null;
         setUserCtx({
           email: user.email,
           role: memberData.role,
