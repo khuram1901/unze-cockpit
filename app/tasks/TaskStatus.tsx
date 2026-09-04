@@ -371,7 +371,7 @@ export default function TaskStatus({
 
     const { error } = await supabase
       .from("tasks")
-      .update({ status: newStatus, updated_at: new Date().toISOString(), ...extraFields })
+      .update({ status: newStatus, updated_at: new Date().toISOString(), ...(newStatus === "Submitted" ? { submitted_at: new Date().toISOString() } : {}), ...extraFields })
       .eq("id", task.id);
 
     setSaving(false);
@@ -538,6 +538,7 @@ export default function TaskStatus({
         recovery_date: recoveryDate || null,
         reply_by: userData.user?.email || "unknown",
         reply_at: new Date().toISOString(),
+        submitted_at: new Date().toISOString(),
         status: "Submitted",
         updated_at: new Date().toISOString(),
       })
