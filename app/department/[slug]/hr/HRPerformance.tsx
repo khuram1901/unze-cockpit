@@ -354,7 +354,7 @@ function GroupView({
                     onMouseLeave={ev => (ev.currentTarget.style.background = "")}
                   >
                     <td style={{ ...tdS, fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE }}>
-                      {d.employee_code || "—"}
+                      {e.employee_code || "—"}
                     </td>
                     <td style={tdS}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
