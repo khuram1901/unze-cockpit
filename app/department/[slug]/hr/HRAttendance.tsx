@@ -34,6 +34,12 @@ export default function HRAttendance() {
   const [loading, setLoading] = useState(true);
   const filterOpts = useHRFilterOptions();
 
+  const handleCompanyChange = (v: string) => { setCompany(v); setStation(""); };
+  const selectedCo = company ? (filterOpts?.companies ?? []).find(c => c.id === company) : null;
+  const visibleStations = selectedCo
+    ? (selectedCo.stations ?? [])
+    : (filterOpts?.stations ?? []);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -58,10 +64,10 @@ export default function HRAttendance() {
           <DateInput value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
         {data && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>({formatDateUK(data.date)})</span>}
-        <FilterSelect label="All companies" value={company} onChange={setCompany}
+        <FilterSelect label="All companies" value={company} onChange={handleCompanyChange}
           options={(filterOpts?.companies ?? []).map(co => ({ value: co.id, label: co.name }))} />
         <FilterSelect label="All stations" value={station} onChange={setStation}
-          options={(filterOpts?.stations ?? []).map(s => ({ value: s, label: s }))} />
+          options={visibleStations.map(s => ({ value: s, label: s }))} />
         {(company || station) && (
           <button onClick={() => { setCompany(""); setStation(""); }} style={{
             padding: "8px 12px", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE,

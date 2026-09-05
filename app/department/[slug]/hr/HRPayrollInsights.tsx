@@ -40,6 +40,15 @@ export default function HRPayrollInsights() {
   const [location, setLocation]     = useState("");
   const filterOpts = useHRFilterOptions();
 
+  const handleCompanyChange = (v: string) => { setCompany(v); setDepartment(""); setLocation(""); };
+  const selectedCo = company ? (filterOpts?.companies ?? []).find(c => c.id === company) : null;
+  const visibleDepts = selectedCo
+    ? (filterOpts?.departments ?? []).filter(d => (selectedCo.department_ids ?? []).includes(d.id))
+    : (filterOpts?.departments ?? []);
+  const visibleLocations = selectedCo
+    ? (filterOpts?.locations ?? []).filter(l => (selectedCo.location_ids ?? []).includes(l.id))
+    : (filterOpts?.locations ?? []);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -91,12 +100,12 @@ export default function HRPayrollInsights() {
           options={(filterOpts?.payroll_months ?? []).map(pm => ({
             value: `${pm.year}-${pm.month}`, label: `${MONTH_NAMES[pm.month - 1]} ${pm.year}`,
           }))} />
-        <FilterSelect label="All companies" value={company} onChange={setCompany}
+        <FilterSelect label="All companies" value={company} onChange={handleCompanyChange}
           options={(filterOpts?.companies ?? []).map(co => ({ value: co.id, label: co.name }))} />
         <FilterSelect label="All departments" value={department} onChange={setDepartment}
-          options={(filterOpts?.departments ?? []).map(d => ({ value: d.id, label: d.name }))} />
+          options={visibleDepts.map(d => ({ value: d.id, label: d.name }))} />
         <FilterSelect label="All locations" value={location} onChange={setLocation}
-          options={(filterOpts?.locations ?? []).map(l => ({ value: l.id, label: l.name }))} />
+          options={visibleLocations.map(l => ({ value: l.id, label: l.name }))} />
         {(ym || company || department || location) && (
           <button onClick={() => { setYm(""); setCompany(""); setDepartment(""); setLocation(""); }} style={{
             padding: "8px 12px", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE,

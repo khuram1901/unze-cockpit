@@ -42,6 +42,12 @@ export default function HRMovement() {
   const [loading, setLoading] = useState(true);
   const filterOpts = useHRFilterOptions();
 
+  const handleCompanyChange = (v: string) => { setCompany(v); setDepartment(""); };
+  const selectedCo = company ? (filterOpts?.companies ?? []).find(c => c.id === company) : null;
+  const visibleDepts = selectedCo
+    ? (filterOpts?.departments ?? []).filter(d => (selectedCo.department_ids ?? []).includes(d.id))
+    : (filterOpts?.departments ?? []);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -130,10 +136,10 @@ export default function HRMovement() {
         )}
       </div>
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-        <FilterSelect label="All companies" value={company} onChange={setCompany}
+        <FilterSelect label="All companies" value={company} onChange={handleCompanyChange}
           options={(filterOpts?.companies ?? []).map(co => ({ value: co.id, label: co.name }))} />
         <FilterSelect label="All departments" value={department} onChange={setDepartment}
-          options={(filterOpts?.departments ?? []).map(d => ({ value: d.id, label: d.name }))} />
+          options={visibleDepts.map(d => ({ value: d.id, label: d.name }))} />
         {(company || department) && (
           <button onClick={() => { setCompany(""); setDepartment(""); }} style={{
             padding: "8px 12px", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE,
