@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../lib/supabase-server";
 import { requireAuth } from "../../../../lib/api-auth";
-import {
 import { isAdmin } from "../../../../lib/admin-config";
+import {
   UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID,
 } from "../../../../lib/constants";
 
