@@ -39,7 +39,7 @@ type Dashboard = {
   movement_12m: MovementMonth[];
 };
 type FilterOptions = {
-  companies: { id: string; name: string }[];
+  companies: { id: string; name: string; department_ids: string[] }[];
   departments: { id: string; name: string }[];
 };
 
@@ -73,6 +73,12 @@ function GroupHRContent() {
   const [company, setCompany] = useState("");
   const [department, setDepartment] = useState("");
   const [filterOpts, setFilterOpts] = useState<FilterOptions | null>(null);
+
+  const handleCompanyChange = (v: string) => { setCompany(v); setDepartment(""); };
+  const selectedCo = company ? (filterOpts?.companies ?? []).find(c => c.id === company) : null;
+  const visibleDepts = selectedCo
+    ? (filterOpts?.departments ?? []).filter(d => (selectedCo.department_ids ?? []).includes(d.id))
+    : (filterOpts?.departments ?? []);
 
   useEffect(() => {
     (async () => {
@@ -142,13 +148,13 @@ function GroupHRContent() {
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <select value={company} onChange={e => setCompany(e.target.value)} aria-label="Company filter" style={filterStyle(!!company)}>
+          <select value={company} onChange={e => handleCompanyChange(e.target.value)} aria-label="Company filter" style={filterStyle(!!company)}>
             <option value="">All companies</option>
             {(filterOpts?.companies ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select value={department} onChange={e => setDepartment(e.target.value)} aria-label="Department filter" style={filterStyle(!!department)}>
             <option value="">All departments</option>
-            {(filterOpts?.departments ?? []).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {visibleDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
           {(company || department) && (
             <button onClick={() => { setCompany(""); setDepartment(""); }} style={{
