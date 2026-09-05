@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
       // hr_employees_view joins flw_employees with members on employee_code,
       // preferring members.first_name+last_name as display_name when linked.
       let q = db.from("hr_employees_view")
-        .select("employee_code, display_name, flw_name, designation, department, station, grade, status, email, mobile, joining_date, company_id, is_active, member_id, member_role, member_photo", { count: "exact" })
+        .select("employee_code, display_name, flw_name, designation, department, department_id, station, grade, status, email, mobile, joining_date, company_id, is_active, member_id, member_role, member_photo", { count: "exact" })
         .order("display_name", { ascending: true })
         .range(offset, offset + limit - 1);
 
