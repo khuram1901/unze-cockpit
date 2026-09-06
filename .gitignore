@@ -52,3 +52,6 @@ sessions/
 push.command
 graphify-out/
 _to_delete/
+
+# Claude web generated context copy
+CLAUDE_SKILLS_CONTEXT.md

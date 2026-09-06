@@ -1,3 +1,59 @@
+## Project AI Workflow
+
+Use Graphify first for codebase understanding.
+
+If `graphify-out/graph.json` exists, query the graph before searching or opening source files for questions about:
+- architecture
+- modules
+- data flow
+- dependencies
+- implementation details
+- where something lives
+- what calls what
+- how a feature works
+
+Use the project skills automatically:
+- `graphify` for codebase mapping and graph queries
+- `feature-planner` before new features
+- `debugging` for errors and regressions
+- `database-safety` for database/schema/permissions/data work
+- `security-review` for auth/admin/user-data/secrets/integrations
+- `refactor-safety` for refactors
+- `code-review` before finalizing code changes
+- `docs-sync` after meaningful changes
+
+Prefer small, safe changes. Explain what changed, why, and what I should test.
+
+---
+
+## Project AI Workflow
+
+Use Graphify first for codebase understanding.
+
+If `graphify-out/graph.json` exists, query the graph before searching or opening source files for questions about:
+- architecture
+- modules
+- data flow
+- dependencies
+- implementation details
+- where something lives
+- what calls what
+- how a feature works
+
+Use the project skills automatically:
+- `graphify` for codebase mapping and graph queries
+- `feature-planner` before new features
+- `debugging` for errors and regressions
+- `database-safety` for database/schema/permissions/data work
+- `security-review` for auth/admin/user-data/secrets/integrations
+- `refactor-safety` for refactors
+- `code-review` before finalizing code changes
+- `docs-sync` after meaningful changes
+
+Prefer small, safe changes. Explain what changed, why, and what I should test.
+
+---
+
 # Working with Khuram — Unze Dashboard Project
 
 **Read this file at the start of every session.** It captures who I am, how I work, and how to help me best.
@@ -145,3 +201,11 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## Claude Web Context Rule
+
+In Claude web, if the local folder is not connected, use the uploaded Project Context files first and do not claim to have read source files directly. Ask me to provide files or switch to Claude Code only when exact source edits are needed.
+
+## Claude Web Context Rule
+
+In Claude web, if the local folder is not connected, use the uploaded Project Context files first and do not claim to have read source files directly. Ask me to provide files or switch to Claude Code only when exact source edits are needed.
