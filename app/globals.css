@@ -34,6 +34,8 @@ body {
   font-family: var(--font-source-sans), system-ui, sans-serif;
   font-size: 16px;
   overflow-x: hidden;
+  /* Slashed zero: prevents "0" from being mistaken for "8" across all weights */
+  font-feature-settings: "zero" 1;
 }
 
 main {

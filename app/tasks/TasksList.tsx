@@ -1195,13 +1195,27 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       </div>
 
       {kpiDrawer && (() => {
+        // When "Mine" scope is active, KPI drawers must show only the tasks the
+        // current user is personally involved in — the same set that the main
+        // list shows. Showing allOpen/overdueTasks (company-wide) here was the
+        // source of task-privacy leakage: privileged users (CEO/Admin/Executive)
+        // who left scope on "mine" still saw every colleague's task in the
+        // drawer when clicking a KPI tile.
+        const drawerBase = myTasksScope === "mine" ? myTasksSource : allOpen;
         const drawerTasks =
-          kpiDrawer === "Open" ? allOpen :
-          kpiDrawer === "Overdue" ? overdueTasks :
-          kpiDrawer === "Due Today" ? allOpen.filter((t) => t.due_date === todayStr) :
-          kpiDrawer === "Waiting Reply" ? waitingReply :
-          kpiDrawer === "Stuck" ? scopedTasks.filter((t) => t.status === "Stuck") :
-          completedAll;
+          kpiDrawer === "Open" ? drawerBase :
+          kpiDrawer === "Overdue" ? drawerBase.filter(isOverdue) :
+          kpiDrawer === "Due Today" ? drawerBase.filter((t) => t.due_date === todayStr) :
+          kpiDrawer === "Waiting Reply" ? drawerBase.filter((t) => t.status === "Waiting Reply") :
+          kpiDrawer === "Stuck" ? (myTasksScope === "mine" ? myTasksSource : scopedTasks).filter((t) => t.status === "Stuck") :
+          (myTasksScope === "mine" ? scopedTasks.filter((t) => {
+            const myEmails = myIdentities;
+            return t.status === "Completed" && (
+              !!(t.assigned_to_email && myEmails.includes(t.assigned_to_email.toLowerCase())) ||
+              !!(t.assigned_by_email && myEmails.includes(t.assigned_by_email.toLowerCase())) ||
+              myCoAssignedTaskIds.has(t.id)
+            );
+          }) : completedAll);
         return (
           <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
             <div style={{ padding: "9px 16px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
