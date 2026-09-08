@@ -25,7 +25,7 @@
   --color-background: var(--bg-page);
   --color-foreground: var(--text-primary);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* --font-mono intentionally left to JetBrains Mono set in layout.tsx */
 }
 
 body {
