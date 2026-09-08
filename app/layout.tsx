@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Source_Sans_3, Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import { Source_Sans_3, Inter, Inter_Tight, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import ThemeProvider from "./lib/ThemeProvider";
 
@@ -22,10 +22,11 @@ const interTight = Inter_Tight({
   weight: ["400", "500", "600", "700"],
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   display: "swap",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -51,7 +52,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en-GB" className={`${sourceSans.variable} ${inter.variable} ${interTight.variable} ${jetbrainsMono.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="en-GB" className={`${sourceSans.variable} ${inter.variable} ${interTight.variable} ${ibmPlexMono.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/icon-192.svg" />
       </head>

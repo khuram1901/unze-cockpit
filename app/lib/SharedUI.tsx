@@ -78,7 +78,7 @@ export const RADII = {
 };
 
 // Monospace font for dates and numbers — slashed zero avoids 0/8 ambiguity
-export const FONT_MONO = "var(--font-mono, 'JetBrains Mono', monospace)";
+export const FONT_MONO = "var(--font-mono, 'IBM Plex Mono', monospace)";
 
 // Shadows removed from card spec by design system — kept only for modals/dropdowns
 export const SHADOWS = {
