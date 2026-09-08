@@ -250,8 +250,8 @@ export default function TaskDetailPanel({
         <div style={{ padding: "8px 12px", border: `1px solid ${COLOURS.GREEN}`, backgroundColor: COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, color: COLOURS.GREEN, fontSize: "13px", marginBottom: "10px" }}>
           <strong>Explanation:</strong> {task.reply_text}
           {task.corrective_action && <div style={{ marginTop: "4px" }}><strong>Corrective action:</strong> {task.corrective_action}</div>}
-          {task.recovery_date && <div style={{ marginTop: "4px" }}><strong>Expected recovery:</strong> {formatDateUK(task.recovery_date)}</div>}
-          <div style={{ marginTop: "4px", fontSize: "12px", color: COLOURS.SLATE }}>By {task.reply_by || "unknown"} {task.reply_at ? `on ${formatDateUK(task.reply_at)}` : ""}</div>
+          {task.recovery_date && <div style={{ marginTop: "4px" }}><strong>Expected recovery:</strong> <span style={{ fontFamily: FONT_MONO }}>{formatDateUK(task.recovery_date)}</span></div>}
+          <div style={{ marginTop: "4px", fontSize: "12px", color: COLOURS.SLATE }}>By {task.reply_by || "unknown"} {task.reply_at ? <span>on <span style={{ fontFamily: FONT_MONO }}>{formatDateUK(task.reply_at)}</span></span> : ""}</div>
         </div>
       )}
       {protected_ && !isPrivileged && (
