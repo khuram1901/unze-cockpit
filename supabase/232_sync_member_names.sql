@@ -1,5 +1,5 @@
 -- Migration 232: sync_member_names_from_flw
--- Pushes the corrected full name (EmployeeName + FatherName) from
+-- Pushes the employee's display name (EmployeeName only, never FatherName) from
 -- flw_employees → members.name, wherever employee_code links them.
 -- Called by the FlowHCM sync route after every employee upsert.
 -- Only updates rows where the name has actually changed to avoid
