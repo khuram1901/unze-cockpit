@@ -6,7 +6,7 @@ import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
-import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, useConfirm, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
+import { COLOURS, RADII, FONT_MONO, cardStyle, StatusBadge, PriorityBadge, useToast, useConfirm, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { canCompleteSubmittedTask, canReopenCompletedTask, canDeleteTask, myIdentityEmails, filterAssignableMembers } from "../lib/permissions";
 // routeSubmittedTask removed (migration 194): DB trigger handles routing atomically.
@@ -1086,8 +1086,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           ) : deptBreakdown.map((d) => (
             <div key={d.department} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 0.8fr", gap: "10px", padding: "9px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, alignItems: "center" }}>
               <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{d.department}</div>
-              <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{d.open_count}</div>
-              <div style={{ fontSize: "14px", fontWeight: 600, color: d.overdue_count > 0 ? COLOURS.RED : COLOURS.GREEN }}>{d.overdue_count}</div>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, fontFamily: FONT_MONO }}>{d.open_count}</div>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: d.overdue_count > 0 ? COLOURS.RED : COLOURS.GREEN, fontFamily: FONT_MONO }}>{d.overdue_count}</div>
             </div>
           ))}
         </div>
@@ -1552,7 +1552,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
                     <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: myTasksGroupColor(group), display: "inline-block" }} />
                     <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>{group}</span>
-                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600 }}>{groupTasks.length}</span>
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{groupTasks.length}</span>
                   </div>
                   <div style={{ ...cardStyle, overflow: "hidden" }}>
                     {groupTasks.length === 0 ? (
@@ -1579,7 +1579,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
                 <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.SLATE, display: "inline-block" }} />
                 <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>Delegated by me</span>
-                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600 }}>{delegatedByMe.length}</span>
+                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{delegatedByMe.length}</span>
                 <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— with your team, watching only</span>
               </div>
               <div style={{ ...cardStyle, overflow: "hidden" }}>
@@ -1637,8 +1637,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                     <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{d.dept}</span>
                   </div>
                   <div style={{ display: "flex", gap: "12px" }}>
-                    <span style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600 }}>{d.open} open</span>
-                    {d.overdue > 0 && <span style={{ fontSize: "12px", color: COLOURS.RED, fontWeight: 700 }}>{d.overdue} overdue</span>}
+                    <span style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600, fontFamily: FONT_MONO }}>{d.open} open</span>
+                    {d.overdue > 0 && <span style={{ fontSize: "12px", color: COLOURS.RED, fontWeight: 700, fontFamily: FONT_MONO }}>{d.overdue} overdue</span>}
                   </div>
                 </div>
 

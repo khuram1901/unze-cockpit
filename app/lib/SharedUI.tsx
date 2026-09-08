@@ -77,6 +77,9 @@ export const RADII = {
   BADGE:  "6px",   // alias for XS (backward compat)
 };
 
+// Monospace font for dates and numbers — slashed zero avoids 0/8 ambiguity
+export const FONT_MONO = "var(--font-mono, 'JetBrains Mono', monospace)";
+
 // Shadows removed from card spec by design system — kept only for modals/dropdowns
 export const SHADOWS = {
   CARD:     "none",

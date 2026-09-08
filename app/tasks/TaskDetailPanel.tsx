@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
-import { COLOURS, RADII, useConfirm, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
+import { COLOURS, RADII, FONT_MONO, useConfirm, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import { canDeleteTask, canEditTask, canReopenCompletedTask, isTaskProtected, filterAssignableMembers } from "../lib/permissions";
 import { renderWithLinks } from "../lib/textUtils";
 import TaskStatus from "./TaskStatus";
@@ -388,7 +388,7 @@ export default function TaskDetailPanel({
               <div key={c.id} style={{ marginBottom: "10px" }}>
                 <div style={{ display: "flex", gap: "8px", alignItems: "baseline", marginBottom: "2px" }}>
                   <span style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY }}>{c.commented_by || "Unknown"}</span>
-                  <span style={{ fontSize: "11px", color: COLOURS.INK_400 }}>{formatDateUK(c.created_at)}</span>
+                  <span style={{ fontSize: "11px", color: COLOURS.INK_400, fontFamily: FONT_MONO }}>{formatDateUK(c.created_at)}</span>
                 </div>
                 <div style={{ fontSize: "13px", color: COLOURS.NAVY, lineHeight: 1.5 }}>{renderWithLinks(c.comment_text)}</div>
               </div>
