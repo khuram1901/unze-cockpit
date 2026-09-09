@@ -1,11 +1,16 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../lib/supabase-server";
-import { requireAuth } from "../../../../lib/api-auth";
+import { requireAuth, getMemberAccess } from "../../../../lib/api-auth";
 
 // GET /api/hr/performance/department?department=Operations&company=Unze+Group&days=90
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
+
+  // Role gate (09/09/2026 access audit): performance data is for
+  // management roles + HR department, not every authenticated user.
+  const access = await getMemberAccess(auth.email);
+  if (!access.hrDirectory) return Response.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const department = searchParams.get("department") ?? "";

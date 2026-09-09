@@ -24,6 +24,15 @@ const ALLOWED_MODULES: Record<string, { table: string; cols: string }> = {
   loans:          { table: "flw_loans",           cols: "employee_code,employee_name,loan_type,principal_amount,outstanding_amount,monthly_deduction,start_date,expected_end_date,status,synced_at" },
 };
 
+// Financial modules: salary and money data — Admin/CEO + HR/Finance Managers
+// only. PA (Executive) never sees financial data (CLAUDE.md rule 6).
+// Workforce modules (employees, transfers, exits, exemptions): management
+// roles + anyone in the HR department.
+const FINANCIAL_MODULES = new Set([
+  "salary_setup", "advances", "allowances", "deductions",
+  "overtime", "pf_data", "tax", "loans",
+]);
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
@@ -39,6 +48,27 @@ export async function GET(request: NextRequest) {
   }
 
   const db = createServiceClient();
+
+  // Role gate (09/09/2026 access audit — this route previously served
+  // salary data to any authenticated user)
+  const { data: member } = await db
+    .from("members")
+    .select("role, department")
+    .eq("email", auth.email)
+    .maybeSingle();
+  const role = member?.role ?? "";
+  const dept = member?.department ?? "";
+  if (FINANCIAL_MODULES.has(module)) {
+    const allowed =
+      role === "Admin" || role === "CEO" ||
+      (role === "Manager" && (dept === "HR" || dept === "Finance"));
+    if (!allowed) return Response.json({ error: "Forbidden" }, { status: 403 });
+  } else {
+    const allowed =
+      role === "Admin" || role === "CEO" || role === "Manager" ||
+      role === "Executive" || dept === "HR";
+    if (!allowed) return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   // Get last sync time for this module
   const { data: logRow } = await db
