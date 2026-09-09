@@ -1127,10 +1127,20 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               )}
             </div>
           </div>
-          <div style={{ display: "flex", gap: isMobile ? "4px" : "8px", alignItems: "center", flexShrink: 0 }}>
-            {/* priority badge moved to left accent bar */}
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
+            {/* Created date */}
+            {!isMobile && task.created_at && (
+              <span style={{
+                fontSize: "11.5px", color: COLOURS.SLATE, fontFamily: "var(--font-mono,'JetBrains Mono',monospace)",
+                whiteSpace: "nowrap", opacity: 0.8,
+              }}>
+                {formatDateUK(task.created_at)}
+              </span>
+            )}
+            {/* Status */}
             <StatusBadge status={task.status} />
-            {task.due_date && (
+            {/* Due date + days overdue */}
+            {task.due_date ? (
               <span
                 title={task.assigned_date ? `Issued ${formatDateUK(task.assigned_date)}` : undefined}
                 style={{
@@ -1141,6 +1151,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               >
                 {formatDateUK(task.due_date)}{od > 0 && ` · ${od}d`}
               </span>
+            ) : (
+              <span style={{ minWidth: isMobile ? "62px" : "76px" }} />
             )}
           </div>
         </div>
