@@ -15,7 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "../../../lib/api-auth";
+import { requireAuth, getMemberAccess } from "../../../lib/api-auth";
 import { createServiceClient } from "../../../lib/supabase-server";
 
 export async function GET(request: NextRequest) {
@@ -27,33 +27,18 @@ export async function GET(request: NextRequest) {
   const db = createServiceClient();
 
   try {
-    // Role gate (30/08/2026 audit, widened 09/09/2026): HR overview data —
-    // including the employee directory with contact details — is for
-    // management roles PLUS anyone in the HR department (HR assistants are
-    // Members but employee data is their day job; the original gate broke
-    // the EmployeePicker for Salman initiating legal cases). Payroll is
-    // stricter still: financial data, so Admin/CEO + HR/Finance Managers
-    // only (PA never sees it — rule 6).
-    const { data: member } = await db
-      .from("members")
-      .select("role, department")
-      .eq("email", auth.email)
-      .maybeSingle();
-    const role = member?.role ?? "";
-    const dept = member?.department ?? "";
-    const allowed =
-      role === "Admin" || role === "CEO" || role === "Manager" || role === "Executive" ||
-      dept === "HR";
-    if (!allowed) {
+    // Three-tier employee data gate (Khuram 09/09/2026):
+    //   full data  — Admin/CEO, HR Managers, can_view_hr_full_data grantees
+    //   names only — rest of HR department (people_list with limited columns,
+    //                so the EmployeePicker still works for HR staff)
+    //   nothing    — everyone outside HR, including other Managers and PA
+    const access = await getMemberAccess(auth.email);
+    const namesOnly = !access.hrFull && access.hrNames;
+    if (!access.hrNames) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    if (section === "payroll") {
-      const payrollAllowed =
-        role === "Admin" || role === "CEO" ||
-        (role === "Manager" && (dept === "HR" || dept === "Finance"));
-      if (!payrollAllowed) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+    if (namesOnly && section !== "people_list") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Optional filter params (migration 233). UUIDs validated; blank = null.
@@ -129,8 +114,12 @@ export async function GET(request: NextRequest) {
 
       // hr_employees_view joins flw_employees with members on employee_code,
       // preferring members.first_name+last_name as display_name when linked.
+      // Names-only tier (HR staff without full-data grant) gets basic
+      // identification columns only — no contact details, grade or dates.
+      const FULL_COLS  = "employee_code, display_name, flw_name, designation, department, department_id, station, grade, status, email, mobile, joining_date, company_id, is_active, member_id, member_role, member_photo";
+      const NAMES_COLS = "employee_code, display_name, flw_name, designation, department, department_id, station, company_id, is_active, member_photo";
       let q = db.from("hr_employees_view")
-        .select("employee_code, display_name, flw_name, designation, department, department_id, station, grade, status, email, mobile, joining_date, company_id, is_active, member_id, member_role, member_photo", { count: "exact" })
+        .select(namesOnly ? NAMES_COLS : FULL_COLS, { count: "exact" })
         .order("display_name", { ascending: true })
         .range(offset, offset + limit - 1);
 
