@@ -82,6 +82,10 @@ async function getPhone(
   supabase: ReturnType<typeof createServiceClient>,
   emailOrKey: string
 ): Promise<{ phone: string | null; name: string }> {
+  if (!emailOrKey) {
+    console.error("[kpi-alerts] getPhone called with empty key");
+    return { phone: null, name: "unknown" };
+  }
   // Full email → direct lookup
   if (emailOrKey.includes("@")) {
     const { data } = await supabase
@@ -177,7 +181,11 @@ async function notifyChain(
   escalationLevel: number,
   message: string
 ): Promise<{ sent: boolean; to: string }> {
-  const idx = Math.min(escalationLevel, chain.length - 1);
+  if (!chain || chain.length === 0) {
+    console.error("[kpi-alerts] notifyChain called with empty chain");
+    return { sent: false, to: "no_chain" };
+  }
+  const idx = Math.min(Math.max(0, escalationLevel), chain.length - 1);
   const key = chain[idx];
   const { phone, name } = await getPhone(supabase, key);
   if (!phone) return { sent: false, to: key };
