@@ -4,6 +4,19 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.4 — 2026-09-09 (minor bump)
+
+**member onboarding: 44-member import, Director role, three-tier HR data access, full FlowHCM mapping**
+
+- Bulk-imported 44 members from Khuram's Excel (mapped to FlowHCM by employee code; Excel emails used, not FlowHCM's); Fahad updated in place. All get tasks + recurring tasks only.
+- New `Director` role (migration 226): counts as Manager tier everywhere via `isManagerTier()`; Anwer Abbasi → Director; Amir Ahmad + Wajid flagged HOD.
+- Three-tier employee data rule (migrations 224–225): full data = Admin/CEO, HR Managers/Directors, `can_view_hr_full_data` grantees (Ghanwa, Salman); names-only = rest of HR (people_list, limited columns); nothing = everyone else. Raw `flw_*` tables locked to API-only.
+- New `GET /api/members/bulk-invite` (dry run / `?confirm=yes`): password-set emails for all active members who have never signed in (~89 pending).
+- Mapping cleanup: 16 more members linked to FlowHCM codes (incl. Ayyaz → 8027, now manager of CCTV trio); duplicate scan clean. 139/145 active members linked; 6 intentional exemptions (4 plant/utility logins, Athar, mnadeem — Khuram: keep as-is).
+
+---
+
+
 ## v4.3 — 2026-09-04 (minor bump)
 
 **restore HR Performance tab**
