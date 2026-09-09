@@ -125,12 +125,16 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
   // rather than an in-memory list passed in by the caller — more
   // reliable than the old client-side "does this task already exist in
   // what I happened to fetch" check.
-  if (input.sourceType && input.sourceLabel && input.sourceRecordId) {
+  // Dedup: source_label alone is enough — sourceRecordId is not always provided.
+  // Only block if an open (non-completed/cancelled) task with the same label exists,
+  // so a resolved escalation can re-fire next period.
+  if (input.sourceType && input.sourceLabel) {
     const { data: existing } = await supabase
       .from("tasks")
       .select("id")
       .eq("source_type", input.sourceType)
       .eq("source_label", input.sourceLabel)
+      .not("status", "in", '("Completed","Cancelled")')
       .limit(1)
       .maybeSingle();
     if (existing) return { ok: true, taskId: null, skipped: true, reason: "duplicate" };
