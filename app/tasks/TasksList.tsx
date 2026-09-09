@@ -1613,126 +1613,95 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         </div>
       )}
 
-      {timeView !== "team" && timeView !== "recurring" && filtersOpen && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
-
-          {/* ── Chip style helper ── */}
-          {(() => {
-            const chip = (label: string, active: boolean, onClick: () => void, color?: string): React.ReactNode => {
-              const ac = color || COLOURS.NAVY;
-              return (
-                <button key={label} onClick={onClick} style={{
-                  display: "inline-flex", alignItems: "center", gap: "5px",
-                  padding: "5px 12px", borderRadius: RADII.PILL, cursor: "pointer",
-                  border: `1px solid ${active ? ac : COLOURS.HAIRLINE}`,
-                  backgroundColor: active ? ac : COLOURS.CARD,
-                  color: active ? "#fff" : COLOURS.INK_700,
-                  fontSize: "12px", fontWeight: active ? 700 : 500,
-                  whiteSpace: "nowrap", transition: "all 120ms",
-                }}>
-                  {label}
+      {timeView !== "team" && timeView !== "recurring" && filtersOpen && (() => {
+        const advancedActive = ownerFilter !== "all" || periodFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all";
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
+            {/* ── Single filter row ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+              {!(department === "Audit" && !isPrivileged) && (
+                <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle }}>
+                  <option value="all">All companies</option>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  <option value="group">Group / needs review</option>
+                </select>
+              )}
+              <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={{ ...filterSelectStyle }}>
+                <option value="all">All departments</option>
+                {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={{ ...filterSelectStyle }}>
+                <option value="all">All priorities</option>
+                <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
+              </select>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...filterSelectStyle }}>
+                <option value="all">All statuses</option>
+                <option>Not Started</option>
+                <option>In Progress</option>
+                <option>Waiting Reply</option>
+                <option>Stuck</option>
+                <option>Submitted</option>
+                <option>Completed</option>
+              </select>
+              {/* More / Reset */}
+              <button
+                onClick={() => setAdvFiltersOpen(!advFiltersOpen)}
+                style={{
+                  border: `1px solid ${advancedActive ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
+                  borderRadius: RADII.SM, padding: "5px 10px", fontSize: "12px", fontWeight: 600,
+                  color: advancedActive ? COLOURS.BLUE : COLOURS.SLATE,
+                  backgroundColor: COLOURS.CARD, cursor: "pointer",
+                }}
+              >
+                More{advancedActive ? " ●" : ""} {advFiltersOpen ? "▲" : "▼"}
+              </button>
+              {filtersActive && (
+                <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
+                  Reset
                 </button>
-              );
-            };
-
-            const advancedActive = ownerFilter !== "all" || periodFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all";
-
-            return (
-              <>
-                {/* Row 1 — Company */}
-                {!(department === "Audit" && !isPrivileged) && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginRight: "2px", flexShrink: 0 }}>Company</span>
-                    {chip("All", companyFilter === "all", () => setCompanyFilter("all"))}
-                    {companies.map((c) => chip(c.short_code || c.name, companyFilter === c.id, () => setCompanyFilter(companyFilter === c.id ? "all" : c.id)))}
-                    {chip("Group", companyFilter === "group", () => setCompanyFilter(companyFilter === "group" ? "all" : "group"))}
-                  </div>
-                )}
-
-                {/* Row 2 — Department */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginRight: "2px", flexShrink: 0 }}>Dept</span>
-                  {chip("All", departmentFilter === "all", () => setDepartmentFilter("all"))}
-                  {departmentOptions.map((d) => chip(d, departmentFilter === d, () => setDepartmentFilter(departmentFilter === d ? "all" : d)))}
-                </div>
-
-                {/* Row 3 — Priority + Status */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginRight: "2px", flexShrink: 0 }}>Priority</span>
-                  {chip("All", priorityFilter === "all", () => setPriorityFilter("all"))}
-                  {[
-                    { label: "Urgent", color: COLOURS.RED },
-                    { label: "High",   color: COLOURS.RED },
-                    { label: "Medium", color: COLOURS.AMBER },
-                    { label: "Low",    color: COLOURS.SLATE },
-                  ].map(({ label, color }) => chip(label, priorityFilter === label, () => setPriorityFilter(priorityFilter === label ? "all" : label), color))}
-                  <span style={{ width: "1px", height: "18px", background: COLOURS.HAIRLINE, margin: "0 4px", flexShrink: 0 }} />
-                  <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginRight: "2px", flexShrink: 0 }}>Status</span>
-                  {[
-                    { label: "Not Started",   val: "Not Started" },
-                    { label: "In Progress",   val: "In Progress" },
-                    { label: "Waiting Reply", val: "Waiting Reply" },
-                    { label: "Stuck",         val: "Stuck" },
-                    { label: "Submitted",     val: "Submitted" },
-                    { label: "Completed",     val: "Completed" },
-                  ].map(({ label, val }) => chip(label, statusFilter === val, () => setStatusFilter(statusFilter === val ? "all" : val)))}
-                </div>
-
-                {/* Advanced toggle */}
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <button
-                    onClick={() => setAdvFiltersOpen(!advFiltersOpen)}
-                    style={{
-                      background: "none", border: `1px solid ${advancedActive ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
-                      borderRadius: RADII.PILL, padding: "4px 12px", fontSize: "11.5px", fontWeight: 600,
-                      color: advancedActive ? COLOURS.BLUE : COLOURS.SLATE, cursor: "pointer",
-                      display: "flex", alignItems: "center", gap: "5px",
-                    }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                      <path d="M2 4h12M4 8h8M6 12h4"/>
-                    </svg>
-                    Advanced{advancedActive ? " ●" : ""} {advFiltersOpen ? "▲" : "▼"}
-                  </button>
-                  {filtersActive && (
-                    <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
-                      Reset all
-                    </button>
-                  )}
-                </div>
-
-                {/* Advanced drawer */}
-                {advFiltersOpen && (
-                  <div style={{
-                    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "8px",
-                    padding: "12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD_ALT,
-                  }}>
-                    {[
-                      { label: "Owner", value: ownerFilter, onChange: setOwnerFilter,
-                        opts: [{ v: "all", l: "All owners" }, ...ownerOptions.map((o) => ({ v: o, l: o }))] },
-                      { label: "Due period", value: periodFilter, onChange: (v: string) => setPeriodFilter(v as typeof periodFilter),
-                        opts: [{ v: "all", l: "Any period" }, { v: "week", l: "This week" }, { v: "month", l: "This month" }, { v: "quarter", l: "This quarter" }] },
-                      { label: "Due date", value: dueFilter, onChange: setDueFilter,
-                        opts: [{ v: "all", l: "Any date" }, { v: "overdue", l: "Overdue" }, { v: "today", l: "Due today" }, { v: "none", l: "No due date" }] },
-                      { label: "Source", value: sourceFilter, onChange: setSourceFilter,
-                        opts: [{ v: "all", l: "All sources" }, { v: "meeting", l: "From meeting" }, { v: "manual", l: "Manual" }, { v: "recurring", l: "Recurring" }, { v: "whatsapp", l: "WhatsApp" }] },
-                      { label: "Subtasks", value: subtaskFilter, onChange: setSubtaskFilter,
-                        opts: [{ v: "all", l: "Any" }, { v: "has", l: "Has subtasks" }, { v: "complete", l: "All complete" }, { v: "none", l: "No subtasks" }] },
-                    ].map(({ label, value, onChange, opts }) => (
-                      <div key={label}>
-                        <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "4px" }}>{label}</div>
-                        <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-                          {opts.map(({ v, l }) => <option key={v} value={v}>{l}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
-      )}
+              )}
+            </div>
+            {/* ── Advanced drawer ── */}
+            {advFiltersOpen && (
+              <div style={{
+                display: "flex", gap: "8px", flexWrap: "wrap",
+                padding: "10px 12px", border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: RADII.SM, backgroundColor: COLOURS.CARD_ALT,
+              }}>
+                <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={{ ...filterSelectStyle }}>
+                  <option value="all">All owners</option>
+                  {ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+                <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)} style={{ ...filterSelectStyle }}>
+                  <option value="all">Any due period</option>
+                  <option value="week">This week</option>
+                  <option value="month">This month</option>
+                  <option value="quarter">This quarter</option>
+                </select>
+                <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={{ ...filterSelectStyle }}>
+                  <option value="all">Any due date</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="today">Due today</option>
+                  <option value="none">No due date</option>
+                </select>
+                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={{ ...filterSelectStyle }}>
+                  <option value="all">All sources</option>
+                  <option value="meeting">From meeting</option>
+                  <option value="manual">Manual</option>
+                  <option value="recurring">Recurring</option>
+                  <option value="whatsapp">WhatsApp</option>
+                </select>
+                <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={{ ...filterSelectStyle }}>
+                  <option value="all">Any subtasks</option>
+                  <option value="has">Has subtasks</option>
+                  <option value="complete">All complete</option>
+                  <option value="none">No subtasks</option>
+                </select>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ═══ LIST VIEW (default landing view) ═══ */}
       {timeView === "list" && (
