@@ -889,39 +889,71 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
   // Column header bar for list view (clickable sort)
   function ListSortHeader() {
-    const cols: { key: typeof listSort.col; label: string }[] = [
+    const sortCols: { key: typeof listSort.col; label: string }[] = [
+      { key: "due_date",    label: "Due Date" },
       { key: "created_at", label: "Created" },
       { key: "status",     label: "Status" },
-      { key: "due_date",   label: "Due Date" },
       { key: "assigned_to", label: "Assigned To" },
     ];
+    const allIds = (listFilteredTasks ?? myTasksSource).map((t) => t.id);
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px", paddingLeft: "4px" }}>
-        {cols.map(({ key, label }) => {
-          const active = listSort.col === key;
-          return (
-            <button
-              key={key}
-              onClick={() => setListSort(prev => ({ col: key, dir: prev.col === key && prev.dir === "asc" ? "desc" : "asc" }))}
-              style={{
-                background: active ? COLOURS.INFO_SOFT : "transparent",
-                border: active ? `1px solid ${COLOURS.BLUE}` : `1px solid ${COLOURS.HAIRLINE}`,
-                borderRadius: RADII.SM,
-                padding: "3px 10px",
-                fontSize: "11.5px",
-                fontWeight: 700,
-                color: active ? COLOURS.BLUE : COLOURS.SLATE,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-            >
-              {label}
-              {active && <span style={{ fontSize: "10px" }}>{listSort.dir === "asc" ? "↑" : "↓"}</span>}
-            </button>
-          );
-        })}
+      <div style={{
+        display: "flex", alignItems: "center", gap: "8px",
+        padding: "10px 14px",
+        backgroundColor: COLOURS.CARD_ALT,
+        border: `1px solid ${COLOURS.HAIRLINE}`,
+        borderBottom: "none",
+        borderRadius: `${RADII.SM} ${RADII.SM} 0 0`,
+        flexWrap: "wrap",
+      }}>
+        {/* left: task count */}
+        <span style={{ fontSize: "12.5px", color: COLOURS.SLATE, flex: 1, minWidth: "120px" }}>
+          <span style={{ fontWeight: 700, color: COLOURS.NAVY, fontFamily: FONT_MONO }}>{(listFilteredTasks ?? myTasksSource).length}</span> tasks
+        </span>
+
+        {/* sort dropdown */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span style={{ fontSize: "11.5px", color: COLOURS.SLATE, fontWeight: 600 }}>Sort:</span>
+          <select
+            value={listSort.col}
+            onChange={(e) => setListSort(prev => ({ col: e.target.value as typeof listSort.col, dir: prev.dir }))}
+            style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "4px 8px", fontSize: "12px", color: COLOURS.NAVY, backgroundColor: COLOURS.CARD, cursor: "pointer" }}
+          >
+            {sortCols.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
+          </select>
+          <button
+            onClick={() => setListSort(prev => ({ ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }))}
+            title={listSort.dir === "asc" ? "Ascending" : "Descending"}
+            style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "4px 8px", fontSize: "13px", backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, cursor: "pointer" }}
+          >
+            {listSort.dir === "asc" ? "↑" : "↓"}
+          </button>
+        </div>
+
+        {/* mine / everyone */}
+        <div style={{ display: "flex", gap: "3px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, padding: "3px" }}>
+          {(["mine", "everyone"] as const).map((s) => (
+            <button key={s} onClick={() => setMyTasksScope(s)} style={{
+              backgroundColor: myTasksScope === s ? COLOURS.CARD : "transparent",
+              color: myTasksScope === s ? COLOURS.NAVY : COLOURS.SLATE,
+              border: "none", borderRadius: RADII.PILL, padding: "4px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+              boxShadow: myTasksScope === s ? "0 1px 2px rgba(15,23,32,0.08)" : "none",
+            }}>{s === "mine" ? "Mine" : "Everyone"}</button>
+          ))}
+        </div>
+
+        {/* select all */}
+        {!isMobile && allIds.length > 0 && (
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={isAllSelected(allIds)}
+              onChange={() => toggleSelectAll(allIds)}
+              style={{ width: "14px", height: "14px", cursor: "pointer" }}
+            />
+            Select all
+          </label>
+        )}
       </div>
     );
   }
@@ -989,6 +1021,18 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               style={{ width: "16px", height: "16px", flexShrink: 0, cursor: "pointer" }}
             />
           )}
+          {/* Priority badge — left column */}
+          {task.priority && (
+            <div title={task.priority} style={{
+              width: "3px", alignSelf: "stretch",
+              borderRadius: "2px", flexShrink: 0,
+              backgroundColor: task.priority === "Urgent" || task.priority === "High"
+                ? COLOURS.RED
+                : task.priority === "Medium"
+                  ? COLOURS.AMBER
+                  : COLOURS.SLATE,
+            }} />
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: "14px", fontWeight: 600, color: done ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
             {/* One muted meta line, dot-separated, instead of a row of
@@ -1044,12 +1088,24 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   <span>→ {task.stage}</span>
                 </>
               )}
-              {task.task_subtasks && task.task_subtasks.length > 0 && (
-                <>
-                  <span>·</span>
-                  <span>{task.task_subtasks.filter((s) => s.is_complete).length}/{task.task_subtasks.length} subtasks</span>
-                </>
-              )}
+              {task.task_subtasks && task.task_subtasks.length > 0 && (() => {
+                const total = task.task_subtasks.length;
+                const done2 = task.task_subtasks.filter((s) => s.is_complete).length;
+                const pct = Math.round((done2 / total) * 100);
+                return (
+                  <>
+                    <span>·</span>
+                    <span title={`${done2}/${total} subtasks complete`} style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 500, whiteSpace: "nowrap" }}>
+                        {done2}/{total}
+                      </span>
+                      <span style={{ display: "inline-block", width: "48px", height: "4px", borderRadius: "2px", backgroundColor: COLOURS.HAIRLINE, overflow: "hidden" }}>
+                        <span style={{ display: "block", height: "100%", width: `${pct}%`, borderRadius: "2px", backgroundColor: pct === 100 ? COLOURS.GREEN : COLOURS.BLUE, transition: "width 200ms" }} />
+                      </span>
+                    </span>
+                  </>
+                );
+              })()}
               {task.task_comments && task.task_comments.length > 0 && (
                 <>
                   <span>·</span>
@@ -1071,7 +1127,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             </div>
           </div>
           <div style={{ display: "flex", gap: isMobile ? "4px" : "8px", alignItems: "center", flexShrink: 0 }}>
-            {!isMobile && task.priority && <PriorityBadge priority={task.priority} />}
+            {/* priority badge moved to left accent bar */}
             <StatusBadge status={task.status} />
             {task.due_date && (
               <span
@@ -1380,29 +1436,31 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             of scrolling out of view, per Khuram. ═══ */}
         {selectedIds.size > 0 && (
           <div style={{
-            display: "flex", flexDirection: "column", gap: "8px",
-            padding: "10px 12px",
-            border: `1px solid ${COLOURS.NAVY}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD,
-            boxShadow: "0 2px 6px rgba(15,23,32,0.08)",
+            display: "flex", flexDirection: "row", alignItems: "center", gap: "10px",
+            padding: "10px 16px",
+            backgroundColor: COLOURS.NAVY, borderRadius: RADII.SM,
+            boxShadow: "0 4px 12px rgba(15,23,32,0.18)",
+            position: "sticky", top: "0", zIndex: 50,
+            flexWrap: "wrap",
           }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "12.5px", fontWeight: 700, color: COLOURS.NAVY }}>{selectedIds.size} task{selectedIds.size !== 1 ? "s" : ""} selected</span>
-              <button onClick={() => setSelectedIds(new Set())} style={{ ...smallActionBtn, backgroundColor: "transparent", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>Clear</button>
-            </div>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff", marginRight: "4px", flexShrink: 0 }}>
+              {selectedIds.size} task{selectedIds.size !== 1 ? "s" : ""} selected
+            </span>
+            <button onClick={() => setSelectedIds(new Set())} style={{ ...smallActionBtn, backgroundColor: "transparent", color: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: RADII.PILL, marginRight: "6px" }}>Clear</button>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-              <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 140px" }}>
+              <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={{ ...filterSelectStyle, flex: "0 1 140px", backgroundColor: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>
                 <option value="">Change status…</option>
                 {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
               <button onClick={applyBulkStatus} disabled={!bulkStatus || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, opacity: !bulkStatus || bulkApplying ? 0.5 : 1, cursor: !bulkStatus || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
 
-              <select value={bulkCompanyId} onChange={(e) => setBulkCompanyId(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 140px" }}>
+              <select value={bulkCompanyId} onChange={(e) => setBulkCompanyId(e.target.value)} style={{ ...filterSelectStyle, flex: "0 1 140px", backgroundColor: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>
                 <option value="">Change company…</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <button onClick={applyBulkCompany} disabled={!bulkCompanyId || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, opacity: !bulkCompanyId || bulkApplying ? 0.5 : 1, cursor: !bulkCompanyId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
 
-              <select value={bulkOwnerId} onChange={(e) => setBulkOwnerId(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 140px" }}>
+              <select value={bulkOwnerId} onChange={(e) => setBulkOwnerId(e.target.value)} style={{ ...filterSelectStyle, flex: "0 1 140px", backgroundColor: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>
                 <option value="">Change owner…</option>
                 {/* CEO assignment lock (24/07/2026) — CEOs only pickable
                     by a CEO account or the PA; server twin in createTaskCore */}
@@ -1510,15 +1568,17 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               </button>
             ))}
 
-            <button onClick={() => { setPaFilter(!paFilter); setFilter("all"); }} style={{
-              backgroundColor: paFilter ? "#7C3AED" : COLOURS.CARD,
-              color: paFilter ? "white" : "#7C3AED",
-              border: `1px solid ${paFilter ? "#7C3AED" : "#C4B5FD"}`,
-              borderRadius: RADII.PILL, padding: isMobile ? "7px 10px" : "6px 12px",
-              fontSize: isMobile ? "12px" : "13px", fontWeight: 600, cursor: "pointer",
-            }}>
-              Sundas{sundasMineCount > 0 ? ` (${sundasMineCount})` : ""}
-            </button>
+            {(myIdentities.includes("khuram1901@gmail.com") || myIdentities.includes("k.saleem@unzegroup.com")) && (
+              <button onClick={() => { setPaFilter(!paFilter); setFilter("all"); }} style={{
+                backgroundColor: paFilter ? "#7C3AED" : COLOURS.CARD,
+                color: paFilter ? "white" : "#7C3AED",
+                border: `1px solid ${paFilter ? "#7C3AED" : "#C4B5FD"}`,
+                borderRadius: RADII.PILL, padding: isMobile ? "7px 10px" : "6px 12px",
+                fontSize: isMobile ? "12px" : "13px", fontWeight: 600, cursor: "pointer",
+              }}>
+                Sundas{sundasMineCount > 0 ? ` (${sundasMineCount})` : ""}
+              </button>
+            )}
 
             {timeView === "list" && (
               <>
@@ -1553,64 +1613,123 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       )}
 
       {timeView !== "team" && timeView !== "recurring" && filtersOpen && (
-        <div style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px",
-          marginBottom: "12px", padding: "12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD,
-        }}>
-          {/* Audit dept non-managers only see their own tasks — company filter is noise for them */}
-          {!(department === "Audit" && !isPrivileged) && (
-            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-              <option value="all">All companies</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              <option value="group">Group / needs review</option>
-            </select>
-          )}
-          <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">All departments</option>
-            {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">All priorities</option>
-            <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
-          </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">All statuses</option>
-            <option>Not Started</option>
-            <option>In Progress</option>
-            <option>Waiting Reply</option>
-            <option>Stuck</option>
-            <option>Submitted</option>
-            <option>Completed</option>
-          </select>
-          <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">All owners</option>
-            {ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">Any due period</option>
-            <option value="week">Due this week</option>
-            <option value="month">Due this month</option>
-            <option value="quarter">Due this quarter</option>
-          </select>
-          <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">Any due date</option>
-            <option value="overdue">Overdue</option>
-            <option value="today">Due today</option>
-            <option value="none">No due date</option>
-          </select>
-          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">All sources</option>
-            <option value="meeting">Meeting-sourced only</option>
-            <option value="manual">Manually created</option>
-            <option value="recurring">Recurring-generated</option>
-            <option value="whatsapp">WhatsApp-created</option>
-          </select>
-          <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">Any subtask state</option>
-            <option value="has">Has subtasks</option>
-            <option value="complete">All subtasks complete</option>
-            <option value="none">No subtasks</option>
-          </select>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
+
+          {/* ── Chip style helper ── */}
+          {(() => {
+            const chip = (label: string, active: boolean, onClick: () => void, color?: string): React.ReactNode => {
+              const ac = color || COLOURS.NAVY;
+              return (
+                <button key={label} onClick={onClick} style={{
+                  display: "inline-flex", alignItems: "center", gap: "5px",
+                  padding: "5px 12px", borderRadius: RADII.PILL, cursor: "pointer",
+                  border: `1px solid ${active ? ac : COLOURS.HAIRLINE}`,
+                  backgroundColor: active ? ac : COLOURS.CARD,
+                  color: active ? "#fff" : COLOURS.INK_700,
+                  fontSize: "12px", fontWeight: active ? 700 : 500,
+                  whiteSpace: "nowrap", transition: "all 120ms",
+                }}>
+                  {label}
+                </button>
+              );
+            };
+
+            const advancedActive = ownerFilter !== "all" || periodFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all";
+
+            return (
+              <>
+                {/* Row 1 — Company */}
+                {!(department === "Audit" && !isPrivileged) && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginRight: "2px", flexShrink: 0 }}>Company</span>
+                    {chip("All", companyFilter === "all", () => setCompanyFilter("all"))}
+                    {companies.map((c) => chip(c.short_code || c.name, companyFilter === c.id, () => setCompanyFilter(companyFilter === c.id ? "all" : c.id)))}
+                    {chip("Group", companyFilter === "group", () => setCompanyFilter(companyFilter === "group" ? "all" : "group"))}
+                  </div>
+                )}
+
+                {/* Row 2 — Department */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginRight: "2px", flexShrink: 0 }}>Dept</span>
+                  {chip("All", departmentFilter === "all", () => setDepartmentFilter("all"))}
+                  {departmentOptions.map((d) => chip(d, departmentFilter === d, () => setDepartmentFilter(departmentFilter === d ? "all" : d)))}
+                </div>
+
+                {/* Row 3 — Priority + Status */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginRight: "2px", flexShrink: 0 }}>Priority</span>
+                  {chip("All", priorityFilter === "all", () => setPriorityFilter("all"))}
+                  {[
+                    { label: "Urgent", color: COLOURS.RED },
+                    { label: "High",   color: COLOURS.RED },
+                    { label: "Medium", color: COLOURS.AMBER },
+                    { label: "Low",    color: COLOURS.SLATE },
+                  ].map(({ label, color }) => chip(label, priorityFilter === label, () => setPriorityFilter(priorityFilter === label ? "all" : label), color))}
+                  <span style={{ width: "1px", height: "18px", background: COLOURS.HAIRLINE, margin: "0 4px", flexShrink: 0 }} />
+                  <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginRight: "2px", flexShrink: 0 }}>Status</span>
+                  {[
+                    { label: "Not Started",   val: "Not Started" },
+                    { label: "In Progress",   val: "In Progress" },
+                    { label: "Waiting Reply", val: "Waiting Reply" },
+                    { label: "Stuck",         val: "Stuck" },
+                    { label: "Submitted",     val: "Submitted" },
+                    { label: "Completed",     val: "Completed" },
+                  ].map(({ label, val }) => chip(label, statusFilter === val, () => setStatusFilter(statusFilter === val ? "all" : val)))}
+                </div>
+
+                {/* Advanced toggle */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <button
+                    onClick={() => setAdvFiltersOpen(!advFiltersOpen)}
+                    style={{
+                      background: "none", border: `1px solid ${advancedActive ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
+                      borderRadius: RADII.PILL, padding: "4px 12px", fontSize: "11.5px", fontWeight: 600,
+                      color: advancedActive ? COLOURS.BLUE : COLOURS.SLATE, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: "5px",
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M2 4h12M4 8h8M6 12h4"/>
+                    </svg>
+                    Advanced{advancedActive ? " ●" : ""} {advFiltersOpen ? "▲" : "▼"}
+                  </button>
+                  {filtersActive && (
+                    <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
+                      Reset all
+                    </button>
+                  )}
+                </div>
+
+                {/* Advanced drawer */}
+                {advFiltersOpen && (
+                  <div style={{
+                    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "8px",
+                    padding: "12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD_ALT,
+                  }}>
+                    {[
+                      { label: "Owner", value: ownerFilter, onChange: setOwnerFilter,
+                        opts: [{ v: "all", l: "All owners" }, ...ownerOptions.map((o) => ({ v: o, l: o }))] },
+                      { label: "Due period", value: periodFilter, onChange: (v: string) => setPeriodFilter(v as typeof periodFilter),
+                        opts: [{ v: "all", l: "Any period" }, { v: "week", l: "This week" }, { v: "month", l: "This month" }, { v: "quarter", l: "This quarter" }] },
+                      { label: "Due date", value: dueFilter, onChange: setDueFilter,
+                        opts: [{ v: "all", l: "Any date" }, { v: "overdue", l: "Overdue" }, { v: "today", l: "Due today" }, { v: "none", l: "No due date" }] },
+                      { label: "Source", value: sourceFilter, onChange: setSourceFilter,
+                        opts: [{ v: "all", l: "All sources" }, { v: "meeting", l: "From meeting" }, { v: "manual", l: "Manual" }, { v: "recurring", l: "Recurring" }, { v: "whatsapp", l: "WhatsApp" }] },
+                      { label: "Subtasks", value: subtaskFilter, onChange: setSubtaskFilter,
+                        opts: [{ v: "all", l: "Any" }, { v: "has", l: "Has subtasks" }, { v: "complete", l: "All complete" }, { v: "none", l: "No subtasks" }] },
+                    ].map(({ label, value, onChange, opts }) => (
+                      <div key={label}>
+                        <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "4px" }}>{label}</div>
+                        <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
+                          {opts.map(({ v, l }) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 
