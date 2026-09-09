@@ -1341,13 +1341,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       </div>
 
       {kpiDrawer && (() => {
-        // When "Mine" scope is active, KPI drawers must show only the tasks the
-        // current user is personally involved in — the same set that the main
-        // list shows. Showing allOpen/overdueTasks (company-wide) here was the
-        // source of task-privacy leakage: privileged users (CEO/Admin/Executive)
-        // who left scope on "mine" still saw every colleague's task in the
-        // drawer when clicking a KPI tile.
-        const drawerBase = myTasksScope === "mine" ? myTasksSource : allOpen;
+        // KPI tiles always show company-wide counts (from the DB RPC), so the
+        // drawer must use the same population — allOpen — regardless of the
+        // Mine/Everyone scope toggle. RLS already limits allOpen to what the
+        // viewer is permitted to see, so there is no privacy leak here.
+        const drawerBase = allOpen;
         const drawerTasks =
           kpiDrawer === "Open" ? drawerBase :
           kpiDrawer === "Overdue" ? drawerBase.filter(isOverdue) :
