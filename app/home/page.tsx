@@ -1560,10 +1560,10 @@ function HomePageInner() {
         setUserName(fullName);
       }
 
-      // Fetch per-member permissions (needed for Admin Ops manager check, e.g. Akhlaq)
-      const { data: memberPerms } = memberData?.id
-        ? await supabase.from("member_permissions").select("can_access_admin_ops").eq("member_id", memberData.id).maybeSingle()
-        : { data: null };
+      // can_access_admin_ops is already in ctx.overrides (loaded via service client in AuthWrapper/
+      // useUserCtx — bypasses RLS). Direct browser query to member_permissions is blocked by RLS
+      // for non-admin-tier users (Akhlaq, Sunaina) and would return null. Use overrides instead.
+      const hasAdminOps = ctx?.overrides?.can_access_admin_ops === true;
 
       const [
         tasksRes, machinesRes, meetingsRes,
@@ -1852,10 +1852,12 @@ function HomePageInner() {
           .catch(() => {});
       }
 
-      // Legal case summary — shown to CEO, Admin, Admin Ops managers (e.g. Akhlaq), and HR managers (e.g. Zuhair)
+      // Legal case summary — shown to CEO, Admin, HR managers, and any user with can_access_admin_ops
+      // (covers Akhlaq as Manager and Sunaina as Member in Admin dept, both have the permission).
       const showLegal =
         userRole === "Admin" || userRole === "CEO" ||
-        (userRole === "Manager" && (userDept === "HR" || userDept === "Human Resources" || memberPerms?.can_access_admin_ops === true));
+        hasAdminOps ||
+        (userRole === "Manager" && (userDept === "HR" || userDept === "Human Resources"));
       if (showLegal) {
         authFetch("/api/legal/cases")
           .then((r) => r.json())
