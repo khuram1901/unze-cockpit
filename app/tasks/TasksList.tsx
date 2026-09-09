@@ -1351,7 +1351,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           kpiDrawer === "Overdue" ? drawerBase.filter(isOverdue) :
           kpiDrawer === "Due Today" ? drawerBase.filter((t) => t.due_date === todayStr) :
           kpiDrawer === "Waiting Reply" ? drawerBase.filter((t) => t.status === "Waiting Reply") :
-          kpiDrawer === "Stuck" ? (myTasksScope === "mine" ? myTasksSource : scopedTasks).filter((t) => t.status === "Stuck") :
+          kpiDrawer === "Stuck" ? allOpen.filter((t) => t.status === "Stuck") :
           (myTasksScope === "mine" ? scopedTasks.filter((t) => {
             const myEmails = myIdentities;
             return t.status === "Completed" && (
