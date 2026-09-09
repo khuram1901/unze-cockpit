@@ -182,6 +182,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // visible again now. filtersOpen is kept (always true) rather than
   // ripped out everywhere it's referenced, to keep this change small.
   const [filtersOpen] = useState(true);
+  const [advFiltersOpen, setAdvFiltersOpen] = useState(false);
   // stageFilter removed per Khuram (24/07/2026) — stage values are
   // free-text progress notes, useless as a filter. The Workload
   // scoreboard (Team view) is the way to see who/which dept is delaying.
