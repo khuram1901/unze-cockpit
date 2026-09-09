@@ -177,7 +177,7 @@ export function canViewFinance(u: UserCtx) {
   const o = ov(u, "can_view_finance");
   if (o !== null) return o;
   if (isAdminTier(u)) return true;
-  return u.role === "Manager" && u.department === "Finance";
+  return isManagerTier(u.role) && u.department === "Finance";
 }
 
 export function canEditFinance(u: UserCtx) {
@@ -239,7 +239,7 @@ export function canViewReceivables(u: UserCtx) {
   const o = ov(u, "can_view_receivables");
   if (o !== null) return o;
   if (isAdminTier(u)) return true;
-  return u.role === "Manager" && (u.department === "Finance" || u.department === "Unze Trading Ops");
+  return isManagerTier(u.role) && (u.department === "Finance" || u.department === "Unze Trading Ops");
 }
 
 export function canEditReceivables(u: UserCtx) {
@@ -276,7 +276,7 @@ export function canViewGuarantees(u: UserCtx) {
   const o = ov(u, "can_view_guarantees");
   if (o !== null) return o;
   if (isAdminTier(u)) return true;
-  return u.role === "Manager" && (u.department === "Finance" || u.department === "Unze Trading Ops");
+  return isManagerTier(u.role) && (u.department === "Finance" || u.department === "Unze Trading Ops");
 }
 
 // Full guarantee details (limits, cash margin, bank charges, facility utilisation)
@@ -284,7 +284,7 @@ export function canViewGuarantees(u: UserCtx) {
 export function canViewGuaranteeFinancials(u: UserCtx) {
   if (isPA(u)) return false;
   if (isAdminTier(u)) return true;
-  return u.role === "Manager" && u.department === "Finance";
+  return isManagerTier(u.role) && u.department === "Finance";
 }
 
 export function canManageGuarantees(u: UserCtx): boolean {
@@ -294,13 +294,13 @@ export function canManageGuarantees(u: UserCtx): boolean {
   const o = ov(u, "can_manage_guarantees");
   if (o !== null) return o;
   if (isAdminTier(u)) return true;
-  return u.role === "Manager" && u.department === "Finance";
+  return isManagerTier(u.role) && u.department === "Finance";
 }
 
 export function canManageStock(u: UserCtx) {
   const o = ov(u, "can_manage_stock");
   if (o !== null) return o;
-  return isAdminTier(u) || (u.role === "Manager" && u.department === "Unze Trading Ops");
+  return isAdminTier(u) || (isManagerTier(u.role) && u.department === "Unze Trading Ops");
 }
 
 // ── Tasks & meetings ──────────────────────────────────────────────
@@ -391,12 +391,20 @@ export function canImportExport(u: UserCtx) {
 }
 
 // ── Member administration rules ───────────────────────────────────
+
+// Director role (added 09/09/2026, Khuram): department heads above Manager.
+// Directors carry the same department-scoped powers as Managers — every
+// "is this a Manager of dept X" check accepts either role.
+export function isManagerTier(role: string | null | undefined): boolean {
+  return role === "Manager" || role === "Director";
+}
+
 export function assignableRoles(u: UserCtx): string[] {
   // Assigning the Admin role is the one thing CEO-tier can't do, even
   // though CEO otherwise defaults to full rights — see the CEO role note
   // at the top of this file.
-  if (isMainAdmin(u) || u.role === "Admin") return ["Admin", "CEO", "Executive", "Manager", "Member"];
-  if (isCEO(u)) return ["CEO", "Executive", "Manager", "Member"];
+  if (isMainAdmin(u) || u.role === "Admin") return ["Admin", "CEO", "Executive", "Director", "Manager", "Member"];
+  if (isCEO(u)) return ["CEO", "Executive", "Director", "Manager", "Member"];
   if (u.role === "Executive") return ["Manager", "Member"];
   return [];
 }
@@ -423,7 +431,7 @@ export function canEditMember(actor: UserCtx, target: UserCtx): boolean {
   const o = ov(actor, "can_edit_members");
   if (o !== null) return o;
   if (isAdminTier(actor)) return true;
-  if (actor.role === "Executive") return target.role === "Manager" || target.role === "Member";
+  if (actor.role === "Executive") return isManagerTier(target.role) || target.role === "Member";
   return false;
 }
 
@@ -459,7 +467,7 @@ export function canViewDepartment(u: UserCtx, departmentName: string): boolean {
   // in the route guard and bypassed overrides entirely.
   if (departmentName === "Tax" && isTaxConsultant(u)) return true;
   if (u.role === "Executive") return false;
-  if (u.role === "Manager") {
+  if (isManagerTier(u.role)) {
     if (u.department === departmentName) return true;
     // Finance HODs can view Tax Notices (closely related)
     if (departmentName === "Tax" && u.department === "Finance") return true;
@@ -645,7 +653,7 @@ export function canReopenCompletedTask(u: UserCtx): boolean {
 export function canAccessAdminOps(u: UserCtx): boolean {
   const o = ov(u, "can_access_admin_ops");
   if (o !== null) return o;
-  return isAdminTier(u) || (u.role === "Manager" && u.department === "Admin");
+  return isAdminTier(u) || (isManagerTier(u.role) && u.department === "Admin");
 }
 
 // ── Admin Entry (fuel, solar, utility, maintenance — mobile form) ─

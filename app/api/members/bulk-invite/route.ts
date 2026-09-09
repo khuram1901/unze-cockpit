@@ -57,15 +57,22 @@ export async function GET(request: NextRequest) {
     .eq("is_active", true);
   if (mErr) return Response.json({ error: mErr.message }, { status: 500 });
 
-  // Existing auth accounts (paged; plenty for current scale)
-  const existing = new Set<string>();
+  // Auth accounts + whether they have EVER signed in. Members with an
+  // account who never logged in also need a fresh password email
+  // (their original invite may be lost/expired) — Khuram 09/09/2026.
+  const hasAccount = new Set<string>();
+  const hasLoggedIn = new Set<string>();
   for (let page = 1; page <= 10; page++) {
     const { data: list } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
-    for (const u of list?.users ?? []) if (u.email) existing.add(u.email.toLowerCase());
+    for (const u of list?.users ?? []) {
+      if (!u.email) continue;
+      hasAccount.add(u.email.toLowerCase());
+      if (u.last_sign_in_at) hasLoggedIn.add(u.email.toLowerCase());
+    }
     if (!list || list.users.length < 200) break;
   }
 
-  const pending = (members ?? []).filter(m => m.email && !existing.has(m.email.toLowerCase()));
+  const pending = (members ?? []).filter(m => m.email && !hasLoggedIn.has(m.email.toLowerCase()));
 
   if (!confirm) {
     return Response.json({

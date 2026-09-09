@@ -56,7 +56,7 @@ export async function getMemberAccess(email: string): Promise<MemberAccess> {
   const override = perms?.can_view_hr_full_data === true;
   const hrFull =
     role === "Admin" || role === "CEO" ||
-    (role === "Manager" && department === "HR") ||
+    ((role === "Manager" || role === "Director") && department === "HR") ||
     override;
   const hrNames = hrFull || department === "HR";
   return { role, department, hrFull, hrNames, hrDirectory: hrFull };
