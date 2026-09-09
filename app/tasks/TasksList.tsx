@@ -63,6 +63,7 @@ type Task = {
   waiting_reply_by_name?: string | null;
   manager_reply_text?: string | null;
   manager_reply_at?: string | null;
+  source_type?: string | null;
   task_subtasks?: { id: string; is_complete: boolean }[];
   task_comments?: { id: string }[];
 };
@@ -255,7 +256,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
     let query = supabase
       .from("tasks")
-      .select("id, task_type, description, project, priority, due_date, original_due_date, assigned_date, assigned_to, assigned_to_email, assigned_by, assigned_by_email, status, stage, stuck_reason, notes, reply_required, reply_text, reply_by, reply_at, corrective_action, recovery_date, impact_on_monthly_target, meeting_id, time_spent_minutes, whatsapp_auto_remind, created_at, completed_at, assigned_to_department, company_id, requires_manager_signoff, explanation_required, submitted_by_name, submitted_by_email, waiting_reply_note, waiting_reply_to_email, waiting_reply_to_name, waiting_reply_by_email, waiting_reply_by_name, manager_reply_text, manager_reply_at, task_subtasks(id, is_complete), task_comments(id)")
+      .select("id, task_type, description, project, priority, due_date, original_due_date, assigned_date, assigned_to, assigned_to_email, assigned_by, assigned_by_email, status, stage, stuck_reason, notes, reply_required, reply_text, reply_by, reply_at, corrective_action, recovery_date, impact_on_monthly_target, meeting_id, time_spent_minutes, whatsapp_auto_remind, created_at, completed_at, assigned_to_department, company_id, requires_manager_signoff, explanation_required, submitted_by_name, submitted_by_email, waiting_reply_note, waiting_reply_to_email, waiting_reply_to_name, waiting_reply_by_email, waiting_reply_by_name, manager_reply_text, manager_reply_at, source_type, task_subtasks(id, is_complete), task_comments(id)")
       .order("created_at", { ascending: false });
 
     if (!isPrivileged && email) {
@@ -427,6 +428,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       if (sourceFilter === "meeting" && !t.meeting_id) return false;
       if (sourceFilter === "manual" && (t.meeting_id || isRecurring)) return false;
       if (sourceFilter === "recurring" && !isRecurring) return false;
+      if (sourceFilter === "whatsapp" && t.source_type !== "whatsapp") return false;
     }
     if (subtaskFilter !== "all") {
       const total = t.task_subtasks?.length ?? 0;
@@ -1084,7 +1086,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           {deptBreakdown.length === 0 ? (
             <div style={{ padding: "16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>No data yet.</div>
           ) : deptBreakdown.map((d) => (
-            <div key={d.department} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 0.8fr", gap: "10px", padding: "9px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, alignItems: "center" }}>
+            <div key={d.department} onClick={() => { setDepartmentFilter(d.department); setDeptBreakdownOpen(false); }} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 0.8fr", gap: "10px", padding: "9px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, alignItems: "center", cursor: "pointer" }} title={`Filter to ${d.department}`}>
               <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{d.department}</div>
               <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, fontFamily: FONT_MONO }}>{d.open_count}</div>
               <div style={{ fontSize: "14px", fontWeight: 600, color: d.overdue_count > 0 ? COLOURS.RED : COLOURS.GREEN, fontFamily: FONT_MONO }}>{d.overdue_count}</div>
@@ -1516,6 +1518,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <option value="meeting">Meeting-sourced only</option>
             <option value="manual">Manually created</option>
             <option value="recurring">Recurring-generated</option>
+            <option value="whatsapp">WhatsApp-created</option>
           </select>
           <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">Any subtask state</option>
