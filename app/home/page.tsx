@@ -10,7 +10,7 @@ import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtil
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES, FINANCE_COMPANIES as ALL_FINANCE_COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
-import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, widgetVisible, financeCompanies, myIdentityEmails, isDailyEntryOnly, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canAccessAdminOps, canViewExecutiveDashboard, widgetVisible, financeCompanies, myIdentityEmails, isDailyEntryOnly, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpiThresholds";
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
@@ -1560,10 +1560,11 @@ function HomePageInner() {
         setUserName(fullName);
       }
 
-      // can_access_admin_ops is already in ctx.overrides (loaded via service client in AuthWrapper/
-      // useUserCtx — bypasses RLS). Direct browser query to member_permissions is blocked by RLS
-      // for non-admin-tier users (Akhlaq, Sunaina) and would return null. Use overrides instead.
-      const hasAdminOps = ctx?.overrides?.can_access_admin_ops === true;
+      // Use canAccessAdminOps(ctx) rather than reading ctx.overrides directly — the permission
+      // function checks the override first (ov()) then falls back gracefully, so it still works
+      // when ctx.overrides is null (transient load failure). Direct browser queries to
+      // member_permissions are still blocked by RLS for non-admin-tier users.
+      const hasAdminOps = ctx ? canAccessAdminOps(ctx) : false;
 
       const [
         tasksRes, machinesRes, meetingsRes,
