@@ -71,7 +71,8 @@ export type CreateTaskResult =
 // and directly, in-process, from the recurring-task cron (server-side,
 // no HTTP round-trip needed there).
 export async function createTaskCore(input: CreateTaskInput): Promise<CreateTaskResult> {
-  const description = input.description?.trim() || "";
+  const description = (input.description?.trim() || "")
+    .replace(/\b\w/g, c => c.toUpperCase());
   if (!description) return { ok: false, error: "Description is required." };
   if (description.length > DESCRIPTION_LIMIT) {
     return { ok: false, error: `Description must be ${DESCRIPTION_LIMIT} characters or fewer.` };
