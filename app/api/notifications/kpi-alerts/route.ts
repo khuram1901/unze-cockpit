@@ -131,13 +131,20 @@ async function getOrCreateAlert(
   if (existing) return { ...existing, is_new: false };
 
   // Create new alert
-  const { data: created } = await supabase
+  const { data: created, error: insertErr } = await supabase
     .from("kpi_alert_log")
     .insert({ source_label: sourceLabel, company_id: companyId, metric, detail })
     .select("id, escalation_level, first_alerted_at")
     .single();
 
-  return { ...created!, is_new: true };
+  if (insertErr || !created) {
+    // Log table not writable — return a safe in-memory fallback so
+    // the notification still fires at level 0 (primary contact).
+    console.error("[kpi-alerts] kpi_alert_log insert failed", insertErr?.message);
+    return { id: "fallback", escalation_level: 0, first_alerted_at: new Date().toISOString(), is_new: true };
+  }
+
+  return { ...created, is_new: true };
 }
 
 async function updateAlert(
@@ -145,6 +152,7 @@ async function updateAlert(
   id: string,
   escalation_level: number
 ) {
+  if (id === "fallback") return;
   await supabase
     .from("kpi_alert_log")
     .update({ last_alerted_at: new Date().toISOString(), escalation_level })
