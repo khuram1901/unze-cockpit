@@ -197,8 +197,9 @@ export async function GET(request: NextRequest) {
     return await runAlerts();
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[kpi-alerts] unhandled error", msg);
-    return Response.json({ ok: false, error: msg }, { status: 500 });
+    const stack = e instanceof Error ? e.stack : undefined;
+    console.error("[kpi-alerts] unhandled error", msg, stack);
+    return Response.json({ ok: false, error: msg, stack }, { status: 500 });
   }
 }
 
