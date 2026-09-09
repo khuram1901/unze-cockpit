@@ -67,7 +67,8 @@ function pktToday(): string {
 }
 
 function daysBetween(isoA: string, isoB: string): number {
-  return Math.floor((new Date(isoB).getTime() - new Date(isoA).getTime()) / 86400000);
+  // Strip time component so we compare calendar dates only
+  return Math.max(0, Math.floor((new Date(isoB.slice(0, 10)).getTime() - new Date(isoA.slice(0, 10)).getTime()) / 86400000));
 }
 
 function fmt(iso: string | null) {
