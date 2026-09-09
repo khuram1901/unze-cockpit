@@ -101,7 +101,11 @@ export async function loadMyPermissions(token?: string): Promise<Record<string, 
     if (!res.ok) return null;
     const json = await res.json();
     const result: Record<string, unknown> | null = json.overrides || null;
-    _permCache = { result, token: accessToken, ts: Date.now() };
+    // Only cache successful (non-null) results — a null must not be cached
+    // because the 1.5s retry in AuthWrapper would hit the cache and return
+    // null again instead of making a fresh API call. Transient failures
+    // (Vercel cold start, network hiccup) should always retry cleanly.
+    if (result !== null) _permCache = { result, token: accessToken, ts: Date.now() };
     return result;
   } catch {
     return null;
@@ -126,7 +130,7 @@ export async function loadMyWidgetOverrides(token?: string): Promise<Record<stri
     if (!res.ok) return null;
     const json = await res.json();
     const result: Record<string, boolean> | null = json.overrides || null;
-    _widgetCache = { result, token: accessToken, ts: Date.now() };
+    if (result !== null) _widgetCache = { result, token: accessToken, ts: Date.now() };
     return result;
   } catch {
     return null;

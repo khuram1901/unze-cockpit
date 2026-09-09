@@ -183,8 +183,12 @@ export default function AuthWrapper({
         // and other override-gated pages break for users who have explicit grants.
         let resolvedPermData = permData;
         if (!resolvedPermData) {
+          // Retry with a fresh session token in case the original was near-expiry
+          // or the API experienced a transient failure (Vercel cold start, etc.).
           await new Promise((r) => setTimeout(r, 1500));
-          resolvedPermData = await loadMyPermissions(session.access_token);
+          const freshSession = await supabase.auth.getSession();
+          const retryToken = freshSession.data.session?.access_token ?? session.access_token;
+          resolvedPermData = await loadMyPermissions(retryToken);
         }
         const overrides = resolvedPermData ? (resolvedPermData as PermOverrides) : null;
         setUserCtx({
