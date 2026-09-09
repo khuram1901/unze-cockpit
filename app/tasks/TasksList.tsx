@@ -1613,95 +1613,68 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         </div>
       )}
 
-      {timeView !== "team" && timeView !== "recurring" && filtersOpen && (() => {
-        const advancedActive = ownerFilter !== "all" || periodFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all";
-        return (
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
-            {/* ── Single filter row ── */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-              {!(department === "Audit" && !isPrivileged) && (
-                <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle }}>
-                  <option value="all">All companies</option>
-                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  <option value="group">Group / needs review</option>
-                </select>
-              )}
-              <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={{ ...filterSelectStyle }}>
-                <option value="all">All departments</option>
-                {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-              <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={{ ...filterSelectStyle }}>
-                <option value="all">All priorities</option>
-                <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
-              </select>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...filterSelectStyle }}>
-                <option value="all">All statuses</option>
-                <option>Not Started</option>
-                <option>In Progress</option>
-                <option>Waiting Reply</option>
-                <option>Stuck</option>
-                <option>Submitted</option>
-                <option>Completed</option>
-              </select>
-              {/* More / Reset */}
-              <button
-                onClick={() => setAdvFiltersOpen(!advFiltersOpen)}
-                style={{
-                  border: `1px solid ${advancedActive ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
-                  borderRadius: RADII.SM, padding: "5px 10px", fontSize: "12px", fontWeight: 600,
-                  color: advancedActive ? COLOURS.BLUE : COLOURS.SLATE,
-                  backgroundColor: COLOURS.CARD, cursor: "pointer",
-                }}
-              >
-                More{advancedActive ? " ●" : ""} {advFiltersOpen ? "▲" : "▼"}
-              </button>
-              {filtersActive && (
-                <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
-                  Reset
-                </button>
-              )}
-            </div>
-            {/* ── Advanced drawer ── */}
-            {advFiltersOpen && (
-              <div style={{
-                display: "flex", gap: "8px", flexWrap: "wrap",
-                padding: "10px 12px", border: `1px solid ${COLOURS.HAIRLINE}`,
-                borderRadius: RADII.SM, backgroundColor: COLOURS.CARD_ALT,
-              }}>
-                <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={{ ...filterSelectStyle }}>
-                  <option value="all">All owners</option>
-                  {ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-                <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)} style={{ ...filterSelectStyle }}>
-                  <option value="all">Any due period</option>
-                  <option value="week">This week</option>
-                  <option value="month">This month</option>
-                  <option value="quarter">This quarter</option>
-                </select>
-                <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={{ ...filterSelectStyle }}>
-                  <option value="all">Any due date</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="today">Due today</option>
-                  <option value="none">No due date</option>
-                </select>
-                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={{ ...filterSelectStyle }}>
-                  <option value="all">All sources</option>
-                  <option value="meeting">From meeting</option>
-                  <option value="manual">Manual</option>
-                  <option value="recurring">Recurring</option>
-                  <option value="whatsapp">WhatsApp</option>
-                </select>
-                <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={{ ...filterSelectStyle }}>
-                  <option value="all">Any subtasks</option>
-                  <option value="has">Has subtasks</option>
-                  <option value="complete">All complete</option>
-                  <option value="none">No subtasks</option>
-                </select>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      {timeView !== "team" && timeView !== "recurring" && filtersOpen && (
+        <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap", marginBottom: "12px" }}>
+          {!(department === "Audit" && !isPrivileged) && (
+            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle, fontSize: "12px", padding: "5px 8px" }}>
+              <option value="all">All companies</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="group">Group / needs review</option>
+            </select>
+          )}
+          <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={{ ...filterSelectStyle, fontSize: "12px", padding: "5px 8px" }}>
+            <option value="all">All departments</option>
+            {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={{ ...filterSelectStyle, fontSize: "12px", padding: "5px 8px" }}>
+            <option value="all">All priorities</option>
+            <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...filterSelectStyle, fontSize: "12px", padding: "5px 8px" }}>
+            <option value="all">All statuses</option>
+            <option>Not Started</option>
+            <option>In Progress</option>
+            <option>Waiting Reply</option>
+            <option>Stuck</option>
+            <option>Submitted</option>
+            <option>Completed</option>
+          </select>
+          <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={{ ...filterSelectStyle, fontSize: "12px", padding: "5px 8px" }}>
+            <option value="all">All owners</option>
+            {ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)} style={{ ...filterSelectStyle, fontSize: "12px", padding: "5px 8px" }}>
+            <option value="all">Any period</option>
+            <option value="week">This week</option>
+            <option value="month">This month</option>
+            <option value="quarter">This quarter</option>
+          </select>
+          <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={{ ...filterSelectStyle, fontSize: "12px", padding: "5px 8px" }}>
+            <option value="all">Any due date</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Due today</option>
+            <option value="none">No due date</option>
+          </select>
+          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={{ ...filterSelectStyle, fontSize: "12px", padding: "5px 8px" }}>
+            <option value="all">All sources</option>
+            <option value="meeting">From meeting</option>
+            <option value="manual">Manual</option>
+            <option value="recurring">Recurring</option>
+            <option value="whatsapp">WhatsApp</option>
+          </select>
+          <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={{ ...filterSelectStyle, fontSize: "12px", padding: "5px 8px" }}>
+            <option value="all">Any subtasks</option>
+            <option value="has">Has subtasks</option>
+            <option value="complete">All complete</option>
+            <option value="none">No subtasks</option>
+          </select>
+          {filtersActive && (
+            <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12px", fontWeight: 600, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}>
+              Reset
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ═══ LIST VIEW (default landing view) ═══ */}
       {timeView === "list" && (
