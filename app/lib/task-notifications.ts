@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendNotificationEmail } from "./send-email";
 import { TRIGGER_TASK_ASSIGNED, TRIGGER_ESCALATION, TRIGGER_TASK_SUBMITTED } from "./notification-types";
+import { sendWhatsAppPush, taskAssignedMessage } from "./whatsapp-push";
 
 // Extracted from /api/notifications/send so the exact same email logic can
 // be called two ways: (1) that route, still used by paths not yet migrated
@@ -22,10 +23,10 @@ export async function notifyTaskAssigned(
     .eq("email", recipientEmail)
     .maybeSingle();
 
-  if (!member?.notify_email) return { skipped: "email notifications disabled" };
-
-  const memberName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || recipientEmail;
-  const memberDisplay = member.employee_code ? `${memberName} (${member.employee_code})` : memberName;
+  const memberName = member
+    ? (`${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || recipientEmail)
+    : recipientEmail;
+  const memberDisplay = member?.employee_code ? `${memberName} (${member.employee_code})` : memberName;
 
   const { data: task } = await supabase
     .from("tasks")
@@ -33,6 +34,23 @@ export async function notifyTaskAssigned(
     .eq("id", taskId)
     .single();
   if (!task) return;
+
+  // WhatsApp push — send to anyone with a phone number on file.
+  if (member?.phone_e164) {
+    await sendWhatsAppPush(
+      member.phone_e164,
+      taskAssignedMessage({
+        assigneeName: memberName,
+        description: task.description || "",
+        dueDate: task.due_date,
+        assignedBy: task.assigned_by,
+        priority: task.priority,
+      })
+    );
+  }
+
+  // Email — only if the member has email notifications enabled.
+  if (!member?.notify_email) return { skipped: "email notifications disabled" };
 
   await sendNotificationEmail({
     to: recipientEmail,
@@ -52,8 +70,8 @@ export async function notifyTaskAssigned(
     triggerType: TRIGGER_TASK_ASSIGNED,
     triggerRecordId: taskId,
     recipientName: memberName,
-    whatsAppPhone: member.notify_whatsapp ? member.phone_e164 : null,
-    whatsAppMessage: `New task assigned to ${memberDisplay}: ${task.description?.slice(0, 90)}. Priority: ${task.priority}. Check the dashboard for details.`,
+    whatsAppPhone: null, // push already sent above; button in email no longer needed
+    whatsAppMessage: undefined,
   });
 }
 
