@@ -682,59 +682,13 @@ function HomePageInner() {
   const [taxSignoffs, setTaxSignoffs] = useState<Map<string, boolean>>(new Map());
   const [taxSignoffs2, setTaxSignoffs2] = useState<Map<string, boolean>>(new Map());
 
-  // KPI escalations (production/dispatch/breakage lagging) and stuck
-  // receivables were previously auto-created as "Explanation Required"
-  // tasks here. Per Khuram's review (14/07/2026, see
-  // TASK_NOTIFICATION_AUDIT.md), both are reclassified as alerts, not
-  // tasks: the underlying exception is already visible on the department's
-  // own pages, and the "Escalations" / "Stuck Receivables" rows on this
-  // dashboard's attention banner already surface it without needing a
-  // tracked, emailed task. See the loops below (foundEscalations /
-  // foundStuckReceivables) — detection logic stayed, task-creation didn't.
-  //
-  // Cash escalation is the one exception Khuram asked to keep as a task
-  // (a specific written explanation from Finance is wanted, tracked to
-  // completion) — it now routes through the shared /api/tasks/create
-  // gate instead of inserting directly, so it gets a company tag and an
-  // actual notification email (previously silent).
-  async function autoCreateCashEscalationTask(
-    exceptionType: "cash_receivables" | "cash_payouts",
-    detail: string,
-    companyId: string,
-    financeOwner: DepartmentOwner | null
-  ) {
-    if (!financeOwner?.primary_owner_name || !financeOwner?.primary_owner_email) return;
-    const month = formatDate(new Date()).slice(0, 7);
-    const sourceLabel = `kpi_escalation:${exceptionType}:${month}`;
-    try {
-      await authFetch("/api/tasks/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          taskType: "Explanation Required",
-          exceptionType,
-          explanationRequired: true,
-          description: detail,
-          companyId,
-          project: "Unze Trading Ops",
-          priority: "High",
-          status: "Waiting Reply",
-          dueDate: workingDaysFromNow(3),
-          assignedTo: financeOwner.primary_owner_name,
-          assignedToEmail: financeOwner.primary_owner_email,
-          assignedToDepartment: "Finance",
-          notes: `Auto-created by the executive cash escalation engine. ${detail}`,
-          replyRequired: true,
-          sourceType: "kpi_escalation",
-          sourceLabel,
-          notificationStyle: "escalation",
-          systemActor: "System",
-        }),
-      });
-    } catch (e) {
-      console.error("Failed to create cash escalation task", e);
-    }
-  }
+  // KPI escalations (all types — production/dispatch/breakage/cash) are
+  // alerts only, not tasks. Cash exceptions are now handled by the daily
+  // /api/notifications/kpi-alerts cron which sends WhatsApp notifications
+  // with company-specific escalation chains (UTPL: Sania→Khuram;
+  // IFPL/Baranh/HD: Shahida→Shakeel→Kamran) and auto-escalates if the
+  // condition persists beyond 3 days. Production/breakage escalations go
+  // to Nadeem Khan first, then Khuram. (Khuram, 09/09/2026)
 
   async function loadExecutiveData(dateToView: string) {
     setExecLoading(true);
@@ -1085,50 +1039,9 @@ function HomePageInner() {
       }
     }
 
-    // KPI escalations (foundEscalations) are alert-only — see note above
-    // the auto-create functions. No task-creation loop needed here
-    // anymore; setEscalations(foundEscalations) below still feeds the
-    // "Escalations" attention row exactly as before.
-
-    const cashMonth = formatDate(new Date()).slice(0, 7);
-    const financeOwnerRes = await supabase
-      .from("department_owners")
-      .select("department_name, primary_owner_name, primary_owner_email")
-      .eq("department_name", "Finance")
-      .maybeSingle();
-    const financeOwner: DepartmentOwner | null = financeOwnerRes.data || null;
-
-    for (const cfd of allCompanyFinance) {
-      const monthCashPos = cfd.cashPositions.filter((p) => p.position_date.slice(0, 7) === cashMonth);
-      const recMTD = monthCashPos.reduce((s, p) => s + p.total_receipts, 0);
-      const payMTD = monthCashPos.reduce((s, p) => s + p.total_payments, 0);
-      const pRecv = cfd.cashPlan?.tentative_receivables || 0;
-      const pPay = cfd.cashPlan?.tentative_payouts || 0;
-      const nowDate = new Date();
-      const dim = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
-      const de = nowDate.getDate();
-      const expRecv = pRecv > 0 ? (pRecv / dim) * de : 0;
-      const recvPct = expRecv > 0 ? (recMTD / expRecv) * 100 : 100;
-      const expPay = pPay > 0 ? (pPay / dim) * de : 0;
-      const payPct = expPay > 0 ? (payMTD / expPay) * 100 : 100;
-
-      if (recvPct < 85) {
-        await autoCreateCashEscalationTask(
-          "cash_receivables",
-          `${cfd.companyName}: Receivables pacing at ${Math.round(recvPct)}% — actual ${fmtMoney(recMTD)} vs expected ${fmtMoney(Math.round(expRecv))} by day ${de} of ${dim}.`,
-          cfd.companyId,
-          financeOwner
-        );
-      }
-      if (payPct > 115) {
-        await autoCreateCashEscalationTask(
-          "cash_payouts",
-          `${cfd.companyName}: Payouts pacing at ${Math.round(payPct)}% — actual ${fmtMoney(payMTD)} vs expected ${fmtMoney(Math.round(expPay))} by day ${de} of ${dim}.`,
-          cfd.companyId,
-          financeOwner
-        );
-      }
-    }
+    // KPI escalations (foundEscalations) are alert-only — no tasks are created here.
+    // Cash exceptions are handled by /api/notifications/kpi-alerts (daily cron) which
+    // sends WhatsApp notifications with company-specific chains and escalation tracking.
 
     setSummaries(result);
     setEscalations(foundEscalations);
