@@ -193,6 +193,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // pills below, and the one way to see Completed/Cancelled tasks in the
   // main list/board/timeline views, which otherwise always hide them.
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [paFilter, setPaFilter] = useState(false);
+  const [listSort, setListSort] = useState<{ col: "created_at" | "due_date" | "status" | "assigned_to"; dir: "asc" | "desc" }>({ col: "due_date", dir: "asc" });
   const [searchQuery, setSearchQuery] = useState("");
   const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
   // Tracks which department/person groups are EXPANDED — starting empty
@@ -318,6 +320,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     setSourceFilter("all");
     setSubtaskFilter("all");
     setStatusFilter("all");
+    setPaFilter(false);
     setSearchQuery("");
   }
 
@@ -836,7 +839,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // (either via the pills or a bell deep-link — "submitted" only arrives
   // via the bell, there's no pill for it), show a single flat list of
   // just that category instead of the grouped breakdown.
-  const listFilteredTasks = filter === "all" ? null
+  const listFilteredTasks = paFilter
+    ? tasks.filter((t) =>
+        t.assigned_to_email === "pa.ceo@unze.co.uk" &&
+        myIdentities.includes((t.assigned_by_email || "").toLowerCase()) &&
+        t.status !== "Completed" && t.status !== "Cancelled"
+      )
+    : filter === "all" ? null
     : filter === "overdue" ? myTasksSource.filter(isOverdue)
     : filter === "waiting" ? myTasksSource.filter((t) => t.status === "Waiting Reply")
     : filter === "exception" ? myTasksSource.filter((t) => !!t.explanation_required)
@@ -850,6 +859,72 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const overdueMineCount = myTasksSource.filter(isOverdue).length;
   const waitingMineCount = myTasksSource.filter((t) => t.status === "Waiting Reply").length;
   const exceptionMineCount = myTasksSource.filter((t) => !!t.explanation_required).length;
+  const sundasMineCount = tasks.filter((t) =>
+    t.assigned_to_email === "pa.ceo@unze.co.uk" &&
+    myIdentities.includes((t.assigned_by_email || "").toLowerCase()) &&
+    t.status !== "Completed" && t.status !== "Cancelled"
+  ).length;
+
+  // Sort a task array by the current listSort state
+  function sortListTasks(arr: Task[]): Task[] {
+    return arr.slice().sort((a, b) => {
+      const mul = listSort.dir === "asc" ? 1 : -1;
+      if (listSort.col === "created_at") {
+        return mul * ((a.created_at || "").localeCompare(b.created_at || ""));
+      }
+      if (listSort.col === "due_date") {
+        const da = a.due_date || "9999-99-99";
+        const db = b.due_date || "9999-99-99";
+        return mul * da.localeCompare(db);
+      }
+      if (listSort.col === "status") {
+        return mul * a.status.localeCompare(b.status);
+      }
+      if (listSort.col === "assigned_to") {
+        return mul * ((a.assigned_to || "").localeCompare(b.assigned_to || ""));
+      }
+      return 0;
+    });
+  }
+
+  // Column header bar for list view (clickable sort)
+  function ListSortHeader() {
+    const cols: { key: typeof listSort.col; label: string }[] = [
+      { key: "created_at", label: "Created" },
+      { key: "status",     label: "Status" },
+      { key: "due_date",   label: "Due Date" },
+      { key: "assigned_to", label: "Assigned To" },
+    ];
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px", paddingLeft: "4px" }}>
+        {cols.map(({ key, label }) => {
+          const active = listSort.col === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setListSort(prev => ({ col: key, dir: prev.col === key && prev.dir === "asc" ? "desc" : "asc" }))}
+              style={{
+                background: active ? COLOURS.INFO_SOFT : "transparent",
+                border: active ? `1px solid ${COLOURS.BLUE}` : `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: RADII.SM,
+                padding: "3px 10px",
+                fontSize: "11.5px",
+                fontWeight: 700,
+                color: active ? COLOURS.BLUE : COLOURS.SLATE,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              {label}
+              {active && <span style={{ fontSize: "10px" }}>{listSort.dir === "asc" ? "↑" : "↓"}</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   const filterSelectStyle: React.CSSProperties = {
     border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 10px",
@@ -1425,7 +1500,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           {/* Row 2: filter pills + scope toggle (wraps on mobile) */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             {(["all", "overdue", "waiting", "exception"] as const).map((f) => (
-              <button key={f} onClick={() => setFilter(f)} style={{
+              <button key={f} onClick={() => { setFilter(f); setPaFilter(false); }} style={{
                 backgroundColor: filter === f ? COLOURS.NAVY : COLOURS.CARD,
                 color: filter === f ? "white" : COLOURS.NAVY,
                 border: `1px solid ${filter === f ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
@@ -1434,6 +1509,16 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueMineCount})` : f === "waiting" ? `Waiting (${waitingMineCount})` : `Needs exp. (${exceptionMineCount})`}
               </button>
             ))}
+
+            <button onClick={() => { setPaFilter(!paFilter); setFilter("all"); }} style={{
+              backgroundColor: paFilter ? "#7C3AED" : COLOURS.CARD,
+              color: paFilter ? "white" : "#7C3AED",
+              border: `1px solid ${paFilter ? "#7C3AED" : "#C4B5FD"}`,
+              borderRadius: RADII.PILL, padding: isMobile ? "7px 10px" : "6px 12px",
+              fontSize: isMobile ? "12px" : "13px", fontWeight: 600, cursor: "pointer",
+            }}>
+              Sundas{sundasMineCount > 0 ? ` (${sundasMineCount})` : ""}
+            </button>
 
             {timeView === "list" && (
               <>
@@ -1532,6 +1617,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {/* ═══ LIST VIEW (default landing view) ═══ */}
       {timeView === "list" && (
         <div>
+          <ListSortHeader />
           {listFilteredTasks ? (
             // A specific quick-filter (or bell deep-link) is active — show
             // one flat list of just that category instead of the usual
@@ -1541,9 +1627,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {listFilteredTasks.length === 0 ? (
                 <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
               ) : (
-                listFilteredTasks
-                  .slice()
-                  .sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9"))
+                sortListTasks(listFilteredTasks)
                   .map((t) => <TaskRow key={t.id} task={t} selectable />)
               )}
             </div>
@@ -1561,7 +1645,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                     {groupTasks.length === 0 ? (
                       <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
                     ) : (
-                      groupTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} selectable />)
+                      sortListTasks(groupTasks).map((t) => <TaskRow key={t.id} task={t} selectable />)
                     )}
                   </div>
                 </div>
@@ -1586,9 +1670,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— with your team, watching only</span>
               </div>
               <div style={{ ...cardStyle, overflow: "hidden" }}>
-                {delegatedByMe
-                  .slice()
-                  .sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9"))
+                {sortListTasks(delegatedByMe)
                   .map((t) => <TaskRow key={t.id} task={t} selectable />)}
               </div>
             </div>
