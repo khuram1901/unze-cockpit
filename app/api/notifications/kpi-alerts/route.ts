@@ -185,6 +185,16 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "Unauthorised" }, { status: 401 });
   }
 
+  try {
+    return await runAlerts();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[kpi-alerts] unhandled error", msg);
+    return Response.json({ ok: false, error: msg }, { status: 500 });
+  }
+}
+
+async function runAlerts() {
   const supabase = createServiceClient();
   const today = pktToday();
   const [year, month] = today.split("-");
