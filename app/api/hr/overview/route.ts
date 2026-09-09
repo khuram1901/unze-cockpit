@@ -27,10 +27,13 @@ export async function GET(request: NextRequest) {
   const db = createServiceClient();
 
   try {
-    // Role gate (30/08/2026 audit): HR overview data — including the employee
-    // directory with contact details — is for management roles, not every
-    // logged-in member. Payroll is stricter still: financial data, so
-    // Admin/CEO + HR/Finance Managers only (PA never sees it — rule 6).
+    // Role gate (30/08/2026 audit, widened 09/09/2026): HR overview data —
+    // including the employee directory with contact details — is for
+    // management roles PLUS anyone in the HR department (HR assistants are
+    // Members but employee data is their day job; the original gate broke
+    // the EmployeePicker for Salman initiating legal cases). Payroll is
+    // stricter still: financial data, so Admin/CEO + HR/Finance Managers
+    // only (PA never sees it — rule 6).
     const { data: member } = await db
       .from("members")
       .select("role, department")
@@ -38,9 +41,10 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
     const role = member?.role ?? "";
     const dept = member?.department ?? "";
-    const isManagement =
-      role === "Admin" || role === "CEO" || role === "Manager" || role === "Executive";
-    if (!isManagement) {
+    const allowed =
+      role === "Admin" || role === "CEO" || role === "Manager" || role === "Executive" ||
+      dept === "HR";
+    if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (section === "payroll") {
