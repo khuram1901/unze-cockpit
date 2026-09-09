@@ -124,7 +124,7 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
   // rather than an in-memory list passed in by the caller — more
   // reliable than the old client-side "does this task already exist in
   // what I happened to fetch" check.
-  if (input.sourceType && input.sourceLabel) {
+  if (input.sourceType && input.sourceLabel && input.sourceRecordId) {
     const { data: existing } = await supabase
       .from("tasks")
       .select("id")
