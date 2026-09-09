@@ -14,9 +14,11 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { sendWhatsAppPush } from "../../../lib/whatsapp-push";
 
 // The two issuers who receive the weekly digest.
-const DIGEST_RECIPIENTS = [
-  "khuram1901@gmail.com",
-  "kamran@unze.co.uk",
+// emails: all email addresses the person uses when assigning tasks
+// memberEmail: the email on their members record (for phone lookup)
+const DIGEST_RECIPIENTS: { memberEmail: string; emails: string[] }[] = [
+  { memberEmail: "k.saleem@unzegroup.com", emails: ["k.saleem@unzegroup.com"] },
+  { memberEmail: "kamran@unze.co.uk",    emails: ["kamran@unze.co.uk"] },
 ];
 
 const OPEN_STATUSES = ["Open", "In Progress", "Waiting Reply", "Stuck", "Submitted"];
@@ -115,26 +117,26 @@ export async function GET(request: NextRequest) {
   const today = pktToday();
   const results: { email: string; tasks: number; sent: boolean; error?: string }[] = [];
 
-  for (const email of DIGEST_RECIPIENTS) {
-    // Get recipient's name and phone
+  for (const recipient of DIGEST_RECIPIENTS) {
+    // Get recipient's name and phone from their primary member record
     const { data: member } = await supabase
       .from("members")
       .select("first_name, last_name, name, phone_e164")
-      .eq("email", email)
+      .eq("email", recipient.memberEmail)
       .maybeSingle();
 
     if (!member?.phone_e164) {
-      results.push({ email, tasks: 0, sent: false, error: "no_phone" });
+      results.push({ email: recipient.memberEmail, tasks: 0, sent: false, error: "no_phone" });
       continue;
     }
 
-    const recipientName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || email;
+    const recipientName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || recipient.memberEmail;
 
-    // Get all outstanding tasks issued by this person
+    // Get all outstanding tasks issued by this person across all their emails
     const { data: tasks } = await supabase
       .from("tasks")
       .select("description, assigned_to, due_date, status")
-      .eq("assigned_by_email", email)
+      .in("assigned_by_email", recipient.emails)
       .in("status", OPEN_STATUSES)
       .order("due_date", { ascending: true, nullsFirst: false });
 
@@ -142,7 +144,7 @@ export async function GET(request: NextRequest) {
     const message = buildDigestMessage(recipientName, taskList, today);
     const result = await sendWhatsAppPush(member.phone_e164, message);
 
-    results.push({ email, tasks: taskList.length, sent: result.ok, error: result.error });
+    results.push({ email: recipient.memberEmail, tasks: taskList.length, sent: result.ok, error: result.error });
   }
 
   return Response.json({ ok: true, date: today, results });
