@@ -22,7 +22,7 @@
 
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
-import { sendWhatsAppPush } from "../../../lib/whatsapp-push";
+import { sendWhatsAppNotification } from "../../../lib/whatsapp-push";
 
 // ── Company IDs ────────────────────────────────────────────────────────────
 const UTPL_ID = "15884c2d-48a4-4d43-be90-0ef6e130790c";
@@ -190,7 +190,8 @@ async function notifyChain(
   const key = chain[idx];
   const { phone, name } = await getPhone(supabase, key);
   if (!phone) return { sent: false, to: key };
-  const result = await sendWhatsAppPush(phone, message);
+  const firstName = name.split(" ")[0] || name;
+  const result = await sendWhatsAppNotification(phone, firstName, message);
   return { sent: result.ok, to: name };
 }
 

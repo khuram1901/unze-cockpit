@@ -21,7 +21,93 @@ function toE164Digits(phone: string): string {
 }
 
 /**
+ * Send the approved `unze_notification` template to open a conversation window.
+ * Must be called before sendWhatsAppPush for recipients who have never messaged us.
+ * {{1}} = recipient's first name.
+ *
+ * Returns { ok: true } on success or { ok: false, error } on failure.
+ * Never throws.
+ */
+export async function sendWhatsAppTemplate(
+  phone: string | null | undefined,
+  firstName: string
+): Promise<{ ok: boolean; error?: string }> {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneId) {
+    console.warn("[whatsapp-push] WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID not set — skipping");
+    return { ok: false, error: "not_configured" };
+  }
+
+  if (!phone) return { ok: false, error: "no_phone" };
+
+  const to = toE164Digits(phone);
+  if (to.length < 10) return { ok: false, error: "invalid_phone" };
+
+  try {
+    const res = await fetch(`${GRAPH}/${phoneId}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "template",
+        template: {
+          name: "unze_notification",
+          language: { code: "en" },
+          components: [
+            {
+              type: "body",
+              parameters: [{ type: "text", text: firstName }],
+            },
+          ],
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("[whatsapp-push] template API error:", err);
+      return { ok: false, error: err };
+    }
+
+    return { ok: true };
+  } catch (e) {
+    console.error("[whatsapp-push] template fetch failed:", e);
+    return { ok: false, error: String(e) };
+  }
+}
+
+/**
+ * Send the template opener then the rich text body.
+ * Use this everywhere instead of sendWhatsAppPush to reach recipients
+ * who have not recently messaged the business number.
+ *
+ * Returns { ok: true } on success or { ok: false, error } on failure.
+ * Never throws.
+ */
+export async function sendWhatsAppNotification(
+  phone: string | null | undefined,
+  firstName: string,
+  message: string
+): Promise<{ ok: boolean; error?: string }> {
+  // Step 1: open the conversation window with the approved template
+  const tpl = await sendWhatsAppTemplate(phone, firstName);
+  if (!tpl.ok) return tpl;
+
+  // Step 2: send the actual rich message (now within the 24-hour window)
+  return sendWhatsAppPush(phone, message);
+}
+
+/**
  * Send a plain-text WhatsApp message to a phone number.
+ * NOTE: Only works within a 24-hour conversation window.
+ * Use sendWhatsAppNotification() for first-time / cold recipients.
+ *
  * Returns { ok: true } on success or { ok: false, error } on failure.
  * Never throws — callers don't need try/catch.
  */

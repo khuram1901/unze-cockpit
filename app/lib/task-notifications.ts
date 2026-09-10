@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendNotificationEmail } from "./send-email";
 import { TRIGGER_TASK_ASSIGNED, TRIGGER_ESCALATION, TRIGGER_TASK_SUBMITTED } from "./notification-types";
-import { sendWhatsAppPush, taskAssignedMessage } from "./whatsapp-push";
+import { sendWhatsAppNotification, taskAssignedMessage } from "./whatsapp-push";
 
 // Extracted from /api/notifications/send so the exact same email logic can
 // be called two ways: (1) that route, still used by paths not yet migrated
@@ -37,8 +37,10 @@ export async function notifyTaskAssigned(
 
   // WhatsApp push — send to anyone with a phone number on file.
   if (member?.phone_e164) {
-    await sendWhatsAppPush(
+    const firstName = memberName.split(" ")[0] || memberName;
+    await sendWhatsAppNotification(
       member.phone_e164,
+      firstName,
       taskAssignedMessage({
         assigneeName: memberName,
         description: task.description || "",

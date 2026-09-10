@@ -14,7 +14,7 @@
 
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
-import { sendWhatsAppPush } from "../../../lib/whatsapp-push";
+import { sendWhatsAppNotification } from "../../../lib/whatsapp-push";
 
 // These are the CEO/MD accounts that have their own separate digest
 // (whatsapp-weekly-digest). Exclude them here to avoid double-messaging.
@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
     }
 
     const message = buildPersonalDigest({ firstName, assignedToMe, assignedByMe, today });
-    const result = await sendWhatsAppPush(member.phone_e164, message);
+    const result = await sendWhatsAppNotification(member.phone_e164, firstName, message);
     results.push({ email, toMe: assignedToMe.length, byMe: assignedByMe.length, sent: result.ok, error: result.error });
   }
 

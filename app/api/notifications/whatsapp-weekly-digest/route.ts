@@ -11,7 +11,7 @@
 
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
-import { sendWhatsAppPush } from "../../../lib/whatsapp-push";
+import { sendWhatsAppNotification } from "../../../lib/whatsapp-push";
 
 // The two issuers who receive the weekly digest.
 // emails: all email addresses the person uses when assigning tasks
@@ -142,7 +142,8 @@ export async function GET(request: NextRequest) {
 
     const taskList = tasks || [];
     const message = buildDigestMessage(recipientName, taskList, today);
-    const result = await sendWhatsAppPush(member.phone_e164, message);
+    const firstName = member.first_name || recipientName.split(" ")[0] || recipientName;
+    const result = await sendWhatsAppNotification(member.phone_e164, firstName, message);
 
     results.push({ email: recipient.memberEmail, tasks: taskList.length, sent: result.ok, error: result.error });
   }
