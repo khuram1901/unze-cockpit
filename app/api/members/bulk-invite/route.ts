@@ -23,29 +23,35 @@ import { canAddMembers, type UserCtx, type PermOverrides } from "../../../lib/pe
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://unze-cockpit.vercel.app";
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
+  const authHeader = request.headers.get("authorization");
+  const isCron = process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
 
   const supabase = createServiceClient();
 
-  // Same server-side gate as /api/members/invite
-  const { data: actorMember } = await supabase
-    .from("members").select("id, role, department, company").eq("email", auth.email).maybeSingle();
-  let actorOverrides: PermOverrides | null = null;
-  if (actorMember) {
-    const { data: perms } = await supabase
-      .from("member_permissions").select("*").eq("member_id", actorMember.id).maybeSingle();
-    actorOverrides = (perms as PermOverrides) || null;
-  }
-  const actorCtx: UserCtx = {
-    email: auth.email,
-    role: actorMember?.role ?? null,
-    department: actorMember?.department ?? null,
-    company: actorMember?.company ?? null,
-    overrides: actorOverrides,
-  };
-  if (!canAddMembers(actorCtx)) {
-    return Response.json({ error: "You don't have permission to add members." }, { status: 403 });
+  if (!isCron) {
+    // Normal user auth path
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+
+    // Same server-side gate as /api/members/invite
+    const { data: actorMember } = await supabase
+      .from("members").select("id, role, department, company").eq("email", auth.email).maybeSingle();
+    let actorOverrides: PermOverrides | null = null;
+    if (actorMember) {
+      const { data: perms } = await supabase
+        .from("member_permissions").select("*").eq("member_id", actorMember.id).maybeSingle();
+      actorOverrides = (perms as PermOverrides) || null;
+    }
+    const actorCtx: UserCtx = {
+      email: auth.email,
+      role: actorMember?.role ?? null,
+      department: actorMember?.department ?? null,
+      company: actorMember?.company ?? null,
+      overrides: actorOverrides,
+    };
+    if (!canAddMembers(actorCtx)) {
+      return Response.json({ error: "You don't have permission to add members." }, { status: 403 });
+    }
   }
 
   const confirm = new URL(request.url).searchParams.get("confirm") === "yes";
