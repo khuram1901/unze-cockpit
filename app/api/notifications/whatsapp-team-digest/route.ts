@@ -16,12 +16,25 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { sendWhatsAppNotification } from "../../../lib/whatsapp-push";
 
-// These are the CEO/MD accounts that have their own separate digest
-// (whatsapp-weekly-digest). Exclude them here to avoid double-messaging.
-const EXCLUDE_EMAILS = new Set([
-  "k.saleem@unzegroup.com",
-  "khuram1901@gmail.com",
-  "kamran@unze.co.uk",
+// Explicit allowlist of HODs and senior managers who receive the Friday digest.
+// Only these people are messaged — keeps costs low (one WhatsApp conversation
+// per person per week) and avoids spamming the whole company.
+const DIGEST_ALLOWLIST = new Set([
+  "shakeel@unze.co.uk",          // Muhammad Shakeel
+  "sania.saleem@unze.co.uk",     // Sania Saleem
+  "shahida.naseem@unze.co.uk",   // Shahida Naseem
+  "pa.ceo@unze.co.uk",           // Sundas Hussain
+  "shahid@unze.co.uk",           // Shahid Masaud
+  "kamran@unze.co.uk",           // Kamran Saleem
+  "k.saleem@unzegroup.com",      // Khuram Saleem
+  "nadeem.khan@unze.co.uk",      // Nadeem Khan (GM Ops)
+  "nadeem@unze.co.uk",           // Muhammad Nadeem (IT)
+  "zuhair.syed@unze.co.uk",      // Zuhair Khalid
+  "julien@unze.co.uk",           // Suleman Julien
+  "amar@unze.co.uk",             // Amar Tahir
+  "akhlaq@unze.co.uk",           // Muhammad Akhlaq
+  "auzaif@unze.co.uk",           // Auzaif Kamran
+  "abbasi@unze.co.uk",           // Anwer Hussain Abbasi
 ]);
 
 const OPEN_STATUSES = ["Open", "In Progress", "Waiting Reply", "Stuck", "Submitted"];
@@ -149,7 +162,7 @@ export async function GET(request: NextRequest) {
     .select("email, first_name, last_name, name, phone_e164")
     .not("phone_e164", "is", null);
 
-  const eligible = (members || []).filter(m => m.email && !EXCLUDE_EMAILS.has(m.email));
+  const eligible = (members || []).filter(m => m.email && DIGEST_ALLOWLIST.has(m.email));
 
   // Load all open tasks once — filter in memory per member (avoids N+1 queries)
   const { data: allTasks } = await supabase

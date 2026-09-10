@@ -77,11 +77,11 @@
     },
     {
       "path": "/api/notifications/whatsapp-weekly-digest",
-      "schedule": "0 3 * * 5"
+      "schedule": "30 4 * * 5"
     },
     {
       "path": "/api/notifications/whatsapp-team-digest",
-      "schedule": "0 3 * * 5"
+      "schedule": "30 4 * * 5"
     },
     {
       "path": "/api/flowhcm/sync",
