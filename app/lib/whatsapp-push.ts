@@ -21,7 +21,7 @@ function toE164Digits(phone: string): string {
 }
 
 /**
- * Send the approved `unze_notification` template to open a conversation window.
+ * Send the approved `unze_dashboard_alert` template to open a conversation window.
  * Must be called before sendWhatsAppPush for recipients who have never messaged us.
  * {{1}} = recipient's first name.
  *
@@ -57,14 +57,9 @@ export async function sendWhatsAppTemplate(
         to,
         type: "template",
         template: {
-          name: "unze_notification",
+          name: "unze_dashboard_alert",
           language: { code: "en" },
-          components: [
-            {
-              type: "body",
-              parameters: [{ type: "text", text: firstName }],
-            },
-          ],
+          // No variable components — template body has no {{1}} placeholders
         },
       }),
     });
