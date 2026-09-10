@@ -709,3 +709,14 @@ export function widgetVisible(u: UserCtx, key: string, defaultVisible: boolean):
   if (v === true || v === false) return v;
   return defaultVisible;
 }
+
+// ── HOD team performance ──────────────────────────────────────────
+// True only when the member_permissions.can_view_team_performance column
+// is explicitly set to true (done for all is_hod=true members by migration 243).
+// The permission is purely override-driven — no role default — so that it can
+// be granted to co-HODs (Auzaif, Rapheo) who don't hold the Manager role.
+export function canViewTeamPerformance(u: UserCtx): boolean {
+  const o = ov(u, "can_view_team_performance");
+  return o === true;
+}
+

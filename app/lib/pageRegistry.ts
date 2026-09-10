@@ -87,6 +87,7 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_see_all_minutes", title: "Meetings", subtitle: "Minutes, approvals, action items", href: "/meetings", icon: "💬", group: "My Workspace", badgeKey: "meetings" },
   { permKey: "_my_minutes", title: "My Minutes", subtitle: "Meeting minutes you attended", href: "/my-minutes", icon: "🗒️", group: "My Workspace", badgeKey: "minutes" },
   { permKey: "_tasks", title: "Tasks", subtitle: "View and manage tasks", href: "/tasks", icon: "🎯", group: "My Workspace", badgeKey: "tasks" },
+  { permKey: "can_view_team_performance", title: "My Team", subtitle: "Your team's task performance", href: "/my-team", icon: "👥", group: "My Workspace" },
 
   // ── Settings ──
   { permKey: "can_view_members", title: "Members", subtitle: "Team members, roles, access", href: "/members", icon: "👥", group: "Settings", badgeKey: "members" },
