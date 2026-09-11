@@ -14,7 +14,7 @@
 
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
-import { sendWhatsAppNotification } from "../../../lib/whatsapp-push";
+import { sendWhatsAppDigestTemplate } from "../../../lib/whatsapp-push";
 
 // Explicit allowlist of HODs and senior managers who receive the Friday digest.
 // Only these people are messaged — keeps costs low (one WhatsApp conversation
@@ -53,98 +53,68 @@ function pktToday(): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-function taskLine(t: { description: string; due_date: string | null }, today: string, showDue = true): string {
-  const overdue = t.due_date && t.due_date < today;
-  const desc = t.description.slice(0, 65) + (t.description.length > 65 ? "…" : "");
-  const due = showDue && t.due_date ? ` — due ${formatDate(t.due_date)}${overdue ? " ⚠️" : ""}` : "";
-  return `• ${desc}${due}`;
+/** Short DD/MM date for compact display */
+function shortDate(iso: string | null): string {
+  if (!iso) return "";
+  const [, m, d] = iso.split("-");
+  return `${d}/${m}`;
 }
 
-function buildPersonalDigest({
+/**
+ * Build a compact single-line digest suitable for a WhatsApp template parameter.
+ * Meta blocks newlines in template variables, so we use " | " for section breaks
+ * and " · " between individual tasks.
+ *
+ * Format:
+ *   Hi {name}, {DD/MM} update: | 📥 YOUR TASKS ({N}): ⚠️ Task A [DD/MM] · Task B [DD/MM] · +N more | 📤 YOU ISSUED ({N}): ⚠️ [Name] Task [DD/MM] · ...
+ */
+function buildCompactDigest({
   firstName,
   assignedToMe,
   assignedByMe,
   today,
 }: {
   firstName: string;
-  assignedToMe: { description: string; due_date: string | null; assigned_by: string | null }[];
+  assignedToMe: { description: string; due_date: string | null }[];
   assignedByMe: { description: string; due_date: string | null; assigned_to: string | null }[];
   today: string;
 }): string {
-  const hasWork = assignedToMe.length > 0 || assignedByMe.length > 0;
-
-  if (!hasWork) {
-    return [
-      `✅ *Weekly Task Digest — Unze Group*`,
-      ``,
-      `Hi ${firstName},`,
-      ``,
-      `You have no outstanding tasks as at ${formatDate(today)}. Keep it up! 🎉`,
-    ].join("\n");
+  if (assignedToMe.length === 0 && assignedByMe.length === 0) {
+    return `Hi ${firstName}, no outstanding tasks as at ${formatDate(today)} — all clear! ✅`;
   }
 
-  const lines: string[] = [
-    `📋 *Weekly Task Digest — Unze Group*`,
-    ``,
-    `Hi ${firstName}, here's your Friday update as at ${formatDate(today)}:`,
-    ``,
-  ];
+  const parts: string[] = [`Hi ${firstName}, ${formatDate(today)} update:`];
 
-  // Section 1: Tasks assigned to me
+  // Section 1 — tasks assigned to me
   if (assignedToMe.length > 0) {
-    const overdue = assignedToMe.filter(t => t.due_date && t.due_date < today);
-    const current = assignedToMe.filter(t => !t.due_date || t.due_date >= today);
-
-    lines.push(`📥 *ASSIGNED TO YOU (${assignedToMe.length} outstanding)*`);
-    if (overdue.length > 0) {
-      lines.push(`_Overdue:_`);
-      overdue.slice(0, 8).forEach(t => lines.push(taskLine(t, today)));
-      if (overdue.length > 8) lines.push(`  _…and ${overdue.length - 8} more overdue_`);
-    }
-    if (current.length > 0) {
-      if (overdue.length > 0) lines.push(`_Upcoming:_`);
-      current.slice(0, 8).forEach(t => lines.push(taskLine(t, today)));
-      if (current.length > 8) lines.push(`  _…and ${current.length - 8} more_`);
-    }
-    lines.push(``);
+    const items = assignedToMe.slice(0, 6).map(t => {
+      const flag = t.due_date && t.due_date < today ? "⚠️ " : "";
+      const desc = t.description.slice(0, 32) + (t.description.length > 32 ? "…" : "");
+      const due = t.due_date ? ` [${shortDate(t.due_date)}]` : "";
+      return `${flag}${desc}${due}`;
+    });
+    const more = assignedToMe.length > 6 ? ` +${assignedToMe.length - 6} more` : "";
+    parts.push(`📥 YOUR TASKS (${assignedToMe.length}): ${items.join(" · ")}${more}`);
   } else {
-    lines.push(`📥 *ASSIGNED TO YOU* — none outstanding ✅`);
-    lines.push(``);
+    parts.push(`📥 YOUR TASKS: none ✅`);
   }
 
-  // Section 2: Tasks I issued to others
+  // Section 2 — tasks I issued to others
   if (assignedByMe.length > 0) {
-    const overdue = assignedByMe.filter(t => t.due_date && t.due_date < today);
-    const current = assignedByMe.filter(t => !t.due_date || t.due_date >= today);
-
-    lines.push(`📤 *TASKS YOU ISSUED (${assignedByMe.length} outstanding)*`);
-    if (overdue.length > 0) {
-      lines.push(`_Overdue:_`);
-      overdue.slice(0, 8).forEach(t => {
-        const who = t.assigned_to ? `[${t.assigned_to.split(" ")[0]}] ` : "";
-        const desc = t.description.slice(0, 60) + (t.description.length > 60 ? "…" : "");
-        lines.push(`• ${who}${desc} — due ${formatDate(t.due_date)} ⚠️`);
-      });
-      if (overdue.length > 8) lines.push(`  _…and ${overdue.length - 8} more overdue_`);
-    }
-    if (current.length > 0) {
-      if (overdue.length > 0) lines.push(`_Upcoming:_`);
-      current.slice(0, 8).forEach(t => {
-        const who = t.assigned_to ? `[${t.assigned_to.split(" ")[0]}] ` : "";
-        const desc = t.description.slice(0, 60) + (t.description.length > 60 ? "…" : "");
-        const due = t.due_date ? ` — due ${formatDate(t.due_date)}` : "";
-        lines.push(`• ${who}${desc}${due}`);
-      });
-      if (current.length > 8) lines.push(`  _…and ${current.length - 8} more_`);
-    }
-    lines.push(``);
+    const items = assignedByMe.slice(0, 6).map(t => {
+      const flag = t.due_date && t.due_date < today ? "⚠️ " : "";
+      const who = t.assigned_to ? `[${t.assigned_to.split(" ")[0]}] ` : "";
+      const desc = t.description.slice(0, 28) + (t.description.length > 28 ? "…" : "");
+      const due = t.due_date ? ` [${shortDate(t.due_date)}]` : "";
+      return `${flag}${who}${desc}${due}`;
+    });
+    const more = assignedByMe.length > 6 ? ` +${assignedByMe.length - 6} more` : "";
+    parts.push(`📤 YOU ISSUED (${assignedByMe.length}): ${items.join(" · ")}${more}`);
   } else {
-    lines.push(`📤 *TASKS YOU ISSUED* — all done ✅`);
-    lines.push(``);
+    parts.push(`📤 YOU ISSUED: all done ✅`);
   }
 
-  lines.push(`https://unze-cockpit.vercel.app/tasks`);
-  return lines.join("\n");
+  return parts.join(" | ");
 }
 
 export async function GET(request: NextRequest) {
@@ -200,9 +170,8 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    const message = buildPersonalDigest({ firstName, assignedToMe, assignedByMe, today });
-    // Two-message approach: template opens session, free-form digest follows immediately
-    const result = await sendWhatsAppNotification(member.phone_e164, firstName, message);
+    const message = buildCompactDigest({ firstName, assignedToMe, assignedByMe, today });
+    const result = await sendWhatsAppDigestTemplate(member.phone_e164, message);
     results.push({ email, toMe: assignedToMe.length, byMe: assignedByMe.length, sent: result.ok, error: result.error });
   }
 
