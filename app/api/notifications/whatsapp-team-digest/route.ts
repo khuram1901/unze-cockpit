@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceClient();
   const today = pktToday();
 
-  // Optional single-recipient test mode: ?test_email=pa.ceo@unze.co.uk
+  // Optional single-recipient test mode: ?test_email=pa.ceo%40unze.co.uk (encode @ as %40)
   const testEmail = new URL(request.url).searchParams.get("test_email")?.toLowerCase();
 
   // Load all members with a phone number

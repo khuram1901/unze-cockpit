@@ -59,12 +59,7 @@ export async function sendWhatsAppTemplate(
         template: {
           name: "unze_dashboard_alert",
           language: { code: "en" },
-          components: [
-            {
-              type: "body",
-              parameters: [{ type: "text", text: firstName }],
-            },
-          ],
+          // Template body is fully static — no {{1}} variables
         },
       }),
     });
