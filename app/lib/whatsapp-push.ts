@@ -59,7 +59,12 @@ export async function sendWhatsAppTemplate(
         template: {
           name: "unze_dashboard_alert",
           language: { code: "en" },
-          // No variable components — template body has no {{1}} placeholders
+          components: [
+            {
+              type: "body",
+              parameters: [{ type: "text", text: firstName }],
+            },
+          ],
         },
       }),
     });
@@ -94,8 +99,8 @@ export async function sendWhatsAppNotification(
   const tpl = await sendWhatsAppTemplate(phone, firstName);
   if (!tpl.ok) return tpl;
 
-  // Step 2: wait briefly so Meta fully establishes the session window
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  // Step 2: wait so Meta fully establishes the session window before free-form
+  await new Promise(resolve => setTimeout(resolve, 5000));
 
   // Step 3: send the actual rich message (now within the 24-hour window)
   return sendWhatsAppPush(phone, message);
