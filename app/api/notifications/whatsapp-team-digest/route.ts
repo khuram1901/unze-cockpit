@@ -14,7 +14,7 @@
 
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
-import { sendWhatsAppNotification } from "../../../lib/whatsapp-push";
+import { sendWhatsAppDigestTemplate } from "../../../lib/whatsapp-push";
 
 // Explicit allowlist of HODs and senior managers who receive the Friday digest.
 // Only these people are messaged — keeps costs low (one WhatsApp conversation
@@ -143,7 +143,7 @@ function buildPersonalDigest({
     lines.push(``);
   }
 
-  lines.push(`https://unze-cockpit.vercel.app/tasks`);
+  // Note: URL is already in the unze_weekly_digest template footer — don't duplicate it here
   return lines.join("\n");
 }
 
@@ -201,7 +201,8 @@ export async function GET(request: NextRequest) {
     }
 
     const message = buildPersonalDigest({ firstName, assignedToMe, assignedByMe, today });
-    const result = await sendWhatsAppNotification(member.phone_e164, firstName, message);
+    // Single-message template: digest content goes into {{1}} of unze_weekly_digest
+    const result = await sendWhatsAppDigestTemplate(member.phone_e164, message);
     results.push({ email, toMe: assignedToMe.length, byMe: assignedByMe.length, sent: result.ok, error: result.error });
   }
 

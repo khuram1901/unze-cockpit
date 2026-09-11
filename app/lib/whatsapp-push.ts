@@ -21,9 +21,78 @@ function toE164Digits(phone: string): string {
 }
 
 /**
+ * Send the `unze_weekly_digest` template with the full personalised digest as {{1}}.
+ * Single message — no follow-up needed. Template body:
+ *   "Unze Group - Weekly Task Update\n\n{{1}}\n\nhttps://unze-cockpit.vercel.app/tasks"
+ *
+ * digestContent should be pre-built and capped at ~900 chars so the final
+ * message stays well under WhatsApp's 1024-char template limit.
+ *
+ * Returns { ok: true } on success or { ok: false, error } on failure.
+ * Never throws.
+ */
+export async function sendWhatsAppDigestTemplate(
+  phone: string | null | undefined,
+  digestContent: string
+): Promise<{ ok: boolean; error?: string }> {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneId) {
+    console.warn("[whatsapp-push] WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID not set — skipping");
+    return { ok: false, error: "not_configured" };
+  }
+
+  if (!phone) return { ok: false, error: "no_phone" };
+
+  const to = toE164Digits(phone);
+  if (to.length < 10) return { ok: false, error: "invalid_phone" };
+
+  // Cap to 900 chars to stay under Meta's template variable limit
+  const content = digestContent.slice(0, 900);
+
+  try {
+    const res = await fetch(`${GRAPH}/${phoneId}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "template",
+        template: {
+          name: "unze_weekly_digest",
+          language: { code: "en" },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: content },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("[whatsapp-push] digest template API error:", err);
+      return { ok: false, error: err };
+    }
+
+    return { ok: true };
+  } catch (e) {
+    console.error("[whatsapp-push] digest template fetch failed:", e);
+    return { ok: false, error: String(e) };
+  }
+}
+
+/**
  * Send the approved `unze_dashboard_alert` template to open a conversation window.
  * Must be called before sendWhatsAppPush for recipients who have never messaged us.
- * {{1}} = recipient's first name.
  *
  * Returns { ok: true } on success or { ok: false, error } on failure.
  * Never throws.
