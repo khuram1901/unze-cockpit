@@ -48,8 +48,12 @@ export async function sendWhatsAppDigestTemplate(
   const to = toE164Digits(phone);
   if (to.length < 10) return { ok: false, error: "invalid_phone" };
 
-  // Cap to 900 chars to stay under Meta's template variable limit
-  const content = digestContent.slice(0, 900);
+  // Meta template parameters cannot contain newline/tab characters.
+  // Flatten the digest: double newlines become " | " section breaks, single newlines become spaces.
+  const content = digestContent
+    .replace(/\n\n/g, " | ")
+    .replace(/\n/g, " ")
+    .slice(0, 900);
 
   try {
     const res = await fetch(`${GRAPH}/${phoneId}/messages`, {
