@@ -156,13 +156,20 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceClient();
   const today = pktToday();
 
-  // Load all members with a phone number (excluding CEO digest recipients)
+  // Optional single-recipient test mode: ?test_email=pa.ceo@unze.co.uk
+  const testEmail = new URL(request.url).searchParams.get("test_email")?.toLowerCase();
+
+  // Load all members with a phone number
   const { data: members } = await supabase
     .from("members")
     .select("email, first_name, last_name, name, phone_e164")
     .not("phone_e164", "is", null);
 
-  const eligible = (members || []).filter(m => m.email && DIGEST_ALLOWLIST.has(m.email));
+  const eligible = (members || []).filter(m => {
+    if (!m.email) return false;
+    if (testEmail) return m.email.toLowerCase() === testEmail;
+    return DIGEST_ALLOWLIST.has(m.email);
+  });
 
   // Load all open tasks once — filter in memory per member (avoids N+1 queries)
   const { data: allTasks } = await supabase
