@@ -167,8 +167,8 @@ export async function sendWhatsAppNotification(
   const tpl = await sendWhatsAppTemplate(phone, firstName);
   if (!tpl.ok) return tpl;
 
-  // Step 2: wait so Meta fully establishes the session window before free-form
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  // Step 2: brief pause then send free-form (session window opens immediately after template)
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
   // Step 3: send the actual rich message (now within the 24-hour window)
   return sendWhatsAppPush(phone, message);
