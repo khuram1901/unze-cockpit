@@ -134,7 +134,7 @@ export default function HRRecruitment() {
 
       {/* KPI strip */}
       <div>
-        <SectionTitle>Recruitment Overview</SectionTitle>
+        <SectionTitle title="Recruitment Overview" />
         <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "12px" }}>
           <KpiCard label="Total Positions"   value={summary.total_positions} />
           <KpiCard label="Open"              value={summary.open_positions}   sub="actively hiring" />
