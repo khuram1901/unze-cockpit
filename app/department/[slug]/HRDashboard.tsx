@@ -14,6 +14,7 @@ import HRTasksLive from "./hr/HRTasksLive";
 import HRLegal from "./hr/HRLegal";
 import HRFlowData from "./hr/HRFlowData";
 import HRPerformance from "./hr/HRPerformance";
+import HRRecruitment from "./hr/HRRecruitment";
 
 // ─── Tab definitions ────────────────────────────────────────────────────────
 // CEO-level 7-tab layout (30/08/2026). Old tabs backed by permanently-empty
@@ -24,7 +25,8 @@ const ALL_HR_TABS = [
   { key: "payroll",    label: "Payroll",            widgetKey: "hr_tabs.payroll" },
   { key: "movement",   label: "Workforce Movement", widgetKey: "hr_tabs.movement" },
   { key: "attendance", label: "Attendance",         widgetKey: "hr_tabs.attendance" },
-  { key: "performance", label: "Performance",        widgetKey: "hr_tabs.performance" },
+  { key: "performance",   label: "Performance",        widgetKey: "hr_tabs.performance" },
+  { key: "recruitment",   label: "Recruitment",        widgetKey: "hr_tabs.recruitment" },
   { key: "td",         label: "T&D Calendar",       widgetKey: "hr_tabs.td" },
   // Tasks and Legal are SEPARATE tabs (Khuram 30/08/2026): legal is managed
   // by a different user, so each needs its own visibility key in the matrix.
@@ -93,7 +95,8 @@ export default function HRDashboard() {
       {safeTab === "payroll"    && <HRPayrollInsights />}
       {safeTab === "movement"   && <HRMovement />}
       {safeTab === "attendance"  && <HRAttendance />}
-      {safeTab === "performance" && <HRPerformance />}
+      {safeTab === "performance"  && <HRPerformance />}
+      {safeTab === "recruitment"  && <HRRecruitment />}
       {safeTab === "td"         && <HRTraining />}
       {safeTab === "tasks"      && <HRTasksLive />}
       {safeTab === "legal"      && <HRLegal />}

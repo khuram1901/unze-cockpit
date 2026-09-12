@@ -272,18 +272,27 @@ async function syncLeave(db: ReturnType<typeof createServiceClient>) {
 async function syncRecruitment(db: ReturnType<typeof createServiceClient>) {
   const t0 = Date.now();
 
+  // Pre-load company ID map (name → uuid) for best-effort company_id linkage
+  const { data: companyRows } = await db.from("companies").select("id, name");
+  const companyMap = new Map((companyRows ?? []).map(c => [c.name?.toLowerCase(), c.id]));
+
   // Sync job requests (positions) into our recruitment_positions table
   const jobRequests = await flowhcm.getJobRequests();
-  const posRows = jobRequests.map(jr => ({
-    position_title: jr.jobTitle,
-    flw_company:    jr.station ?? "Unze Group",
-    salary_range:   jr.salaryRange,
-    date_opened:    jr.addedOn?.slice(0, 10) ?? null,
-    status:         jr.status === "Approved" ? "Open" : "On Hold",
-    required_count: jr.noOfPositions ?? 1,
-    import_source:  "flowhcm_api",
-    flw_remarks:    null,
-  }));
+  const posRows = jobRequests.map(jr => {
+    const companyName = jr.station ?? jr.Station ?? jr.company ?? "Unze Group";
+    const companyId = companyMap.get(companyName.toLowerCase()) ?? companyMap.get("unze group") ?? null;
+    return {
+      position_title: jr.jobTitle ?? jr.JobTitle ?? jr.title ?? "Unknown",
+      flw_company:    companyName,
+      company_id:     companyId,
+      salary_range:   jr.salaryRange ?? jr.SalaryRange ?? null,
+      date_opened:    parseAnyFlwDate(jr.addedOn ?? jr.AddedOn ?? jr.dateOpened ?? null),
+      status:         (jr.status ?? jr.Status ?? "") === "Approved" ? "Open" : "On Hold",
+      required_count: jr.noOfPositions ?? jr.NoOfPositions ?? 1,
+      import_source:  "flowhcm_api",
+      flw_remarks:    jr.remarks ?? jr.Remarks ?? null,
+    };
+  });
 
   // Sync candidates into recruitment_candidates
   const candidates = await flowhcm.getCandidates();

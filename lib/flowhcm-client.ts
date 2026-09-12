@@ -14,8 +14,9 @@
  *   FLOWHCM_API_URL      = https://api40.flowhcm.com/api
  *   FLOWHCM_EMAIL        = integration@unze.com
  *   FLOWHCM_PASSWORD     = <password>
- *   FLOWHCM_LOGIN_TOKEN  = <static Token key used during login>
- *   FLOWHCM_GROUP        = Head Group  (optional — filters by employee group)
+ *   FLOWHCM_LOGIN_TOKEN         = <static Token key used during login>
+ *   FLOWHCM_RECRUIT_LOGIN_TOKEN = <separate static Token for recruitment module login>
+ *   FLOWHCM_GROUP               = Head Group  (optional — filters by employee group)
  *
  * NOTE: All endpoints confirmed from Postman collection provided by FlowHCM.
  *       Field names in response types are best-guess until real responses
@@ -26,7 +27,8 @@
 const BASE_URL     = (process.env.FLOWHCM_API_URL ?? "https://api40.flowhcm.com/api").replace(/\/$/, "");
 const EMAIL        = process.env.FLOWHCM_EMAIL        ?? "";
 const PASSWORD     = process.env.FLOWHCM_PASSWORD     ?? "";
-const LOGIN_TOKEN  = process.env.FLOWHCM_LOGIN_TOKEN  ?? "";
+const LOGIN_TOKEN         = process.env.FLOWHCM_LOGIN_TOKEN         ?? "";
+const RECRUIT_LOGIN_TOKEN = process.env.FLOWHCM_RECRUIT_LOGIN_TOKEN ?? LOGIN_TOKEN;   // Falls back to standard token if not set
 const GROUP        = process.env.FLOWHCM_GROUP        ?? "";   // e.g. "Head Group" — leave blank for all
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -141,6 +143,53 @@ async function login(): Promise<string> {
 
   if (!token) {
     throw new Error(`FlowHCM login succeeded but no token in response: ${JSON.stringify(json)}`);
+  }
+
+  return token;
+}
+
+/**
+ * Login with the recruitment-specific static token.
+ * FlowHCM uses a separate Token for the recruitment module
+ * (FLOWHCM_RECRUIT_LOGIN_TOKEN env var). Falls back to the standard token.
+ */
+async function loginRecruit(): Promise<string> {
+  if (!isConfigured()) {
+    throw new Error(
+      "FlowHCM not configured. Add FLOWHCM_EMAIL, FLOWHCM_PASSWORD, and FLOWHCM_LOGIN_TOKEN to Vercel env vars."
+    );
+  }
+
+  const res = await fetch(`${BASE_URL}/IntegrationSettings/IntegrationLogin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email:    EMAIL,
+      password: PASSWORD,
+      Token:    RECRUIT_LOGIN_TOKEN,
+    }),
+    next: { revalidate: 0 },
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`FlowHCM recruitment login failed (${res.status}): ${text}`);
+  }
+
+  const json = await res.json();
+
+  const token: string =
+    typeof json === "string"
+      ? json
+      : (json?.informations?.[0]?.myToken
+          ?? json?.token
+          ?? json?.Token
+          ?? json?.accessToken
+          ?? json?.data
+          ?? "");
+
+  if (!token) {
+    throw new Error(`FlowHCM recruitment login succeeded but no token in response: ${JSON.stringify(json)}`);
   }
 
   return token;
@@ -389,6 +438,60 @@ export const flowhcm = {
   async getPerformanceReviews(): Promise<FlwPerformanceReview[]>   { return []; },
   async getTrainingRecords():    Promise<FlwTrainingRecord[]>      { return []; },
   async getDisciplinary():       Promise<FlwDisciplinaryAction[]>  { return []; },
-  async getCandidates():         Promise<FlwJobCandidate[]>        { return []; },
-  async getJobRequests():        Promise<FlwJobRequest[]>          { return []; },
+  /**
+   * GetJobRecruitmentData — all open job requests / positions.
+   * Uses the recruitment-specific login token (FLOWHCM_RECRUIT_LOGIN_TOKEN).
+   *
+   * ⚠️  Field names in the response are best-guess until a real response is seen.
+   *     The sync route maps: jobTitle, station, salaryRange, addedOn, status, noOfPositions.
+   *     Update syncRecruitment() in sync/route.ts if actual field names differ.
+   */
+  async getJobRequests(): Promise<FlwJobRequest[]> {
+    const token = await loginRecruit();
+    return flwPost<FlwJobRequest>(token, "IntegrationSettings/GetJobRecruitmentData", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+  },
+
+  /**
+   * GetJobRecruitmentData — candidate/applicant list embedded in recruitment data.
+   * Calls the same endpoint as getJobRequests() and extracts candidate records.
+   * If the API returns candidates nested within each job (under a "candidates" or
+   * "applicants" array field), this flatmaps them and injects jobTitle for linking.
+   * If the API returns a flat list of candidates instead, returns it as-is.
+   *
+   * ⚠️  Field names are best-guess. Sync route expects: name, mobile, email,
+   *     pipelineStatus, gender, experience, station, jobTitle.
+   */
+  async getCandidates(): Promise<FlwJobCandidate[]> {
+    const token = await loginRecruit();
+    const data = await flwPost<Record<string, any>>(token, "IntegrationSettings/GetJobRecruitmentData", {
+      employeecode:  "",
+      employeegroup: "",
+    });
+
+    // If candidates are nested within each job record, flatten them
+    const nested = data.flatMap((job: Record<string, any>) => {
+      const subs =
+        (Array.isArray(job.candidates)  ? job.candidates  : null) ??
+        (Array.isArray(job.applicants)  ? job.applicants  : null) ??
+        (Array.isArray(job.pipeline)    ? job.pipeline    : null) ??
+        null;
+      if (subs) {
+        return subs.map((c: Record<string, any>) => ({
+          ...c,
+          jobTitle: c.jobTitle ?? job.jobTitle ?? job.JobTitle ?? "",
+        }));
+      }
+      return [];
+    });
+
+    // If nested extraction found candidates, return them
+    if (nested.length > 0) return nested;
+
+    // Otherwise the endpoint may return a flat list — return as-is
+    // (sync code will use c.name, c.mobile, c.email etc. directly)
+    return data;
+  },
 };
