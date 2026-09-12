@@ -128,7 +128,6 @@ async function login(): Promise<string> {
   }
 
   const json = await res.json();
-  if (endpoint.includes("Recruitment")) console.log("[RECRUIT-RAW]", JSON.stringify(json)?.slice(0, 1000));
 
   // FlowHCM returns: { informations: [{ myToken: "..." }] }
   // Fallback to other common shapes just in case
@@ -178,7 +177,6 @@ async function loginRecruit(): Promise<string> {
   }
 
   const json = await res.json();
-  if (endpoint.includes("Recruitment")) console.log("[RECRUIT-RAW]", JSON.stringify(json)?.slice(0, 1000));
 
   const token: string =
     typeof json === "string"
