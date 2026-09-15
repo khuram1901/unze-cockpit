@@ -65,8 +65,8 @@ function shortDate(iso: string | null): string {
  * Meta blocks newlines in template variables, so we use " | " for section breaks
  * and " · " between individual tasks.
  *
- * Format:
- *   Hi {name}, {DD/MM} update: | 📥 YOUR TASKS ({N}): ⚠️ Task A [DD/MM] · Task B [DD/MM] · +N more | 📤 YOU ISSUED ({N}): ⚠️ [Name] Task [DD/MM] · ...
+ * Format (overdue highlighted prominently):
+ *   Hi {name}, {DD/MM} update: | 🚨 OVERDUE (N): ⚠️ Task A [10/09] · ⚠️ Task B [11/09] | 📥 YOUR TASKS (N): Task C [20/09] · +N more | 📤 YOU ISSUED (N): ...
  */
 function buildCompactDigest({
   firstName,
@@ -85,31 +85,70 @@ function buildCompactDigest({
 
   const parts: string[] = [`Hi ${firstName}, ${formatDate(today)} update:`];
 
-  // Section 1 — tasks assigned to me
+  // Section 1 — tasks assigned to me, overdue separated and shown first
   if (assignedToMe.length > 0) {
-    const items = assignedToMe.slice(0, 6).map(t => {
-      const flag = t.due_date && t.due_date < today ? "⚠️ " : "";
-      const desc = t.description.slice(0, 32) + (t.description.length > 32 ? "…" : "");
-      const due = t.due_date ? ` [${shortDate(t.due_date)}]` : "";
-      return `${flag}${desc}${due}`;
-    });
-    const more = assignedToMe.length > 6 ? ` +${assignedToMe.length - 6} more` : "";
-    parts.push(`📥 YOUR TASKS (${assignedToMe.length}): ${items.join(" · ")}${more}`);
+    const overdue = assignedToMe.filter(t => t.due_date && t.due_date < today);
+    const upcoming = assignedToMe.filter(t => !t.due_date || t.due_date >= today);
+
+    const subParts: string[] = [];
+
+    if (overdue.length > 0) {
+      const items = overdue.slice(0, 4).map(t => {
+        const desc = t.description.slice(0, 28) + (t.description.length > 28 ? "…" : "");
+        return `⚠️ ${desc} [${shortDate(t.due_date)}]`;
+      });
+      const more = overdue.length > 4 ? ` +${overdue.length - 4} more` : "";
+      subParts.push(`🚨 OVERDUE (${overdue.length}): ${items.join(" · ")}${more}`);
+    }
+
+    if (upcoming.length > 0) {
+      const slots = overdue.length > 0 ? 3 : 5;
+      const items = upcoming.slice(0, slots).map(t => {
+        const desc = t.description.slice(0, 28) + (t.description.length > 28 ? "…" : "");
+        const due = t.due_date ? ` [${shortDate(t.due_date)}]` : "";
+        return `${desc}${due}`;
+      });
+      const more = upcoming.length > slots ? ` +${upcoming.length - slots} more` : "";
+      const label = overdue.length > 0 ? `✅ Upcoming (${upcoming.length})` : `📥 YOUR TASKS (${assignedToMe.length})`;
+      subParts.push(`${label}: ${items.join(" · ")}${more}`);
+    }
+
+    parts.push(subParts.join(" | "));
   } else {
     parts.push(`📥 YOUR TASKS: none ✅`);
   }
 
-  // Section 2 — tasks I issued to others
+  // Section 2 — tasks I issued to others, overdue shown first
   if (assignedByMe.length > 0) {
-    const items = assignedByMe.slice(0, 6).map(t => {
-      const flag = t.due_date && t.due_date < today ? "⚠️ " : "";
-      const who = t.assigned_to ? `[${t.assigned_to.split(" ")[0]}] ` : "";
-      const desc = t.description.slice(0, 28) + (t.description.length > 28 ? "…" : "");
-      const due = t.due_date ? ` [${shortDate(t.due_date)}]` : "";
-      return `${flag}${who}${desc}${due}`;
-    });
-    const more = assignedByMe.length > 6 ? ` +${assignedByMe.length - 6} more` : "";
-    parts.push(`📤 YOU ISSUED (${assignedByMe.length}): ${items.join(" · ")}${more}`);
+    const overdue = assignedByMe.filter(t => t.due_date && t.due_date < today);
+    const upcoming = assignedByMe.filter(t => !t.due_date || t.due_date >= today);
+
+    const subParts: string[] = [];
+
+    if (overdue.length > 0) {
+      const items = overdue.slice(0, 3).map(t => {
+        const who = t.assigned_to ? `[${t.assigned_to.split(" ")[0]}] ` : "";
+        const desc = t.description.slice(0, 24) + (t.description.length > 24 ? "…" : "");
+        return `⚠️ ${who}${desc} [${shortDate(t.due_date)}]`;
+      });
+      const more = overdue.length > 3 ? ` +${overdue.length - 3} more` : "";
+      subParts.push(`🚨 OVERDUE (${overdue.length}): ${items.join(" · ")}${more}`);
+    }
+
+    if (upcoming.length > 0) {
+      const slots = overdue.length > 0 ? 3 : 5;
+      const items = upcoming.slice(0, slots).map(t => {
+        const who = t.assigned_to ? `[${t.assigned_to.split(" ")[0]}] ` : "";
+        const desc = t.description.slice(0, 24) + (t.description.length > 24 ? "…" : "");
+        const due = t.due_date ? ` [${shortDate(t.due_date)}]` : "";
+        return `${who}${desc}${due}`;
+      });
+      const more = upcoming.length > slots ? ` +${upcoming.length - slots} more` : "";
+      const label = overdue.length > 0 ? `📤 Pending (${upcoming.length})` : `📤 YOU ISSUED (${assignedByMe.length})`;
+      subParts.push(`${label}: ${items.join(" · ")}${more}`);
+    }
+
+    parts.push(subParts.join(" | "));
   } else {
     parts.push(`📤 YOU ISSUED: all done ✅`);
   }
