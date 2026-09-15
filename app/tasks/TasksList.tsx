@@ -9,6 +9,7 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import { COLOURS, RADII, FONT_MONO, cardStyle, StatusBadge, PriorityBadge, useToast, useConfirm, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { canCompleteSubmittedTask, canReopenCompletedTask, canDeleteTask, myIdentityEmails, filterAssignableMembers } from "../lib/permissions";
+import { scopedToMemberEmail } from "../lib/permissions";
 // routeSubmittedTask removed (migration 194): DB trigger handles routing atomically.
 import { logAction } from "../lib/audit-log";
 import TeamStats from "./TeamStats";
@@ -135,7 +136,7 @@ function getWeekStart(d: Date): string {
 // getMonthLabel/getQuarterLabel removed — labels now come straight from
 // get_tasks_monthly_chart()/get_tasks_quarterly_chart() (migration 102).
 
-export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport, department }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean; department?: string | null }) {
+export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport, department, scopedEmail }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean; department?: string | null; scopedEmail?: string | null }) {
   const isMobile = useMobile();
   const searchParams = useSearchParams();
   const taskIdFromUrl = searchParams.get("task");
@@ -262,7 +263,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       .select("id, task_type, description, project, priority, due_date, original_due_date, assigned_date, assigned_to, assigned_to_email, assigned_by, assigned_by_email, status, stage, stuck_reason, notes, reply_required, reply_text, reply_by, reply_at, corrective_action, recovery_date, impact_on_monthly_target, meeting_id, time_spent_minutes, whatsapp_auto_remind, created_at, completed_at, assigned_to_department, company_id, requires_manager_signoff, explanation_required, submitted_by_name, submitted_by_email, waiting_reply_note, waiting_reply_to_email, waiting_reply_to_name, waiting_reply_by_email, waiting_reply_by_name, manager_reply_text, manager_reply_at, source_type, task_subtasks(id, is_complete), task_comments(id)")
       .order("created_at", { ascending: false });
 
-    if (!isPrivileged && email) {
+    if (isPrivileged && scopedEmail && email) {
+      // Scoped EA (e.g. Rimsha / Ali): they have can_see_all_tasks=true but are
+      // restricted to their own tasks + the member they're scoped to (Kamran).
+      const idClause = myCoAssignedIds.length > 0 ? `,id.in.(${myCoAssignedIds.join(",")})` : "";
+      query = query.or(
+        `assigned_to_email.eq.${email},assigned_by_email.eq.${email},` +
+        `assigned_to_email.eq.${scopedEmail},assigned_by_email.eq.${scopedEmail}${idClause}`
+      );
+    } else if (!isPrivileged && email) {
       const idClause = myCoAssignedIds.length > 0 ? `,id.in.(${myCoAssignedIds.join(",")})` : "";
       const reportsClause = myReportEmails.length > 0 ? `,assigned_to_email.in.(${myReportEmails.join(",")})` : "";
       query = query.or(`assigned_to_email.eq.${email},assigned_by_email.eq.${email}${idClause}${reportsClause}`);
