@@ -280,7 +280,7 @@ const DEPT_DEFAULT_COMPANY: Record<string, string> = {
 };
 // Company list for member assignment — imported from constants (single source of truth)
 const MEMBER_COMPANIES = MEMBER_COMPANY_NAMES;
-function busFor(dept: string | null) { return dept ? DEPT_BUS[dept] || ALL_BUS : []; }
+function busFor(dept: string | null) { return dept ? DEPT_BUS[dept] || ALL_BUS : ALL_BUS; }
 function fullName(m: DrawerMember) {
   return `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || m.email || "Unnamed";
 }
@@ -1089,8 +1089,8 @@ export default function MemberDrawer({
                   {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
                 </select>
               </Field>
-              <Field label="Business unit" disabled={!canEdit || !member.department}>
-                <select style={inp} value={member.business_unit || ""} disabled={!canEdit || !member.department}
+              <Field label="Business unit" disabled={!canEdit}>
+                <select style={inp} value={member.business_unit || ""} disabled={!canEdit}
                   onChange={(e) => onUpdate(member.id, { business_unit: e.target.value || null })}>
                   <option value="">—</option>
                   {busFor(member.department).map((b) => <option key={b}>{b}</option>)}
