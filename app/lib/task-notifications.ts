@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendNotificationEmail } from "./send-email";
 import { TRIGGER_TASK_ASSIGNED, TRIGGER_ESCALATION, TRIGGER_TASK_SUBMITTED } from "./notification-types";
-import { sendWhatsAppNotification, taskAssignedMessage } from "./whatsapp-push";
+import { sendWhatsAppDigestTemplate } from "./whatsapp-push";
 
 // Extracted from /api/notifications/send so the exact same email logic can
 // be called two ways: (1) that route, still used by paths not yet migrated
@@ -35,20 +35,15 @@ export async function notifyTaskAssigned(
     .single();
   if (!task) return;
 
-  // WhatsApp push — send to anyone with a phone number on file.
+  // WhatsApp push — single template message, no follow-up needed.
   if (member?.phone_e164) {
     const firstName = memberName.split(" ")[0] || memberName;
-    await sendWhatsAppNotification(
-      member.phone_e164,
-      firstName,
-      taskAssignedMessage({
-        assigneeName: memberName,
-        description: task.description || "",
-        dueDate: task.due_date,
-        assignedBy: task.assigned_by,
-        priority: task.priority,
-      })
-    );
+    const due = task.due_date ? task.due_date.split("-").reverse().join("/") : null;
+    const priority = task.priority && task.priority !== "Normal" ? ` | ⚡ Priority: ${task.priority}` : "";
+    const by = task.assigned_by ? ` | 👤 By: ${task.assigned_by}` : "";
+    const desc = (task.description || "").slice(0, 120);
+    const content = `Hi ${firstName} — 📋 New task: ${desc}${due ? ` | 📅 Due: ${due}` : ""}${priority}${by} | Log in to confirm or update status.`;
+    await sendWhatsAppDigestTemplate(member.phone_e164, content);
   }
 
   // Email — only if the member has email notifications enabled.
