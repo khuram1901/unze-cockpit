@@ -20,6 +20,8 @@ import {
 } from "../lib/SharedUI";
 import { whatsappLink, taskChaseMessage } from "../lib/whatsapp";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import { loadMyPermissions } from "../lib/supabase";
+import { scopedToMemberEmail, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 
 type Task = {
@@ -138,16 +140,35 @@ export default function PADashboardPage() {
     const email = user?.email || null;
     setCurrentUserEmail(email);
 
+    // Resolve scoped EA permissions — if this user is scoped to another member
+    // (e.g. Rimsha/Ali → Kamran), restrict task visibility to own + that member.
+    let scopedEmail: string | null = null;
     if (email) {
-      const { data: member } = await supabase
-        .from("members").select("first_name, last_name, name")
+      const { data: memberRow } = await supabase
+        .from("members").select("first_name, last_name, name, role, department, company")
         .eq("email", email).maybeSingle();
-      if (member) setCurrentUserName(`${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || email);
+      if (memberRow) {
+        setCurrentUserName(`${memberRow.first_name || ""} ${memberRow.last_name || ""}`.trim() || memberRow.name || email);
+        const p = await loadMyPermissions();
+        const overrides: PermOverrides | null = p ? (p as PermOverrides) : null;
+        const ctx: UserCtx = { email, role: memberRow.role, department: memberRow.department, company: memberRow.company, overrides };
+        scopedEmail = scopedToMemberEmail(ctx);
+      }
     }
 
     const TASK_COLS = "id, description, project, priority, due_date, assigned_to, assigned_to_email, assigned_by, status, source_type, exception_type, assigned_to_department, reply_text, notes, created_at";
+
+    // Build tasks query — scoped EAs see own + their scoped member's tasks only
+    let tasksQuery = supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(300);
+    if (scopedEmail && email) {
+      tasksQuery = tasksQuery.or(
+        `assigned_to_email.eq.${email},assigned_by_email.eq.${email},` +
+        `assigned_to_email.eq.${scopedEmail},assigned_by_email.eq.${scopedEmail}`
+      );
+    }
+
     const [tasksRes, meetingsRes, membersRes, companiesRes] = await Promise.all([
-      supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(300),
+      tasksQuery,
       supabase.from("meeting_requests").select("id, requested_by_name, meeting_title, requested_date, priority, status").eq("status", "Pending").order("created_at", { ascending: false }),
       supabase.from("members").select("id, first_name, last_name, name, email, department, phone_e164").eq("is_active", true),
       supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),

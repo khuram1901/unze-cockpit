@@ -23,6 +23,7 @@ export default function MyTasks() {
   const [userName, setUserName] = useState<string | null>(null);
 
   const [seeAll, setSeeAll] = useState(false);
+  const [myScopedEmail, setMyScopedEmail] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -52,6 +53,7 @@ export default function MyTasks() {
       const canSeeAll = canSeeAllTasks(ctx);
       const scopedEmail = scopedToMemberEmail(ctx);
       setSeeAll(canSeeAll);
+      setMyScopedEmail(scopedEmail);
 
       let query = supabase
         .from("tasks")
@@ -79,7 +81,7 @@ export default function MyTasks() {
   }, []);
 
   if (!loaded || tasks.length === 0) return null;
-  if (seeAll) return null;
+  if (seeAll && !myScopedEmail) return null;
 
   const today = new Date().toISOString().slice(0, 10);
   const title = `Your Tasks (${tasks.length})`;
