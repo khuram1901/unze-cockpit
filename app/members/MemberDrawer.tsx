@@ -236,6 +236,8 @@ const PLAIN_WIDGET_PAGES = [...new Set(PLAIN_WIDGETS.map((w) => w.page))].sort()
 const DEPARTMENTS = [
   "Unze Trading Ops", "Finance", "HR", "Admin",
   "IT", "Tax", "Legal", "Sales", "Audit", "S&M Investment", "BINC",
+  "Marketing", "Online", "Supply Chain", "Supply Chain Apparel",
+  "CCTV and Surveillance", "Fit Out & Maintenance", "Retail Operations",
 ];
 const ALL_BUS = [
   "Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant",
