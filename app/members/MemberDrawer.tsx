@@ -249,22 +249,34 @@ const DEPT_BUS: Record<string, string[]> = {
   Sales: ["PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
   "S&M Investment": ["Property"], BINC: ["Nursing College"],
 };
-/** Departments that belong to a specific company — used to auto-set company on dept change */
+/**
+ * Department → default company mapping.
+ * Used to auto-set company when a department is selected in the member editor.
+ *
+ * Unze Group:        Finance, HR, Audit, Tax, Admin, CEO, IT, CCTV and Surveillance
+ * Unze Trading:      Unze Trading Ops
+ * Imperial Footwear: Online, Supply Chain, Supply Chain Apparel, Marketing,
+ *                    Retail Operations, Fit Out & Maintenance
+ */
 const DEPT_DEFAULT_COMPANY: Record<string, string> = {
-  "Retail Operations": "Imperial Footwear",
-  "Online": "Imperial Footwear",
-  "Supply Chain": "Imperial Footwear",
-  "Supply Chain Apparel": "Imperial Footwear",
-  "CCTV and Surveillance": "Imperial Footwear",
-  "Marketing": "Imperial Footwear",
-  "Finance": "Unze Group",
-  "HR": "Unze Group",
-  "Admin": "Unze Group",
-  "IT": "Unze Group",
-  "Audit": "Unze Group",
-  "Tax": "Unze Group",
-  "CEO": "Unze Group",
-  "Unze Trading Ops": "Unze Trading",
+  // Unze Group
+  "Finance":               "Unze Group",
+  "HR":                    "Unze Group",
+  "Audit":                 "Unze Group",
+  "Tax":                   "Unze Group",
+  "Admin":                 "Unze Group",
+  "CEO":                   "Unze Group",
+  "IT":                    "Unze Group",
+  "CCTV and Surveillance": "Unze Group",
+  // Unze Trading
+  "Unze Trading Ops":      "Unze Trading",
+  // Imperial Footwear
+  "Online":                "Imperial Footwear",
+  "Supply Chain":          "Imperial Footwear",
+  "Supply Chain Apparel":  "Imperial Footwear",
+  "Marketing":             "Imperial Footwear",
+  "Retail Operations":     "Imperial Footwear",
+  "Fit Out & Maintenance": "Imperial Footwear",
 };
 // Company list for member assignment — imported from constants (single source of truth)
 const MEMBER_COMPANIES = MEMBER_COMPANY_NAMES;
