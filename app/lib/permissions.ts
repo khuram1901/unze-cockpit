@@ -304,6 +304,14 @@ export function canManageStock(u: UserCtx) {
 }
 
 // ── Tasks & meetings ──────────────────────────────────────────────
+// Returns the email of the member this user is scoped to (e.g. Kamran for
+// his EAs). When set, the app shows the user their own tasks/minutes PLUS
+// the scoped member's. Null means no scoping — show all or own only.
+export function scopedToMemberEmail(u: UserCtx): string | null {
+  const v = u.overrides?.["scoped_to_member_email"];
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
 export function canSeeAllTasks(u: UserCtx) {
   const o = ov(u, "can_see_all_tasks");
   if (o !== null) return o;

@@ -8,7 +8,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, cardStyle, PageHeader, CountCard, StatusBadge, inputStyle, primaryButtonStyle, labelStyle, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES, fixedCols, cardGrid } from "../lib/SharedUI";
-import { canSeeAllMinutes, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canSeeAllMinutes, scopedToMemberEmail, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Meeting = {
   id: string;
@@ -111,39 +111,59 @@ function MyMinutesPage() {
     if (p) overrides = p as PermOverrides;
     const ctx: UserCtx = { email, role, department: memberData?.department, company: memberData?.company, overrides };
     const privUser = canSeeAllMinutes(ctx);
+    const scopedEmail = scopedToMemberEmail(ctx);
 
     setIsAdmin(privUser);
 
     let meetingsData: Meeting[] = [];
 
-    if (privUser) {
+    if (privUser && !scopedEmail) {
+      // Full access — see all minutes (Khuram, Kamran, Sundas)
       const { data } = await supabase.from("meetings").select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at, mind_map_url").order("meeting_date", { ascending: false });
       meetingsData = data || [];
     } else {
-      const { data: attendeeLinks } = await supabase
-        .from("meeting_attendees")
-        .select("meeting_id")
-        .eq("member_email", email);
+      // Either scoped EA (see own + scoped member's minutes) or standard member (own only)
+      const emailsToCheck = [email];
+      if (scopedEmail) emailsToCheck.push(scopedEmail);
 
-      const meetingIds = new Set((attendeeLinks || []).map((a) => a.meeting_id));
+      const meetingIds = new Set<string>();
 
-      const fullName = memberData ? `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim() || memberData.name : "";
-      if (fullName && fullName.length >= 3) {
+      for (const checkEmail of emailsToCheck) {
+        const { data: attendeeLinks } = await supabase
+          .from("meeting_attendees")
+          .select("meeting_id")
+          .eq("member_email", checkEmail);
+        (attendeeLinks || []).forEach((a) => meetingIds.add(a.meeting_id));
+      }
+
+      // Also match by full name in attendees array (for all emails to check)
+      const { data: memberRows } = await supabase
+        .from("members")
+        .select("first_name, last_name, name")
+        .in("email", emailsToCheck);
+      const namesToCheck = (memberRows || []).map((m) =>
+        (`${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || "").toLowerCase()
+      ).filter((n) => n.length >= 3);
+
+      if (namesToCheck.length > 0) {
         const { data: allMeetings } = await supabase.from("meetings").select("id, attendees").order("meeting_date", { ascending: false });
         for (const m of allMeetings || []) {
-          if (m.attendees?.some((a: string) => a.toLowerCase() === fullName.toLowerCase())) {
+          if (m.attendees?.some((a: string) => namesToCheck.includes(a.toLowerCase()))) {
             meetingIds.add(m.id);
           }
         }
       }
 
-      const { data: taskMeetings } = await supabase
-        .from("tasks")
-        .select("meeting_id")
-        .eq("assigned_to_email", email)
-        .not("meeting_id", "is", null);
-      for (const t of taskMeetings || []) {
-        if (t.meeting_id) meetingIds.add(t.meeting_id);
+      // Tasks linked to these meetings, for both emails
+      for (const checkEmail of emailsToCheck) {
+        const { data: taskMeetings } = await supabase
+          .from("tasks")
+          .select("meeting_id")
+          .eq("assigned_to_email", checkEmail)
+          .not("meeting_id", "is", null);
+        for (const t of taskMeetings || []) {
+          if (t.meeting_id) meetingIds.add(t.meeting_id);
+        }
       }
 
       if (meetingIds.size > 0) {

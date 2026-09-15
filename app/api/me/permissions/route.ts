@@ -28,5 +28,19 @@ export async function GET(req: Request) {
     .maybeSingle();
   if (pErr) console.error("me/permissions perms lookup failed:", pErr.message);
 
-  return NextResponse.json({ overrides: perms ?? null });
+  // If this member is scoped to another person, resolve their email so
+  // client code can filter tasks/minutes without an extra round-trip.
+  let enriched: Record<string, unknown> | null = perms ?? null;
+  if (perms?.scoped_to_member_id) {
+    const { data: scopedMember } = await serviceClient
+      .from("members")
+      .select("email, name")
+      .eq("id", perms.scoped_to_member_id)
+      .maybeSingle();
+    if (scopedMember) {
+      enriched = { ...perms, scoped_to_member_email: scopedMember.email, scoped_to_member_name: scopedMember.name };
+    }
+  }
+
+  return NextResponse.json({ overrides: enriched });
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "./supabase";
 import { formatDateUK } from "./dateUtils";
 import { COLOURS, SectionTitle, StatusBadge, PriorityBadge } from "./SharedUI";
-import { canSeeAllTasks, type UserCtx, type PermOverrides } from "./permissions";
+import { canSeeAllTasks, scopedToMemberEmail, type UserCtx, type PermOverrides } from "./permissions";
 
 type UserTask = {
   id: string;
@@ -50,6 +50,7 @@ export default function MyTasks() {
       if (p) overrides = p as PermOverrides;
       const ctx: UserCtx = { email: user.email, role: member.role, department: member.department, company: member.company, overrides };
       const canSeeAll = canSeeAllTasks(ctx);
+      const scopedEmail = scopedToMemberEmail(ctx);
       setSeeAll(canSeeAll);
 
       let query = supabase
@@ -58,7 +59,14 @@ export default function MyTasks() {
         .not("status", "in", '("Completed","Cancelled")')
         .order("due_date", { ascending: true });
 
-      if (!canSeeAll) {
+      if (canSeeAll && scopedEmail) {
+        // Scoped EA: show own tasks + the member they support (both directions)
+        const idClause = coAssignedIds.length > 0 ? `,id.in.(${coAssignedIds.join(",")})` : "";
+        query = query.or(
+          `assigned_to_email.eq.${user.email},assigned_by_email.eq.${user.email},` +
+          `assigned_to_email.eq.${scopedEmail},assigned_by_email.eq.${scopedEmail}${idClause}`
+        );
+      } else if (!canSeeAll) {
         const idClause = coAssignedIds.length > 0 ? `,id.in.(${coAssignedIds.join(",")})` : "";
         query = query.or(`assigned_to.eq.${name},assigned_to_email.eq.${user.email}${idClause}`);
       }
