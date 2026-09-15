@@ -76,10 +76,6 @@
       "schedule": "0 5 * * 1-5"
     },
     {
-      "path": "/api/notifications/whatsapp-weekly-digest",
-      "schedule": "30 4 * * 5"
-    },
-    {
       "path": "/api/notifications/whatsapp-team-digest",
       "schedule": "30 4 * * 5"
     },
