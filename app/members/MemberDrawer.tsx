@@ -249,6 +249,23 @@ const DEPT_BUS: Record<string, string[]> = {
   Sales: ["PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
   "S&M Investment": ["Property"], BINC: ["Nursing College"],
 };
+/** Departments that belong to a specific company — used to auto-set company on dept change */
+const DEPT_DEFAULT_COMPANY: Record<string, string> = {
+  "Retail Operations": "Imperial Footwear",
+  "Online": "Imperial Footwear",
+  "Supply Chain": "Imperial Footwear",
+  "Supply Chain Apparel": "Imperial Footwear",
+  "CCTV and Surveillance": "Imperial Footwear",
+  "Marketing": "Imperial Footwear",
+  "Finance": "Unze Group",
+  "HR": "Unze Group",
+  "Admin": "Unze Group",
+  "IT": "Unze Group",
+  "Audit": "Unze Group",
+  "Tax": "Unze Group",
+  "CEO": "Unze Group",
+  "Unze Trading Ops": "Unze Trading",
+};
 // Company list for member assignment — imported from constants (single source of truth)
 const MEMBER_COMPANIES = MEMBER_COMPANY_NAMES;
 function busFor(dept: string | null) { return dept ? DEPT_BUS[dept] || ALL_BUS : []; }
@@ -1047,7 +1064,15 @@ export default function MemberDrawer({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
               <Field label="Department" disabled={!canEdit}>
                 <select style={inp} value={member.department || ""} disabled={!canEdit}
-                  onChange={(e) => onUpdate(member.id, { department: e.target.value || null })}>
+                  onChange={(e) => {
+                    const dept = e.target.value || null;
+                    const updates: Record<string, string | null> = { department: dept };
+                    // Auto-set company when department has a known default
+                    if (dept && DEPT_DEFAULT_COMPANY[dept] && !member.company) {
+                      updates.company = DEPT_DEFAULT_COMPANY[dept];
+                    }
+                    onUpdate(member.id, updates);
+                  }}>
                   <option value="">—</option>
                   {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
                 </select>
