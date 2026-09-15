@@ -253,10 +253,10 @@ const DEPT_BUS: Record<string, string[]> = {
  * Department → default company mapping.
  * Used to auto-set company when a department is selected in the member editor.
  *
- * Unze Group:        Finance, HR, Audit, Tax, Admin, CEO, IT, CCTV and Surveillance
+ * Unze Group:        Finance, HR, Audit, Tax, Admin, CEO, IT
  * Unze Trading:      Unze Trading Ops
  * Imperial Footwear: Online, Supply Chain, Supply Chain Apparel, Marketing,
- *                    Retail Operations, Fit Out & Maintenance
+ *                    Retail Operations, Fit Out & Maintenance, CCTV and Surveillance
  */
 const DEPT_DEFAULT_COMPANY: Record<string, string> = {
   // Unze Group
@@ -267,7 +267,7 @@ const DEPT_DEFAULT_COMPANY: Record<string, string> = {
   "Admin":                 "Unze Group",
   "CEO":                   "Unze Group",
   "IT":                    "Unze Group",
-  "CCTV and Surveillance": "Unze Group",
+  "CCTV and Surveillance": "Imperial Footwear",
   // Unze Trading
   "Unze Trading Ops":      "Unze Trading",
   // Imperial Footwear
