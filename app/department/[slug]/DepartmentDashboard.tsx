@@ -89,7 +89,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
           const { data: tasks } = await supabase
             .from("tasks")
             .select("id, description, due_date, priority, status")
-            .eq("assigned_to_email", user.email)
+            .or(`assigned_to_email.eq.${user.email},assigned_by_email.eq.${user.email}`)
             .not("status", "in", '("Completed","Cancelled")')
             .order("due_date", { ascending: true })
             .limit(10);

@@ -70,7 +70,7 @@ export default function MyTasks() {
         );
       } else if (!canSeeAll) {
         const idClause = coAssignedIds.length > 0 ? `,id.in.(${coAssignedIds.join(",")})` : "";
-        query = query.or(`assigned_to.eq.${name},assigned_to_email.eq.${user.email}${idClause}`);
+        query = query.or(`assigned_to.eq.${name},assigned_to_email.eq.${user.email},assigned_by_email.eq.${user.email}${idClause}`);
       }
 
       const { data } = await query.limit(canSeeAll ? 30 : 15);
