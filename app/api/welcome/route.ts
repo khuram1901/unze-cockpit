@@ -239,7 +239,7 @@ export async function GET(request: NextRequest) {
               .eq("due_date", today),
           ]);
           return {
-            name:         m.first_name || m.name?.split(" ")[0] || m.email.split("@")[0],
+            name:         m.name || m.first_name || m.email.split("@")[0],
             email:        m.email,
             overdueCount: ov.count ?? 0,
             todayCount:   td.count ?? 0,
