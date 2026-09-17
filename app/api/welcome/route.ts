@@ -196,8 +196,8 @@ export async function GET(request: NextRequest) {
     const { data: teamMembers } = await supabase
       .from("members")
       .select("email, first_name, name")
-      .eq("department", department)
-      .eq("role", "Member")
+      .eq("manager_id", memberId)
+      .eq("is_active", true)
       .neq("email", auth.email);
 
     const emails = (teamMembers ?? []).map((m) => m.email);
