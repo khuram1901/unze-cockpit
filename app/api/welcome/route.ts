@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
   // ── 1. Member profile ───────────────────────────────────────
   const { data: member } = await supabase
     .from("members")
-    .select("id, first_name, name, role, department, company, photo_url")
+    .select("id, first_name, name, role, is_hod, department, company, photo_url")
     .eq("email", auth.email)
     .maybeSingle();
 
@@ -191,8 +191,11 @@ export async function GET(request: NextRequest) {
     myTasks:          myTasksRes.data   ?? [],
   };
 
-  // ── 3. Manager: team data ───────────────────────────────────
-  if (role === "Manager" && department && memberId) {
+  // ── 3. HOD / Manager / Director: team data ──────────────────
+  // Use is_hod flag as primary check so Directors and any other HOD role
+  // also get team data, not just those with role === "Manager".
+  const isHod = member?.is_hod === true || role === "Manager" || role === "Director";
+  if (isHod && department && memberId) {
     const { data: teamMembers } = await supabase
       .from("members")
       .select("email, first_name, name")
