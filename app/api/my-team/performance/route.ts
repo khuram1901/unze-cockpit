@@ -10,19 +10,25 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient();
 
-  // Check permission
+  // Check permission — Admins and CEOs bypass; everyone else needs explicit can_view_team_performance
   const { data: member } = await db
     .from("members")
-    .select("id, member_permissions(can_view_team_performance)")
+    .select("id, role")
     .eq("email", auth.email)
     .maybeSingle();
 
-  const perms = Array.isArray(member?.member_permissions)
-    ? member?.member_permissions[0]
-    : member?.member_permissions;
+  const isAdminOrCeo = member?.role === "Admin" || member?.role === "CEO";
 
-  if (!perms?.can_view_team_performance) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  if (!isAdminOrCeo) {
+    const { data: mp } = await db
+      .from("member_permissions")
+      .select("can_view_team_performance")
+      .eq("member_id", member?.id ?? "")
+      .maybeSingle();
+
+    if (!mp?.can_view_team_performance) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const { searchParams } = new URL(request.url);

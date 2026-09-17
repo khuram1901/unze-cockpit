@@ -1,10 +1,16 @@
 "use client";
 
-import { useRequireCapability } from "../lib/useRouteGuard";
+import AuthWrapper from "../lib/AuthWrapper";
 import MyTeamPerformance from "./MyTeamPerformance";
+import { useMobile } from "../lib/useMobile";
 
 export default function MyTeamPage() {
-  const { checking } = useRequireCapability("team_performance");
-  if (checking) return null;
-  return <MyTeamPerformance />;
+  const isMobile = useMobile();
+  return (
+    <AuthWrapper>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
+        <MyTeamPerformance />
+      </main>
+    </AuthWrapper>
+  );
 }
