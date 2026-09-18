@@ -42,18 +42,35 @@ export type MemberAccess = {
 };
 
 export async function getMemberAccess(email: string): Promise<MemberAccess> {
+  // 18/09/2026: switched from embedded join to two-step lookup — same fix as
+  // api/me/permissions (09/09/2026). The embedded join
+  // `member_permissions(can_view_hr_full_data)` was silently failing in
+  // production: PostgREST returned {data:null, error:{...}} which the
+  // original code destructured as `{ data }` (error ignored), leaving
+  // role="" and department="" — hrFull=false — and every non-Admin user
+  // got a 403 on every HR route. Two-step lookup is immune to this class
+  // of failure.
   const db = createServiceClient();
-  const { data } = await db
+  const { data: member, error: mErr } = await db
     .from("members")
-    .select("id, role, department, member_permissions(can_view_hr_full_data)")
+    .select("id, role, department")
     .eq("email", email)
     .maybeSingle();
-  const role = data?.role ?? "";
-  const department = data?.department ?? "";
-  const perms = Array.isArray(data?.member_permissions)
-    ? data?.member_permissions[0]
-    : data?.member_permissions;
-  const override = perms?.can_view_hr_full_data === true;
+  if (mErr) console.error("getMemberAccess members lookup failed:", mErr.message);
+  const role = member?.role ?? "";
+  const department = member?.department ?? "";
+
+  let override = false;
+  if (member?.id) {
+    const { data: perms, error: pErr } = await db
+      .from("member_permissions")
+      .select("can_view_hr_full_data")
+      .eq("member_id", member.id)
+      .maybeSingle();
+    if (pErr) console.error("getMemberAccess perms lookup failed:", pErr.message);
+    override = perms?.can_view_hr_full_data === true;
+  }
+
   const hrFull =
     role === "Admin" || role === "CEO" ||
     ((role === "Manager" || role === "Director") && department === "HR") ||

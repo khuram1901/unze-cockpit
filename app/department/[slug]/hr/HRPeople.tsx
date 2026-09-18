@@ -50,6 +50,7 @@ export default function HRPeople() {
   const [showLeavers, setShowLeavers] = useState(false);
   const [loading, setLoading]   = useState(true);
   const [listLoading, setListLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [company, setCompany]       = useState("");
   const [department, setDepartment] = useState("");
   const [station, setStation]       = useState("");
@@ -74,13 +75,21 @@ export default function HRPeople() {
   useEffect(() => {
     (async () => {
       setLoading(true);
+      setFetchError(null);
       try {
         const params = new URLSearchParams({ section: "people" });
         if (company) params.set("company", company);
         if (department) params.set("department", department);
         if (station) params.set("station", station);
         const res = await authFetch(`/api/hr/overview?${params.toString()}`);
-        if (res.ok) setOverview(await res.json());
+        if (res.ok) {
+          setOverview(await res.json());
+        } else {
+          const body = await res.json().catch(() => ({}));
+          setFetchError(`HR data unavailable (${res.status}${body?.error ? ": " + body.error : ""})`);
+        }
+      } catch (e: unknown) {
+        setFetchError(`Network error: ${e instanceof Error ? e.message : String(e)}`);
       } finally { setLoading(false); }
     })();
   }, [company, department, station]);
@@ -136,6 +145,17 @@ export default function HRPeople() {
           }}>Clear</button>
         )}
       </div>
+
+      {/* Error banner — shown when the API returns a non-2xx (e.g. 401/403/500) */}
+      {fetchError && (
+        <div style={{
+          padding: "10px 14px", marginBottom: "14px", borderRadius: RADII.SM,
+          backgroundColor: "#fff5f5", border: "1px solid #fed7d7", color: "#c53030",
+          fontSize: "13px",
+        }}>
+          {fetchError}
+        </div>
+      )}
 
       {/* Headcount cards */}
       <div style={{
