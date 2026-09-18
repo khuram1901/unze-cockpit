@@ -16,6 +16,7 @@ type Member = {
   role: string;
   department: string | null;
   business_unit: string | null;
+  company: string | null;
 };
 
 type DepartmentOwner = {
@@ -140,7 +141,7 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
       const [membersRes, ownersRes, companiesRes, deptsRes] = await Promise.all([
         supabase
           .from("members")
-          .select("id, name, email, role, department, business_unit")
+          .select("id, name, email, role, department, business_unit, company")
           .eq("is_active", true)
           .order("name", { ascending: true }),
 
@@ -297,7 +298,23 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
   const selectedOwner = departmentOwners.find((d) => d.department_name === project);
 
   function toggleAssignee(id: string, checked: boolean) {
-    setAssignedToIds((prev) => checked ? [...prev, id] : prev.filter((x) => x !== id));
+    setAssignedToIds((prev) => {
+      const next = checked ? [...prev, id] : prev.filter((x) => x !== id);
+
+      // Auto-fill company from the first assignee's record (only if not already touched)
+      if (checked && !companyTouched) {
+        const member = members.find((m) => m.id === id);
+        if (member?.company) {
+          const match = companies.find((c) => c.name === member.company);
+          if (match) {
+            setCompanyId(match.id);
+            setCompanyTouched(true);
+          }
+        }
+      }
+
+      return next;
+    });
   }
 
   return (
