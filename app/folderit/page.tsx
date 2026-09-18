@@ -1289,6 +1289,158 @@ function FilingHealthTab({ initialCompany, initialType }: { initialCompany?: str
   );
 }
 
+// ── Pending Approvals card — shown above the tabs when the user has items ──
+
+type ApprovalItem = {
+  section: string;
+  item_uid: string;
+  file_uid: string;
+  name: string;
+  account_name: string;
+  status: string;
+  created_at: string;
+  days_pending: number;
+};
+
+function PendingApprovalsCard() {
+  const setPreview = useContext(PreviewContext);
+  const [items, setItems]     = useState<ApprovalItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+
+  useEffect(() => {
+    authFetch("/api/folderit/details")
+      .then((r) => r.json())
+      .then((d) => {
+        const approvals = (d.items ?? []).filter(
+          (i: ApprovalItem) => i.section === "approval"
+        );
+        setItems(approvals);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleOpen = async (item: ApprovalItem) => {
+    if (previewing) return;
+    setPreviewing(item.item_uid);
+    try {
+      const url = await fetchPreviewBlobUrl(item.file_uid);
+      setPreview({ url, name: item.name });
+    } catch {
+      // file-url errors are non-fatal — just open Folderit directly
+    } finally {
+      setPreviewing(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "14px 18px", marginBottom: "20px", fontSize: "13px", color: COLOURS.SLATE }}>
+        Loading pending approvals…
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: items.length > 0 ? COLOURS.CARD : COLOURS.CARD,
+      border: `1px solid ${items.length > 0 ? COLOURS.AMBER : COLOURS.HAIRLINE}`,
+      borderRadius: RADII.CARD,
+      marginBottom: "20px",
+      overflow: "hidden",
+    }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: "10px",
+        padding: "12px 18px",
+        borderBottom: items.length > 0 ? `1px solid ${COLOURS.HAIRLINE}` : "none",
+        background: items.length > 0 ? `${COLOURS.AMBER}12` : "transparent",
+      }}>
+        <span style={{ fontSize: "16px" }}>{items.length > 0 ? "⏳" : "✅"}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>
+            Pending Approvals
+            {items.length > 0 && (
+              <span style={{
+                marginLeft: "8px", fontSize: "11px", fontWeight: 700,
+                background: COLOURS.AMBER, color: "#fff",
+                borderRadius: "10px", padding: "1px 7px",
+              }}>
+                {items.length}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+            {items.length === 0
+              ? "No documents are waiting for your signature or approval."
+              : "Documents in Folderit that require your sign-off."}
+          </div>
+        </div>
+      </div>
+
+      {/* Item list */}
+      {items.length > 0 && (
+        <div>
+          {items.map((item, idx) => (
+            <div
+              key={item.item_uid}
+              style={{
+                display: "flex", alignItems: "center", gap: "12px",
+                padding: "10px 18px",
+                borderBottom: idx < items.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none",
+                background: previewing === item.item_uid ? COLOURS.CARD_ALT : "transparent",
+                transition: "background 0.15s",
+              }}
+            >
+              {/* File icon */}
+              <span style={{ fontSize: "18px", flexShrink: 0 }}>📄</span>
+
+              {/* Name + company */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <button
+                  onClick={() => handleOpen(item)}
+                  disabled={!!previewing}
+                  style={{
+                    background: "none", border: "none", cursor: previewing ? "wait" : "pointer",
+                    padding: 0, textAlign: "left",
+                    fontSize: "13px", fontWeight: 500, color: COLOURS.NAVY,
+                    textDecoration: "underline", textUnderlineOffset: "2px",
+                    maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={item.name}
+                >
+                  {previewing === item.item_uid ? "Loading preview…" : item.name}
+                </button>
+                <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                  {item.account_name}
+                </div>
+              </div>
+
+              {/* Status badge */}
+              <span style={{
+                fontSize: "10.5px", fontWeight: 600, borderRadius: "8px",
+                padding: "2px 8px", flexShrink: 0,
+                background: item.status === "active" ? `${COLOURS.GREEN}20` : `${COLOURS.AMBER}20`,
+                color: item.status === "active" ? COLOURS.GREEN : COLOURS.AMBER,
+                textTransform: "capitalize",
+              }}>
+                {item.status === "pendingInvite" ? "Invite Pending" : item.status === "active" ? "Active" : "Pending"}
+              </span>
+
+              {/* Age */}
+              <span style={{ fontSize: "11.5px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "52px", textAlign: "right" }}>
+                {item.days_pending === 0 ? "Today" : `${item.days_pending}d ago`}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ── Dashboard shell — ONE dashboard for everyone ────────────────────────────
 //
 // Khuram (22/07/2026): "I want everyone who has access to the relevant
@@ -1348,6 +1500,9 @@ function FolderitDashboard() {
             <GlobalSearchBox />
           </div>
         )}
+
+        {/* Pending Approvals — personal sign-off queue, always visible */}
+        <PendingApprovalsCard />
 
         {/* Tab bar */}
         <div style={{ display: "flex", gap: "0", borderBottom: `2px solid ${COLOURS.BORDER}`, marginBottom: "20px" }}>

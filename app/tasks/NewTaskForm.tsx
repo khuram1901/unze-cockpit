@@ -446,9 +446,22 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
               padding: "8px 10px", maxHeight: "160px", overflowY: "auto", display: "flex", flexWrap: "wrap", gap: "8px",
               backgroundColor: COLOURS.CARD,
             }}>
-              {members
-                .filter((m) => !assigneeSearch.trim() || m.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase()))
-                .map((m) => {
+              {(() => {
+                // Always show checked members + filter by department (if selected) + name search
+                const filtered = members.filter((m) => {
+                  const nameMatch = !assigneeSearch.trim() || m.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase());
+                  // If a department is selected, show only members in that dept (but always show already-checked ones)
+                  const deptMatch = !project || m.department === project || assignedToIds.includes(m.id);
+                  return nameMatch && deptMatch;
+                });
+                if (filtered.length === 0) {
+                  return (
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>
+                      {assigneeSearch.trim() ? `No members match "${assigneeSearch}"` : "No members found."}
+                    </span>
+                  );
+                }
+                return filtered.map((m) => {
                   const checked = assignedToIds.includes(m.id);
                   const isPrimary = assignedToIds[0] === m.id;
                   return (
@@ -457,13 +470,8 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
                       {m.name}{isPrimary && <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.BLUE }}> (primary)</span>}
                     </label>
                   );
-                })
-              }
-              {members.filter((m) => !assigneeSearch.trim() || m.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase())).length === 0 && (
-                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>
-                  {assigneeSearch.trim() ? `No members match "${assigneeSearch}"` : "No members found."}
-                </span>
-              )}
+                });
+              })()}
             </div>
           </div>
 
