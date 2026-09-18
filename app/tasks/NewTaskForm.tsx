@@ -33,19 +33,7 @@ type Company = {
 };
 
 
-const PROJECT_AREAS = [
-  "Unze Trading Ops",
-  "Finance",
-  "HR",
-  "Admin",
-  "IT",
-  "Tax",
-  "Legal",
-  "Sales",
-  "Audit",
-  "S&M Investment",
-  "BINC",
-];
+// Departments are now loaded dynamically from the departments table — see loadInitialData().
 
 // "Completed" is deliberately NOT offered as a starting status — found
 // during the 15 Jul 2026 full-app audit that offering it here let anyone
@@ -97,6 +85,7 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
   const [members, setMembers] = useState<Member[]>([]);
   const [departmentOwners, setDepartmentOwners] = useState<DepartmentOwner[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [projectAreas, setProjectAreas] = useState<string[]>([]);
 
   const [description, setDescription] = useState(prefillDescription);
   const [companyId, setCompanyId] = useState<string>(""); // "" = Group / needs review
@@ -148,7 +137,7 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
 
       setAssignedBy(memberData?.name || currentEmail);
 
-      const [membersRes, ownersRes, companiesRes] = await Promise.all([
+      const [membersRes, ownersRes, companiesRes, deptsRes] = await Promise.all([
         supabase
           .from("members")
           .select("id, name, email, role, department, business_unit")
@@ -168,6 +157,12 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
           .select("id, name, short_code")
           .in("short_code", TASK_COMPANY_CODES)
           .order("name", { ascending: true }),
+
+        supabase
+          .from("departments")
+          .select("department_name")
+          .eq("active", true)
+          .order("department_name", { ascending: true }),
       ]);
 
       // CEO assignment lock (Khuram, 24/07/2026): the CEOs never appear
@@ -176,6 +171,7 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
       if (membersRes.data) setMembers(filterAssignableMembers(membersRes.data, currentEmail));
       if (ownersRes.data) setDepartmentOwners(ownersRes.data);
       if (companiesRes.data) setCompanies(companiesRes.data);
+      if (deptsRes.data) setProjectAreas(deptsRes.data.map((d) => d.department_name));
     }
 
     loadInitialData();
@@ -365,7 +361,7 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
             >
               <option value="">-- Select department / area --</option>
               <option value="Executive Office">Executive Office</option>
-              {PROJECT_AREAS.map((area) => (
+              {projectAreas.map((area) => (
                 <option key={area}>{area}</option>
               ))}
             </select>
