@@ -141,8 +141,15 @@ async function syncAccountApprovals(
         errors.push(`${account.account_name}: audit fetch page ${page} — ${auditRes.status}`);
         break;
       }
-      const json = (await auditRes.json()) as AuditEntry[] | { entries?: AuditEntry[]; data?: AuditEntry[] } | null;
-      const entries: AuditEntry[] = Array.isArray(json) ? json : (json?.entries ?? json?.data ?? []);
+      // Folderit's accountLog endpoint may return entries under different
+      // keys depending on API version — handle all known shapes.
+      const json = (await auditRes.json()) as
+        | AuditEntry[]
+        | { entries?: AuditEntry[]; data?: AuditEntry[]; items?: AuditEntry[]; results?: AuditEntry[]; auditTrail?: AuditEntry[] }
+        | null;
+      const entries: AuditEntry[] = Array.isArray(json)
+        ? json
+        : (json?.entries ?? json?.data ?? json?.items ?? json?.results ?? json?.auditTrail ?? []);
       if (!entries.length) break;
       auditEntriesScanned += entries.length;
       for (const entry of entries) {
@@ -153,6 +160,32 @@ async function syncAccountApprovals(
       }
       if (entries.length < AUDIT_PER_PAGE) break; // last page
     }
+    // Also re-check any file UIDs already stored in our DB for this account
+    // (covers approvals older than the 30-day audit lookback window).
+    const { data: existingInvites } = await db
+      .from("folderit_resolution_invites")
+      .select("file_uid")
+      .eq("account_uid", account.account_uid);
+    for (const row of existingInvites ?? []) {
+      if (row.file_uid) candidateEntityUids.add(row.file_uid);
+    }
+
+    // If the audit trail returned nothing at all (auditEntriesScanned === 0),
+    // fall back to scanning all known files for this account. This catches
+    // approvals created before our sync started or older than 30 days.
+    // Capped at 200 most-recent files to stay within Vercel's timeout.
+    if (auditEntriesScanned === 0) {
+      const { data: allFiles } = await db
+        .from("folderit_all_files")
+        .select("file_uid")
+        .eq("account_uid", account.account_uid)
+        .order("synced_at", { ascending: false })
+        .limit(200);
+      for (const row of allFiles ?? []) {
+        if (row.file_uid) candidateEntityUids.add(row.file_uid);
+      }
+    }
+
     const candidatesFound = candidateEntityUids.size;
 
     const currentInviteUids: string[] = [];
