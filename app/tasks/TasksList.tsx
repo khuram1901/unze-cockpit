@@ -210,6 +210,10 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // shared with someone else, not only ones where you're the primary owner.
   const [assigneesByTask, setAssigneesByTask] = useState<Map<string, string[]>>(new Map());
   const [myCoAssignedTaskIds, setMyCoAssignedTaskIds] = useState<Set<string>>(new Set());
+  // Direct reports' emails — used both in the query and in the Mine-view
+  // "My Team's Tasks" section so managers see their team's work without
+  // having to switch to "Everyone".
+  const [myReportEmailsState, setMyReportEmailsState] = useState<string[]>([]);
   // Bulk select — List view only, per Khuram. Move/change status/company/
   // owner across many tasks at once instead of one at a time.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -257,6 +261,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         myReportEmails = (reports || []).map((r) => r.email).filter((e): e is string => !!e);
       }
     }
+    // Persist so the Mine view "My Team's Tasks" section can use it.
+    setMyReportEmailsState(myReportEmails);
 
     let query = supabase
       .from("tasks")
@@ -790,6 +796,20 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         // Already surfaced above as an action item
         if (t.status === "Submitted") return false;
         if (t.status === "Waiting Reply" && t.reply_required) return false;
+        return true;
+      })
+    : [];
+
+  // ── My Team's Tasks (Mine view, managers only) — tasks assigned TO a
+  // direct report by someone other than the current user. These show on
+  // the home page via RLS but were invisible in Mine view without this
+  // section (required switching to Everyone). Fix: Khuram, 19/09/2026.
+  const teamTasksSection = myTasksScope === "mine" && myReportEmailsState.length > 0
+    ? allOpen.filter((t) => {
+        if (!t.assigned_to_email) return false;
+        if (!myReportEmailsState.includes(t.assigned_to_email.toLowerCase())) return false;
+        if (myTasksSource.some((m) => m.id === t.id)) return false;
+        if (delegatedByMe.some((d) => d.id === t.id)) return false;
         return true;
       })
     : [];
@@ -1759,6 +1779,22 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               <div style={{ ...cardStyle, overflow: "hidden" }}>
                 {sortListTasks(delegatedByMe)
                   .map((t) => <TaskRow key={t.id} task={t} selectable />)}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ MY TEAM'S TASKS — tasks assigned TO direct reports by others.
+              Visible on home via RLS; was invisible in Mine view before this. ═══ */}
+          {!listFilteredTasks && teamTasksSection.length > 0 && (
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.BLUE, display: "inline-block" }} />
+                <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>My Team&apos;s Tasks</span>
+                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{teamTasksSection.length}</span>
+                <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— assigned to your team by others</span>
+              </div>
+              <div style={{ ...cardStyle, overflow: "hidden" }}>
+                {sortListTasks(teamTasksSection).map((t) => <TaskRow key={t.id} task={t} selectable />)}
               </div>
             </div>
           )}
