@@ -171,16 +171,18 @@ async function syncAccountApprovals(
     }
 
     // If the audit trail returned nothing at all (auditEntriesScanned === 0),
-    // fall back to scanning all known files for this account. This catches
-    // approvals created before our sync started or older than 30 days.
-    // Capped at 200 most-recent files to stay within Vercel's timeout.
+    // fall back to scanning the most-recently-created known files for this
+    // account. This catches approvals created before our sync started or older
+    // than 30 days. Capped at 25 per account (≈200 candidates across 8
+    // accounts) so we stay within Folderit's API rate limits and Vercel's
+    // 30-second function timeout.
     if (auditEntriesScanned === 0) {
       const { data: allFiles } = await db
         .from("folderit_all_files")
         .select("file_uid")
         .eq("account_uid", account.account_uid)
-        .order("synced_at", { ascending: false })
-        .limit(200);
+        .order("created_at_folderit", { ascending: false })
+        .limit(25);
       for (const row of allFiles ?? []) {
         if (row.file_uid) candidateEntityUids.add(row.file_uid);
       }
