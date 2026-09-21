@@ -137,7 +137,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
     // off needed on what it creates) apart from one built for someone
     // else (sign-off needed), per Khuram's 17/07/2026 request.
     const { data: userData } = await supabase.auth.getUser();
-    const { error } = await supabase.from("recurring_tasks").insert({
+    const { data: newRows, error } = await supabase.from("recurring_tasks").insert({
       description: desc, assigned_to: assignTo || null,
       assigned_to_email: member?.email || null, assigned_to_department: member?.department || null,
       assigned_by: "Recurring Template", priority, project: project || null,
@@ -146,11 +146,22 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       day_of_month: frequency === "monthly" ? dayOfMonth : null,
       due_days_after: Number(dueDays) || 3, active: true,
       created_by_email: userData.user?.email || null,
-    });
+    }).select("id");
     setSaving(false);
     if (error) {
       alert("Error saving recurring task: " + error.message);
       return;
+    }
+    // Spawn the first task instance immediately so the assignee sees it right away —
+    // the cron only fires on schedule (daily/weekly/monthly), so without this
+    // the assignee would have to wait until the next cycle.
+    const newId = newRows?.[0]?.id;
+    if (newId) {
+      fetch("/api/tasks/recurring/fire-now", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId: newId }),
+      }).catch(() => { /* non-critical — cron will pick it up on next cycle */ });
     }
     logAction("Created", "recurring_tasks", `${desc} (${frequency})`);
     setDesc(""); setAssignTo(""); setCompanyId(""); setPriority("Normal"); setProject(""); setFrequency("weekly"); setDueDays("3");
