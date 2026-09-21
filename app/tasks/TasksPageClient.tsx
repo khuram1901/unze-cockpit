@@ -30,6 +30,11 @@ export default function TasksPageClient() {
   const [showQuick,      setShowQuick]      = useState(voiceParam || !!textParam);
   const [showFull,       setShowFull]       = useState(false);
   const [fullPrefill,    setFullPrefill]    = useState("");
+  // Increments every time openFull() is called — used as the key on NewTaskForm
+  // so React always unmounts/remounts with fresh state, regardless of whether
+  // the prefill text changed (key={fullPrefill} silently fails when the same
+  // text is typed twice because React bails out of the no-op state update).
+  const [fullOpenCount,  setFullOpenCount]  = useState(0);
   const [autoStartVoice, setAutoStartVoice] = useState(voiceParam);
 
   if (loading) return <p style={{ color: COLOURS.SLATE }}>Loading tasks…</p>;
@@ -43,6 +48,7 @@ export default function TasksPageClient() {
   const scopedEmail = ctx ? scopedToMemberEmail(ctx) : null;
 
   function openFull(prefill = "") {
+    setFullOpenCount((c) => c + 1); // always force a fresh NewTaskForm mount
     setFullPrefill(prefill);
     setShowQuick(false);
     setShowFull(true);
@@ -89,9 +95,10 @@ export default function TasksPageClient() {
       {/* ── Full form modal ──────────────────────────────────────────── */}
       {canCreate && (
         <Modal open={showFull} onClose={() => setShowFull(false)}>
-          {/* key={fullPrefill} forces a fresh mount whenever the prefill text changes, so
-              useState(prefillDescription) in NewTaskForm always initialises from the latest value. */}
-          <NewTaskForm key={fullPrefill} onCreated={() => setShowFull(false)} prefillDescription={fullPrefill} />
+          {/* key={fullOpenCount} forces a fresh mount every time More Options is clicked —
+              even if the prefill text hasn't changed — so useState(prefillDescription) in
+              NewTaskForm always initialises from the latest value rather than reusing stale state. */}
+          <NewTaskForm key={fullOpenCount} onCreated={() => setShowFull(false)} prefillDescription={fullPrefill} />
         </Modal>
       )}
 
