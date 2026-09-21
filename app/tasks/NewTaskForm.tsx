@@ -89,6 +89,10 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
   const [projectAreas, setProjectAreas] = useState<string[]>([]);
 
   const [description, setDescription] = useState(prefillDescription);
+  // Re-sync if the parent updates the prefill after mount (e.g. "More options" called twice
+  // in the same session — React 18 batching means the state update and the modal open land
+  // in the same render, but this guard covers edge cases where the prop arrives late).
+  useEffect(() => { setDescription(prefillDescription); }, [prefillDescription]);
   const [companyId, setCompanyId] = useState<string>(""); // "" = Group / needs review
   const [companyTouched, setCompanyTouched] = useState(false); // must actively pick, "" is a real choice not a default
   const [project, setProject] = useState("");
@@ -301,15 +305,22 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
     setAssignedToIds((prev) => {
       const next = checked ? [...prev, id] : prev.filter((x) => x !== id);
 
-      // Auto-fill company from the first assignee's record (only if not already touched)
-      if (checked && !companyTouched) {
+      if (checked) {
         const member = members.find((m) => m.id === id);
-        if (member?.company) {
+
+        // Auto-fill company from the first assignee's record (only if not already touched)
+        if (!companyTouched && member?.company) {
           const match = companies.find((c) => c.name === member.company);
           if (match) {
             setCompanyId(match.id);
             setCompanyTouched(true);
           }
+        }
+
+        // Auto-fill department (project) from the first assignee when none is set.
+        // Prevents the assignee list from immediately re-filtering to hide other members.
+        if (!project && member?.department) {
+          setProject(member.department);
         }
       }
 
@@ -450,8 +461,10 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
                 // Always show checked members + filter by department (if selected) + name search
                 const filtered = members.filter((m) => {
                   const nameMatch = !assigneeSearch.trim() || m.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase());
-                  // If a department is selected, show only members in that dept (but always show already-checked ones)
-                  const deptMatch = !project || m.department === project || assignedToIds.includes(m.id);
+                  // If a department is selected, show members in that dept — but also show members with no
+                  // department set (FlowHCM dept names can differ from app dept names, so hiding them would
+                  // silently exclude real staff). Always show already-checked ones.
+                  const deptMatch = !project || !m.department || m.department === project || assignedToIds.includes(m.id);
                   return nameMatch && deptMatch;
                 });
                 if (filtered.length === 0) {

@@ -34,6 +34,8 @@ export type DepartmentConfig = {
   columns: ColumnDef[];
   formFields: FormField[];
   kpis: KPIDef[];
+  /** When true this dept serves all companies — no company filter is applied on data queries. */
+  crossCompany?: boolean;
   statusField: string;
   statusOptions: string[];
 };
@@ -42,6 +44,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
   {
     slug: "audit",
     title: "Internal Audit",
+    crossCompany: true,
     departmentName: "Audit",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "audit_plan_items",
@@ -78,6 +81,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
   {
     slug: "hr",
     title: "Human Resources",
+    crossCompany: true,
     departmentName: "HR",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "recruitment_positions",
@@ -107,6 +111,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
   {
     slug: "taxation",
     title: "Tax Notices",
+    crossCompany: true,
     departmentName: "Tax",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "legal_notices",
@@ -144,6 +149,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
   {
     slug: "admin",
     title: "Administration",
+    crossCompany: false,
     departmentName: "Admin",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "tasks",
@@ -176,6 +182,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
   {
     slug: "it",
     title: "Information Technology",
+    crossCompany: true,
     departmentName: "IT",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "tasks",
@@ -206,6 +213,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
   {
     slug: "ops",
     title: "Unze Trading Operations",
+    crossCompany: false,
     departmentName: "Unze Trading Ops",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "tasks",

@@ -105,7 +105,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
     const today = new Date().toISOString().slice(0, 10);
     const [tmplRes, memRes, companiesRes, cycleRes] = await Promise.all([
       supabase.from("recurring_tasks").select("id, description, assigned_to, assigned_to_email, assigned_to_department, assigned_by, priority, project, frequency, day_of_week, day_of_month, due_days_after, active, last_created_at, company_id").order("created_at", { ascending: false }),
-      supabase.from("members").select("name, email, department, first_name, last_name"),
+      supabase.from("members").select("name, email, department, first_name, last_name").eq("is_active", true),
       supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
       supabase.rpc("get_recurring_task_cycle_status", { p_today: today }),
     ]);
@@ -126,8 +126,12 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
     const member = members.find((m) => memberName(m) === assignTo);
+    if (assignTo && !member?.email) {
+      alert("Could not resolve an email address for the selected member. Please re-select.");
+      return;
+    }
+    setSaving(true);
     // created_by_email (migration 143) — lets the cron that spins out each
     // cycle's task tell a self-built recurring template (no manager sign-
     // off needed on what it creates) apart from one built for someone
@@ -179,8 +183,12 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
   }
 
   async function saveEdit(id: string) {
-    setSavingEdit(true);
     const member = members.find((m) => memberName(m) === editAssignTo);
+    if (editAssignTo && !member?.email) {
+      alert("Could not resolve an email address for the selected member. Please re-select.");
+      return;
+    }
+    setSavingEdit(true);
     const { error } = await supabase.from("recurring_tasks").update({
       description: editDesc,
       assigned_to: editAssignTo || null,

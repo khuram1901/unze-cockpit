@@ -309,6 +309,18 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
+    // Also enforce can_create_tasks from member_permissions — same gate as the web app
+    const { data: senderPerms } = await supabase
+      .from("member_permissions")
+      .select("can_create_tasks")
+      .eq("member_id", sender.id)
+      .maybeSingle();
+    if (senderPerms?.can_create_tasks === false) {
+      await sendReply(from, `Hi ${fullName(sender).split(" ")[0]} — you do not have permission to create tasks. Contact an admin to enable it.`);
+      await logOutcome("not_permitted");
+      continue;
+    }
+
     // Is this a reply to a pending "when is it due?" question?
     const { data: pendingRows } = await supabase
       .from("whatsapp_pending_tasks").select("*").eq("sender_phone", from).limit(1);

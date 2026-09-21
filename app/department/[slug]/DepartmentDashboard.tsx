@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
-import { UTPL_COMPANY_ID } from "../../lib/constants";
+import { UTPL_COMPANY_ID, COMPANIES } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
 import {
@@ -46,33 +46,12 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
   async function loadData() {
     setLoading(true);
     setMyTasks([]);
-    // Row-level display columns only — the KPI tiles above the table come
-    // from get_department_kpi_counts (migration 130), not from these rows.
-    const displayColumns = Array.from(new Set(["id", config.statusField, ...config.columns.map((c) => c.key)])).join(", ");
-    let query = supabase
-      .from(config.table)
-      .select(displayColumns)
-      .order("created_at", { ascending: false });
 
-    if (config.table === "tasks") {
-      query = query.eq("assigned_to_department", config.departmentName);
-    } else {
-      query = query.eq("company_id", UTPL_COMPANY_ID);
-    }
-
-    const [{ data }, { data: countsData }] = await Promise.all([
-      query,
-      supabase.rpc("get_department_kpi_counts", {
-        p_slug: config.slug,
-        p_department_name: config.departmentName,
-        p_company_id: UTPL_COMPANY_ID,
-        p_today: new Date().toISOString().slice(0, 10),
-      }),
-    ]);
-    setRows((data as unknown as Record<string, unknown>[]) || []);
-    setKpiCounts((countsData as Record<string, number>) || {});
-
+    // ── 1. Resolve user identity and company FIRST so queries can be scoped ──
     const { data: { user } } = await supabase.auth.getUser();
+    let resolvedCompanyId: string | null = null;
+    let builtCtx: UserCtx | null = null;
+
     if (user?.email) {
       const { data: member } = await supabase
         .from("members").select("id, first_name, last_name, name, role, department, company")
@@ -82,20 +61,60 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
         let overrides: PermOverrides | null = null;
         const p = await loadMyPermissions();
         if (p) overrides = p as PermOverrides;
-        const ctx: UserCtx = { email: user.email, role: member.role, department: member.department, company: member.company, overrides };
-        setUserCtx(ctx);
-        if (!canSeeAllTasks(ctx)) {
-          const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || user.email;
-          const { data: tasks } = await supabase
-            .from("tasks")
-            .select("id, description, due_date, priority, status")
-            .or(`assigned_to_email.eq.${user.email},assigned_by_email.eq.${user.email}`)
-            .not("status", "in", '("Completed","Cancelled")')
-            .order("due_date", { ascending: true })
-            .limit(10);
-          setMyTasks(tasks || []);
-        }
+        builtCtx = { email: user.email, role: member.role, department: member.department, company: member.company, overrides };
+        setUserCtx(builtCtx);
+        // Resolve company name → UUID so queries can use company_id
+        resolvedCompanyId = COMPANIES.find(c => c.name === member.company)?.id ?? null;
       }
+    }
+
+    // ── 2. Build scoped data query ──
+    // crossCompany depts (Audit, HR, IT, Tax) serve the whole group — no company filter.
+    // Company-specific depts (Admin, Ops, …) scope to the logged-in user's company.
+    const displayColumns = Array.from(new Set(["id", config.statusField, ...config.columns.map((c) => c.key)])).join(", ");
+    let query = supabase
+      .from(config.table)
+      .select(displayColumns)
+      .order("created_at", { ascending: false });
+
+    if (config.table === "tasks") {
+      query = query.eq("assigned_to_department", config.departmentName);
+      if (!config.crossCompany && resolvedCompanyId) {
+        query = query.eq("company_id", resolvedCompanyId);
+      }
+    } else if (!config.crossCompany) {
+      // Non-task tables for company-specific depts: scope to user's company
+      query = query.eq("company_id", resolvedCompanyId ?? UTPL_COMPANY_ID);
+    }
+    // crossCompany + non-task table (audit_plan_items, legal_notices, recruitment_positions):
+    // no company filter — the full group view is correct
+
+    // KPI RPC: for cross-company depts, pass null company so it counts across all entities;
+    // for company-specific depts, pass the user's company.
+    const kpiCompanyId = config.crossCompany ? null : (resolvedCompanyId ?? UTPL_COMPANY_ID);
+
+    const [{ data }, { data: countsData }] = await Promise.all([
+      query,
+      supabase.rpc("get_department_kpi_counts", {
+        p_slug: config.slug,
+        p_department_name: config.departmentName,
+        p_company_id: kpiCompanyId,
+        p_today: new Date().toISOString().slice(0, 10),
+      }),
+    ]);
+    setRows((data as unknown as Record<string, unknown>[]) || []);
+    setKpiCounts((countsData as Record<string, number>) || {});
+
+    // ── 3. Personal tasks for non-privileged users ──
+    if (builtCtx && !canSeeAllTasks(builtCtx) && user?.email) {
+      const { data: tasks } = await supabase
+        .from("tasks")
+        .select("id, description, due_date, priority, status")
+        .or(`assigned_to_email.eq.${user.email},assigned_by_email.eq.${user.email}`)
+        .not("status", "in", '("Completed","Cancelled")')
+        .order("due_date", { ascending: true })
+        .limit(10);
+      setMyTasks(tasks || []);
     }
 
     setLoading(false);
@@ -114,7 +133,13 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
     e.preventDefault();
     setSaving(true);
 
-    const record: Record<string, unknown> = { company_id: UTPL_COMPANY_ID };
+    // Use the logged-in user's company for company-specific depts;
+    // for cross-company depts (Audit, HR, IT, Tax) keep existing UTPL default
+    // until those forms get a company picker of their own.
+    const insertCompanyId = (!config.crossCompany && userCtx)
+      ? (COMPANIES.find(c => c.name === userCtx.company)?.id ?? UTPL_COMPANY_ID)
+      : UTPL_COMPANY_ID;
+    const record: Record<string, unknown> = { company_id: insertCompanyId };
 
     for (const field of config.formFields) {
       const val = formData[field.key] || "";

@@ -89,7 +89,9 @@ export default function TasksPageClient() {
       {/* ── Full form modal ──────────────────────────────────────────── */}
       {canCreate && (
         <Modal open={showFull} onClose={() => setShowFull(false)}>
-          <NewTaskForm onCreated={() => setShowFull(false)} prefillDescription={fullPrefill} />
+          {/* key={fullPrefill} forces a fresh mount whenever the prefill text changes, so
+              useState(prefillDescription) in NewTaskForm always initialises from the latest value. */}
+          <NewTaskForm key={fullPrefill} onCreated={() => setShowFull(false)} prefillDescription={fullPrefill} />
         </Modal>
       )}
 
