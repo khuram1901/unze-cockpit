@@ -230,12 +230,15 @@ async function createTaskFromWhatsApp(opts: {
     assignedToMemberId: assignee.id,
     assignedToDepartment: assignee.department,
     dueDate: due,
-    sourceType: "whatsapp",
-    sourceLabel: "WhatsApp",
+    // sourceType / sourceLabel intentionally omitted — the dedup guard in createTaskCore
+    // uses those to skip duplicate cash-escalation tasks (which carry a unique sourceLabel
+    // per event). Using a generic label like "WhatsApp" here caused every WhatsApp task
+    // after the very first one to be silently swallowed as a "duplicate".
     notificationStyle: "task_assigned",
     actor: { kind: "user", name: fullName(sender), email: sender.email || "" },
   });
   if (!result.ok) return `⚠ Could not create the task: ${result.error}`;
+  if (result.skipped) return `⚠ Task was not saved (internal skip: ${result.reason}). Please try again or use the dashboard.`;
   const dueLabel = new Date(due + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   return `✓ Task created for ${fullName(assignee)}, due ${dueLabel}:\n"${description}"`;
 }

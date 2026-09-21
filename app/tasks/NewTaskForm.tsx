@@ -458,14 +458,13 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
               backgroundColor: COLOURS.CARD,
             }}>
               {(() => {
-                // Always show checked members + filter by department (if selected) + name search
+                // Filter members by name search only (department filter removed — see comment inside)
                 const filtered = members.filter((m) => {
-                  const nameMatch = !assigneeSearch.trim() || m.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase());
-                  // If a department is selected, show members in that dept — but also show members with no
-                  // department set (FlowHCM dept names can differ from app dept names, so hiding them would
-                  // silently exclude real staff). Always show already-checked ones.
-                  const deptMatch = !project || !m.department || m.department === project || assignedToIds.includes(m.id);
-                  return nameMatch && deptMatch;
+                  // Filter only by name search — department is NOT used to filter assignees because
+                  // FlowHCM department names in members (e.g. "Retail Operations") differ from the
+                  // department_owners names (e.g. "Retail"), so filtering by dept silently excludes
+                  // most staff. The dept field on the task categorises the work, not who can do it.
+                  return !assigneeSearch.trim() || m.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase());
                 });
                 if (filtered.length === 0) {
                   return (
