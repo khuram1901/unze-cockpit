@@ -3300,65 +3300,6 @@ function ExecutiveDashboardBody({
         </>
       )}
 
-      {/* ── INVESTMENTS ── */}
-      {investmentData && wv("home.investments", true) && (
-        <>
-          <SectionTitle title="Investments — PSX Portfolio" />
-          <a href="/investments" style={{ textDecoration: "none", display: "block" }}>
-            <div style={{
-              ...execCard(investmentData.gainLoss >= 0 ? GREEN : RED),
-              marginBottom: "12px",
-              cursor: "pointer",
-            }}
-            >
-              <div style={{ display: "grid", gridTemplateColumns: kpiGrid(200), gap: "16px", marginBottom: investmentData.losers.length > 0 ? "16px" : "0" }}>
-                <div>
-                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Invested</div>
-                  <div style={{ fontSize: "28px", fontWeight: 600, color: NAVY, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Rs {fmtMoney(investmentData.totalCost)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Current Value</div>
-                  <div style={{ fontSize: "28px", fontWeight: 600, color: BLUE, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Rs {fmtMoney(investmentData.totalValue)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Gain / Loss</div>
-                  <div style={{ fontSize: "28px", fontWeight: 600, color: investmentData.gainLoss >= 0 ? GREEN : RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
-                    {investmentData.gainLoss >= 0 ? "+" : ""}Rs {fmtMoney(Math.abs(investmentData.gainLoss))}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Return</div>
-                  <div style={{ fontSize: "28px", fontWeight: 600, color: investmentData.gainLossPct >= 0 ? GREEN : RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
-                    {investmentData.gainLossPct >= 0 ? "+" : ""}{investmentData.gainLossPct.toFixed(2)}%
-                  </div>
-                </div>
-              </div>
-              {investmentData.losers.length > 0 && (
-                <div style={{ borderTop: `1px solid ${DANGER_SOFT}`, paddingTop: "8px", fontSize: "13px", color: RED }}>
-                  <span style={{ fontWeight: 700 }}>{investmentData.losers.length} stock{investmentData.losers.length > 1 ? "s" : ""} down &gt;5%:</span>{" "}
-                  {investmentData.losers.map((l, i) => (
-                    <span key={l.ticker}>{i > 0 ? ", " : ""}{l.ticker} ({l.pct.toFixed(1)}%)</span>
-                  ))}
-                </div>
-              )}
-              <div style={{ fontSize: "13px", color: SLATE, marginTop: "6px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                {investmentData.priceDate && (
-                  <span>{investmentData.stockCount} stocks · Prices as of {formatDateUK(investmentData.priceDate)} · Click to view portfolio →</span>
-                )}
-                {investmentData.dividendCount > 0 && (
-                  <span style={{
-                    fontSize: "12px", fontWeight: 700,
-                    backgroundColor: COLOURS.AMBER, color: "white",
-                    padding: "2px 9px", borderRadius: "10px",
-                  }}>
-                    {investmentData.dividendCount} dividend{investmentData.dividendCount > 1 ? "s" : ""} due this week
-                  </span>
-                )}
-              </div>
-            </div>
-          </a>
-        </>
-      )}
 
       {/* ── UK PENSION — AVIVA ── */}
       {pensionSummary && wv("home.uk_pension", true) && (
