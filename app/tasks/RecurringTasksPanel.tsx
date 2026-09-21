@@ -87,6 +87,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [dayOfMonth, setDayOfMonth] = useState(1);
   const [dueDays, setDueDays] = useState("3");
+  const [firstDueDate, setFirstDueDate] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDesc, setEditDesc] = useState("");
@@ -160,11 +161,11 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       fetch("/api/tasks/recurring/fire-now", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId: newId }),
+        body: JSON.stringify({ templateId: newId, firstDueDate: firstDueDate || undefined }),
       }).catch(() => { /* non-critical — cron will pick it up on next cycle */ });
     }
     logAction("Created", "recurring_tasks", `${desc} (${frequency})`);
-    setDesc(""); setAssignTo(""); setCompanyId(""); setPriority("Normal"); setProject(""); setFrequency("weekly"); setDueDays("3");
+    setDesc(""); setAssignTo(""); setCompanyId(""); setPriority("Normal"); setProject(""); setFrequency("weekly"); setDueDays("3"); setFirstDueDate("");
     setShowForm(false);
     loadData();
   }
@@ -250,6 +251,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
               <label style={lbl}>Frequency <select style={inp} value={frequency} onChange={(e) => setFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
               {frequency === "weekly" && <label style={lbl}>Day <select style={inp} value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>}
               {frequency === "monthly" && <label style={lbl}>Day of Month <input type="number" min="1" max="28" style={inp} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} /></label>}
+              <label style={lbl}>First task due date <input type="date" style={inp} value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} required /></label>
               <label style={lbl}>Due after (days) <input type="number" min="1" style={inp} value={dueDays} onChange={(e) => setDueDays(e.target.value)} /></label>
               <label style={lbl}>Department / Project <input style={inp} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Optional" /></label>
             </div>

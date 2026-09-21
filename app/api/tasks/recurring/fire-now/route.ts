@@ -4,18 +4,20 @@ import { createTaskCore } from "../../../../lib/task-creation";
 
 // POST /api/tasks/recurring/fire-now
 // Spawns the first task instance immediately when a recurring template is created.
+// Accepts an explicit firstDueDate (YYYY-MM-DD) chosen by the creator in the form.
 // Called client-side right after inserting into recurring_tasks so the assignee
 // sees a task straight away, rather than waiting for the next cron cycle.
 export async function POST(request: NextRequest) {
   try {
-    const { templateId } = await request.json();
+    const { templateId, firstDueDate } = await request.json();
     if (!templateId) return Response.json({ error: "templateId required" }, { status: 400 });
+    if (!firstDueDate) return Response.json({ error: "firstDueDate required" }, { status: 400 });
 
     const supabase = createServiceClient();
 
     const { data: tmpl, error: fetchErr } = await supabase
       .from("recurring_tasks")
-      .select("id, description, frequency, day_of_week, day_of_month, due_days_after, company_id, assigned_to, assigned_to_email, assigned_to_department, priority, project, assigned_by, created_by_email")
+      .select("id, description, frequency, due_days_after, company_id, assigned_to, assigned_to_email, assigned_to_department, priority, project, assigned_by, created_by_email")
       .eq("id", templateId)
       .single();
 
@@ -23,18 +25,9 @@ export async function POST(request: NextRequest) {
     if (!tmpl.company_id) return Response.json({ error: "No company set on template" }, { status: 400 });
     if (!tmpl.assigned_to) return Response.json({ error: "No assignee set on template" }, { status: 400 });
 
-    // Due date based on frequency — aligns the first task's deadline with the cycle length
-    const now = new Date();
-    const dueDate = new Date(now);
-    if (tmpl.frequency === "daily") {
-      dueDate.setDate(dueDate.getDate() + 1);
-    } else if (tmpl.frequency === "weekly") {
-      dueDate.setDate(dueDate.getDate() + 7);
-    } else {
-      // monthly (default)
-      dueDate.setMonth(dueDate.getMonth() + 1);
-    }
-    const dueDateStr = dueDate.toISOString().slice(0, 10);
+    // Use the explicitly chosen first due date — do not derive from frequency
+    // so the creator's intent is preserved and we don't assume the cycle day
+    const dueDateStr: string = firstDueDate;
 
     const requiresManagerSignoff = !tmpl.created_by_email
       || tmpl.created_by_email.trim().toLowerCase() !== (tmpl.assigned_to_email || "").trim().toLowerCase();
@@ -56,8 +49,11 @@ export async function POST(request: NextRequest) {
 
     if (!result.ok) return Response.json({ error: result.error }, { status: 500 });
 
-    // Stamp last_created_at so the cron doesn't double-fire on the next cycle
-    await supabase.from("recurring_tasks").update({ last_created_at: now.toISOString() }).eq("id", templateId);
+    // Stamp last_created_at so the cron doesn't double-fire on the same day
+    await supabase
+      .from("recurring_tasks")
+      .update({ last_created_at: new Date().toISOString() })
+      .eq("id", templateId);
 
     return Response.json({ ok: true, taskId: result.taskId });
   } catch (err) {
