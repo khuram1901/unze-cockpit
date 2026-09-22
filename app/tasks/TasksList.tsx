@@ -1516,13 +1516,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 <option value="">Change status…</option>
                 {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-              <button onClick={applyBulkStatus} disabled={!bulkStatus || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, opacity: !bulkStatus || bulkApplying ? 0.5 : 1, cursor: !bulkStatus || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+              <button onClick={applyBulkStatus} disabled={!bulkStatus || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, backgroundColor: bulkStatus && !bulkApplying ? "#fff" : "rgba(255,255,255,0.12)", color: bulkStatus && !bulkApplying ? COLOURS.NAVY : "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.3)", cursor: !bulkStatus || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
 
               <select value={bulkCompanyId} onChange={(e) => setBulkCompanyId(e.target.value)} style={{ ...filterSelectStyle, flex: "0 1 140px", backgroundColor: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>
                 <option value="">Change company…</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <button onClick={applyBulkCompany} disabled={!bulkCompanyId || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, opacity: !bulkCompanyId || bulkApplying ? 0.5 : 1, cursor: !bulkCompanyId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+              <button onClick={applyBulkCompany} disabled={!bulkCompanyId || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, backgroundColor: bulkCompanyId && !bulkApplying ? "#fff" : "rgba(255,255,255,0.12)", color: bulkCompanyId && !bulkApplying ? COLOURS.NAVY : "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.3)", cursor: !bulkCompanyId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
 
               <select value={bulkOwnerId} onChange={(e) => setBulkOwnerId(e.target.value)} style={{ ...filterSelectStyle, flex: "0 1 140px", backgroundColor: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>
                 <option value="">Change owner…</option>
@@ -1530,7 +1530,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                     by a CEO account or the PA; server twin in createTaskCore */}
                 {filterAssignableMembers(bulkMembers, myEmail).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
-              <button onClick={applyBulkOwner} disabled={!bulkOwnerId || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, opacity: !bulkOwnerId || bulkApplying ? 0.5 : 1, cursor: !bulkOwnerId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+              <button onClick={applyBulkOwner} disabled={!bulkOwnerId || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, backgroundColor: bulkOwnerId && !bulkApplying ? "#fff" : "rgba(255,255,255,0.12)", color: bulkOwnerId && !bulkApplying ? COLOURS.NAVY : "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.3)", cursor: !bulkOwnerId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
 
               {(() => {
                 const eligibleCount = Array.from(selectedIds).filter((id) => {
