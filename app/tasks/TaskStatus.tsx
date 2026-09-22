@@ -35,6 +35,8 @@ type Task = {
   // below (migration 113).
   submitted_by_name?: string | null;
   submitted_by_email?: string | null;
+  // The person who originally created / assigned this task (never changes).
+  assigned_by_email?: string | null;
   // Khuram (17/07/2026): false = this task was created by its own
   // assignee, for themselves — see migration 143. They can close it
   // directly, no Submitted step or manager sign-off required.
@@ -239,6 +241,24 @@ export default function TaskStatus({
     setStatus("In Progress");
     onChanged();
     if (onClose) setTimeout(() => onClose(), 400);
+  }
+
+  // ── Return to assignee (assigner action on a Stuck task) ─────────────
+  // Mirror of returnToSubmitter — used when the assigner has helped the
+  // assignee and wants to unblock them. Simply sets the status back to
+  // "In Progress"; the task stays with the same assignee (no re-routing).
+  async function returnToAssignee() {
+    if (!task.assigned_to_email || !task.assigned_to) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("tasks")
+      .update({ status: "In Progress", updated_at: new Date().toISOString() })
+      .eq("id", task.id);
+    if (error) { setSaving(false); toast.show("Error returning task: " + error.message, "error"); return; }
+    setSaving(false);
+    logAction("Updated", "tasks", `Returned to ${task.assigned_to} (unblocked): ${task.id}`, task.id);
+    setStatus("In Progress");
+    onChanged();
   }
 
   // ── Waiting Reply: set ─────────────────────────────────────────────────
@@ -765,6 +785,38 @@ export default function TaskStatus({
             )}
           </div>
         )}
+        {/* Stuck: assigner can unblock the assignee and return the task to
+            them once they've replied / helped. Only visible to the assigner
+            (assigned_by_email) — not to the assignee themselves, who already
+            have the full status dropdown to move it themselves. */}
+        {status === "Stuck" && myEmail && task.assigned_by_email &&
+          myEmail.toLowerCase() === task.assigned_by_email.toLowerCase() &&
+          myEmail.toLowerCase() !== (task.assigned_to_email || "").toLowerCase() && (
+          <div style={{ marginTop: "10px" }}>
+            <button
+              onClick={returnToAssignee}
+              disabled={saving}
+              title={`Mark as unblocked and return to ${task.assigned_to}`}
+              style={{
+                backgroundColor: COLOURS.CARD,
+                color: COLOURS.AMBER,
+                border: `1px solid ${COLOURS.AMBER}`,
+                borderRadius: RADII.SM,
+                padding: "7px 16px",
+                fontSize: "13px",
+                cursor: "pointer",
+                fontWeight: 700,
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {saving ? "Returning…" : `↩ Return to ${task.assigned_to}`}
+            </button>
+            <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "6px", marginBottom: 0 }}>
+              Once you&apos;ve helped unblock this task, return it to {task.assigned_to} to continue.
+            </p>
+          </div>
+        )}
+
         {/* Submitted, but the viewer isn't the one it's waiting on — tell
             them plainly rather than leave them wondering why there's no
             button here for them to click. */}
