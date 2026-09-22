@@ -98,7 +98,7 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
   // accounts and the PA (who manages the CEO's list) may assign a task
   // to a CEO account. System actors (cash escalation, recurring cron)
   // are trusted server-side callers and stay allowed.
-  const CEO_LOCKED = ["khuram1901@gmail.com", "k.saleem@unzegroup.com", "kamran@unze.co.uk"];
+  const CEO_LOCKED = ["khuram1901@gmail.com"]; // only khuram1901@gmail.com stays locked (22/09/2026); k.saleem and kamran@unze.co.uk are now assignable
   const ALLOWED_TO_ASSIGN_CEO = [...CEO_LOCKED, "pa.ceo@unze.co.uk"];
   if (input.actor.kind === "user" && !ALLOWED_TO_ASSIGN_CEO.includes(input.actor.email.toLowerCase())) {
     const targets = [

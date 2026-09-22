@@ -130,7 +130,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
   // Cash sheet drilldown detail modal
   const [csDetailId, setCsDetailId] = useState<string | null>(null);
-  const [csDetail, setCsDetail] = useState<{ date: string; opening: number; closing: number; receipts: {description: string; amount_pkr: number}[]; payments: {description: string; amount_pkr: number}[] } | null>(null);
+  const [csDetail, setCsDetail] = useState<{ date: string; opening: number; closing: number; totalReceipts?: number; totalPayments?: number; receipts: {description: string; amount_pkr: number}[]; payments: {description: string; amount_pkr: number}[] } | null>(null);
   const [csDetailLoading, setCsDetailLoading] = useState(false);
 
   // Opening balance form
@@ -942,7 +942,20 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                     && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01
                     && Math.abs(Math.abs(p.opening_balance) - Math.abs(prevDay.closing_balance)) > 0.01;
                   const openDetail = () => {
-                    if (!p.cash_sheet_id) return;
+                    if (!p.cash_sheet_id) {
+                      // No PDF cash sheet — open modal with position-level totals only
+                      setCsDetailId(p.id);
+                      setCsDetail({
+                        date: p.position_date,
+                        opening: p.opening_balance,
+                        closing: p.closing_balance,
+                        totalReceipts: p.total_receipts,
+                        totalPayments: p.total_payments,
+                        receipts: [],
+                        payments: [],
+                      });
+                      return;
+                    }
                     setCsDetailId(p.cash_sheet_id);
                     setCsDetailLoading(true);
                     setCsDetail(null);
@@ -964,10 +977,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                   return (
                     <tr
                       key={p.id}
-                      onClick={p.cash_sheet_id ? openDetail : undefined}
+                      onClick={openDetail}
                       style={{
                         ...(mismatch ? { backgroundColor: DANGER_SOFT } : {}),
-                        ...(p.cash_sheet_id ? { cursor: "pointer" } : {}),
+                        cursor: "pointer",
                       }}
                     >
                       <td style={tdBold}>
@@ -1040,8 +1053,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 <div style={{ display: "grid", gridTemplateColumns: kpiGrid(200), gap: "12px", marginBottom: "24px" }}>
                   {[
                     { label: "Opening", value: csDetail.opening, color: NAVY },
-                    { label: "Receipts", value: csDetail.receipts.reduce((s, r) => s + r.amount_pkr, 0), color: GREEN },
-                    { label: "Payments", value: csDetail.payments.reduce((s, r) => s + r.amount_pkr, 0), color: RED },
+                    { label: "Receipts", value: csDetail.totalReceipts ?? csDetail.receipts.reduce((s, r) => s + r.amount_pkr, 0), color: GREEN },
+                    { label: "Payments", value: csDetail.totalPayments ?? csDetail.payments.reduce((s, r) => s + r.amount_pkr, 0), color: RED },
                     { label: "Closing", value: csDetail.closing, color: NAVY },
                   ].map(({ label, value, color }) => (
                     <div key={label} style={{ border: "1px solid #EEF0F3", borderRadius: "10px", padding: "12px", textAlign: "center" }}>

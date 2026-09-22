@@ -142,7 +142,7 @@ export function myIdentityEmails(email: string | null | undefined): string[] {
 // the CEO's task list on his behalf — may still pick them as assignee.
 // Enforced server-side in createTaskCore AND filtered out of every
 // assignee picker client-side (filterAssignableMembers below).
-export const CEO_ASSIGN_LOCKED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, CEO2_EMAIL];
+export const CEO_ASSIGN_LOCKED_EMAILS = [ADMIN_EMAIL]; // CEO_EMAIL + CEO2_EMAIL unlocked 22/09/2026 — only khuram1901@gmail.com stays locked
 
 export function canAssignToCeos(viewerEmail: string | null | undefined): boolean {
   const e = lc(viewerEmail);
