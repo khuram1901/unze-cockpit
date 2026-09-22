@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { COLOURS, RADII, PageHeader } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
 import { useUserCtx } from "../../lib/useUserCtx";
@@ -42,10 +41,15 @@ type HRTab = (typeof ALL_HR_TABS)[number]["key"];
 export default function HRDashboard() {
   const isMobile = useMobile();
   const { ctx } = useUserCtx();
-const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<HRTab>(
-    ALL_HR_TABS.some((t) => t.key === searchParams.get("tab")) ? (searchParams.get("tab") as HRTab) : "people"
-  );
+const [activeTab, setActiveTab] = useState<HRTab>("people");
+
+  // Open the tab specified in the URL (?tab=performance etc.) after mount.
+  // useSearchParams() requires <Suspense> in Next.js 16 — use window.location instead.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const t = p.get("tab");
+    if (t && ALL_HR_TABS.some((tab) => tab.key === t)) setActiveTab(t as HRTab);
+  }, []);
 
   // Filter tabs based on per-member widget visibility settings (default: show all)
   const HR_TABS = ALL_HR_TABS.filter((t) =>
