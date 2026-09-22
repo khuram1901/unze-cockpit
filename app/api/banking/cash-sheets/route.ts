@@ -4,6 +4,7 @@ import { requireAuth } from "../../../lib/api-auth";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID } from "../../../lib/constants";
 import { isAdmin } from "../../../lib/admin-config";
 import { CEO_EMAIL, CEO2_EMAIL } from "../../../lib/permissions";
+import { CEO_EMAIL, CEO2_EMAIL } from "../../../lib/permissions";
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 const RESTAURANT_COMPANIES = ["BRNH", "HD", "KKJ"];
