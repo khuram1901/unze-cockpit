@@ -16,25 +16,11 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { sendWhatsAppDigestTemplate } from "../../../lib/whatsapp-push";
 
-// Explicit allowlist of HODs and senior managers who receive the Friday digest.
-// Only these people are messaged — keeps costs low (one WhatsApp conversation
-// per person per week) and avoids spamming the whole company.
+// Team digest paused for all staff as at 22/09/2026 (Khuram's request).
+// Khuram only — everyone else removed until further notice.
+// To reinstate, add emails back to this set.
 const DIGEST_ALLOWLIST = new Set([
-  "shakeel@unze.co.uk",          // Muhammad Shakeel
-  "sania.saleem@unze.co.uk",     // Sania Saleem
-  "shahida.naseem@unze.co.uk",   // Shahida Naseem
-  "pa.ceo@unze.co.uk",           // Sundas Hussain
-  "shahid@unze.co.uk",           // Shahid Masaud
-  "kamran@unze.co.uk",           // Kamran Saleem
-  "k.saleem@unzegroup.com",      // Khuram Saleem
-  "nadeem.khan@unze.co.uk",      // Nadeem Khan (GM Ops)
-  "nadeem@unze.co.uk",           // Muhammad Nadeem (IT)
-  "zuhair.syed@unze.co.uk",      // Zuhair Khalid
-  "julien@unze.co.uk",           // Suleman Julien
-  "amar@unze.co.uk",             // Amar Tahir
-  "akhlaq@unze.co.uk",           // Muhammad Akhlaq
-  "auzaif@unze.co.uk",           // Auzaif Kamran
-  "abbasi@unze.co.uk",           // Anwer Hussain Abbasi
+  "k.saleem@unzegroup.com",      // Khuram Saleem — CEO weekly digest
 ]);
 
 const OPEN_STATUSES = ["Open", "In Progress", "Waiting Reply", "Stuck", "Submitted"];

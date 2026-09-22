@@ -35,16 +35,9 @@ export async function notifyTaskAssigned(
     .single();
   if (!task) return;
 
-  // WhatsApp push — single template message, no follow-up needed.
-  if (member?.phone_e164) {
-    const firstName = memberName.split(" ")[0] || memberName;
-    const due = task.due_date ? task.due_date.split("-").reverse().join("/") : null;
-    const priority = task.priority && task.priority !== "Normal" ? ` | ⚡ Priority: ${task.priority}` : "";
-    const by = task.assigned_by ? ` | 👤 By: ${task.assigned_by}` : "";
-    const desc = (task.description || "").slice(0, 120);
-    const content = `Hi ${firstName} — 📋 New task: ${desc}${due ? ` | 📅 Due: ${due}` : ""}${priority}${by} | Log in to confirm or update status.`;
-    await sendWhatsAppDigestTemplate(member.phone_e164, content);
-  }
+  // WhatsApp instant push on task assignment is paused (22/09/2026).
+  // Only Khuram receives WhatsApp — via the weekly digest cron — not on every assignment.
+  // To re-enable individual pushes, restore the sendWhatsAppDigestTemplate call here.
 
   // Email — only if the member has email notifications enabled.
   if (!member?.notify_email) return { skipped: "email notifications disabled" };

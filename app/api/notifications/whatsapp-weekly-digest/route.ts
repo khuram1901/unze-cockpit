@@ -13,12 +13,12 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { sendWhatsAppNotification } from "../../../lib/whatsapp-push";
 
-// The two issuers who receive the weekly digest.
+// Weekly digest recipients — Khuram only (22/09/2026).
+// Kamran paused at Khuram's request; re-add when needed.
 // emails: all email addresses the person uses when assigning tasks
 // memberEmail: the email on their members record (for phone lookup)
 const DIGEST_RECIPIENTS: { memberEmail: string; emails: string[] }[] = [
   { memberEmail: "k.saleem@unzegroup.com", emails: ["k.saleem@unzegroup.com"] },
-  { memberEmail: "kamran@unze.co.uk",    emails: ["kamran@unze.co.uk"] },
 ];
 
 const OPEN_STATUSES = ["Open", "In Progress", "Waiting Reply", "Stuck", "Submitted"];
