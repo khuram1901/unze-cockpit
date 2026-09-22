@@ -760,6 +760,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         if (byMe && t.status === "Submitted") return true;
         // 4. I assigned it and the team is waiting for my reply
         if (byMe && t.status === "Waiting Reply" && t.reply_required) return true;
+        // 5. I assigned it and it's now Stuck — I need to unblock it too
+        if (byMe && t.status === "Stuck" && !toMe) return true;
         return false;
       })
     : allOpen;
@@ -796,6 +798,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         // Already surfaced above as an action item
         if (t.status === "Submitted") return false;
         if (t.status === "Waiting Reply" && t.reply_required) return false;
+        // Stuck tasks are lifted into the "Stuck — Awaiting Your Input" section
+        if (t.status === "Stuck") return false;
         return true;
       })
     : [];
@@ -810,7 +814,27 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         if (!myReportEmailsState.includes(t.assigned_to_email.toLowerCase())) return false;
         if (myTasksSource.some((m) => m.id === t.id)) return false;
         if (delegatedByMe.some((d) => d.id === t.id)) return false;
+        // Stuck tasks are lifted into the "Stuck — Awaiting Your Input" section
+        if (t.status === "Stuck") return false;
         return true;
+      })
+    : [];
+
+  // ── HOD alert: stuck tasks in their team — shown as an amber banner so
+  // the manager knows their team is blocked. Covers two cases:
+  //   a. A direct report IS the stuck assignee
+  //   b. A direct report IS the assigner of a stuck task (assigner's manager)
+  // The assigner sees the stuck task in their own main action queue (condition
+  // 5 in myTasksSource above), so they are NOT included here.
+  const stuckNeedsAttention = myTasksScope === "mine" && myReportEmailsState.length > 0
+    ? allOpen.filter((t) => {
+        if (t.status !== "Stuck") return false;
+        const assignedToMe = myIdentities.includes((t.assigned_to_email || "").toLowerCase());
+        // a. One of my direct reports is the stuck assignee
+        if (t.assigned_to_email && myReportEmailsState.includes(t.assigned_to_email.toLowerCase())) return true;
+        // b. One of my direct reports assigned this task (and it's not assigned back to me)
+        if (t.assigned_by_email && myReportEmailsState.includes(t.assigned_by_email.toLowerCase()) && !assignedToMe) return true;
+        return false;
       })
     : [];
 
@@ -1724,6 +1748,22 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {/* ═══ LIST VIEW (default landing view) ═══ */}
       {timeView === "list" && (
         <div>
+          {/* ── STUCK — AWAITING YOUR INPUT: shown to the assigner, the
+              assignee's HOD, and the assigner's manager. Appears at the top
+              of Mine view so it's impossible to miss. ── */}
+          {!listFilteredTasks && stuckNeedsAttention.length > 0 && (
+            <div style={{ marginBottom: "14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.AMBER, display: "inline-block" }} />
+                <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.AMBER }}>Your Team Is Stuck</span>
+                <span style={{ fontSize: "12px", color: COLOURS.AMBER, fontWeight: 600, fontFamily: FONT_MONO }}>{stuckNeedsAttention.length}</span>
+                <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— flagged for your awareness as HOD</span>
+              </div>
+              <div style={{ ...cardStyle, overflow: "hidden", borderLeft: `3px solid ${COLOURS.AMBER}` }}>
+                {stuckNeedsAttention.map((t) => <TaskRow key={t.id} task={t} selectable />)}
+              </div>
+            </div>
+          )}
           <ListSortHeader />
           {listFilteredTasks ? (
             // A specific quick-filter (or bell deep-link) is active — show
