@@ -3,6 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID } from "../../../lib/constants";
 import { isAdmin } from "../../../lib/admin-config";
+import { CEO_EMAIL, CEO2_EMAIL } from "../../../lib/permissions";
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 const RESTAURANT_COMPANIES = ["BRNH", "HD", "KKJ"];
@@ -12,6 +13,9 @@ async function checkBankingAccess(
   supabase: ReturnType<typeof createServiceClient>,
 ): Promise<boolean> {
   if (isAdmin(email.toLowerCase())) return true;
+  // CEO accounts have full banking access via role, not via member_permissions row
+  const CEO_EMAILS = [CEO_EMAIL, CEO2_EMAIL].map((e) => e.toLowerCase());
+  if (CEO_EMAILS.includes(email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members")
     .select("id")
@@ -33,6 +37,9 @@ async function checkReadAccess(
   company?: string,
 ): Promise<boolean> {
   if (isAdmin(email.toLowerCase())) return true;
+  // CEO accounts have full finance read access via role, not via member_permissions row
+  const CEO_EMAILS = [CEO_EMAIL, CEO2_EMAIL].map((e) => e.toLowerCase());
+  if (CEO_EMAILS.includes(email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members")
     .select("id")
