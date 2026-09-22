@@ -21,7 +21,7 @@ import {
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
   canViewIfplPnl, canViewRestaurantsPnl, canViewGroupHR,
   canViewTeamPerformance,
-  isMainAdmin, isSecondaryCEO, isDailyEntryOnly,
+  isMainAdmin, isSecondaryCEO, isDailyEntryOnly, isCEO,
   type UserCtx,
 } from "./permissions";
 
@@ -62,6 +62,7 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_view_group_hr: canViewGroupHR,
   can_access_banking: canAccessBanking,
   can_view_team_performance: canViewTeamPerformance,
+  can_view_hr_performance: (c) => isCEO(c) || isMainAdmin(c),
 };
 
 function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
