@@ -99,11 +99,13 @@ type SpeechRecognitionAny = any;
 export default function QuickAddTask({
   onCreated,
   onMoreOptions,
+  onClose,
   autoStartVoice = false,
   prefillText = "",
 }: {
   onCreated?: () => void;
   onMoreOptions?: (description: string) => void;
+  onClose?: () => void;
   autoStartVoice?: boolean;
   prefillText?: string;
 }) {
@@ -333,6 +335,17 @@ export default function QuickAddTask({
     setSearch("");
     setTimeout(() => inputRef.current?.focus(), 50);
   }
+
+  // Close the whole panel on Escape (global listener so it fires regardless
+  // of which field is focused — matches how the full-form Modal behaves).
+  useEffect(() => {
+    if (!onClose) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose!();
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (!showDrop || filtered.length === 0) return;

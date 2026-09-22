@@ -87,6 +87,7 @@ export default function TasksPageClient() {
         <QuickAddTask
           onCreated={() => { setShowQuick(false); setAutoStartVoice(false); }}
           onMoreOptions={openFull}
+          onClose={() => { setShowQuick(false); setAutoStartVoice(false); }}
           autoStartVoice={autoStartVoice}
           prefillText={textParam}
         />

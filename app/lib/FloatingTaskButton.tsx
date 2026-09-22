@@ -132,6 +132,7 @@ export default function FloatingTaskButton() {
           <QuickAddTask
             onCreated={() => setOpen(false)}
             onMoreOptions={handleMoreOptions}
+            onClose={() => setOpen(false)}
           />
         )}
       </div>
