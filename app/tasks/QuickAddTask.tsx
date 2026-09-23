@@ -36,6 +36,9 @@ type Member = {
   // task_default_company_id added by migration 183 — task-only default company,
   // separate from the member's group-level company profile.
   task_default_company_id: string | null;
+  // company is the plain-text company name — always populated from FlowHCM,
+  // used as the final fallback when task_default_company_id is not set.
+  company: string | null;
 };
 
 type Company = {
@@ -152,7 +155,7 @@ export default function QuickAddTask({
     async function load() {
       const [userRes, mRes, cRes] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from("members").select("id, name, email, department, business_unit, task_default_company_id").eq("is_active", true).order("name", { ascending: true }),
+        supabase.from("members").select("id, name, email, department, business_unit, task_default_company_id, company").eq("is_active", true).order("name", { ascending: true }),
         supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
       ]);
       // CEO assignment lock (Khuram, 24/07/2026): CEOs aren't assignable
@@ -236,10 +239,12 @@ export default function QuickAddTask({
     : members.slice(0, 8);
 
   // Resolve company: prefer task_default_company_id (migration 183),
-  // fall back to business_unit short-code match for any member not yet covered.
+  // fall back to business_unit short-code match, then finally match against
+  // the member's plain-text company field (populated from FlowHCM for all members).
   const autoCompany: Company | null = selected
     ? (companies.find((c) => c.id === selected.task_default_company_id)
         ?? companies.find((c) => c.short_code === selected.business_unit)
+        ?? companies.find((c) => c.name === selected.company)
         ?? null)
     : null;
 
