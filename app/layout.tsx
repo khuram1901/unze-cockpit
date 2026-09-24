@@ -8,25 +8,27 @@ const sourceSans = Source_Sans_3({
   subsets: ["latin"],
 });
 
+// Inter and Inter Tight are variable fonts — omitting `weight` loads the
+// full 100–900 axis so every CSS font-weight works without an explicit array.
+// IBM Plex Mono is not a variable font; single weight string avoids the
+// Turbopack "queries have exactly one entry" error with weight arrays.
 const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
   display: "swap",
-  weight: ["400", "500", "600", "700"],
 });
 
 const interTight = Inter_Tight({
   variable: "--font-display",
   subsets: ["latin"],
   display: "swap",
-  weight: ["400", "500", "600", "700"],
 });
 
 const ibmPlexMono = IBM_Plex_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   display: "swap",
-  weight: ["400", "500", "600", "700"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
