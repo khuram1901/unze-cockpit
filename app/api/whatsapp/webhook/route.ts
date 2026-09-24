@@ -169,9 +169,16 @@ function extractDue(text: string): { description: string; due: string | null } {
 
 type MemberRow = {
   id: string; email: string | null; first_name: string | null; last_name: string | null;
-  name: string | null; department: string | null; company_id: string | null;
+  name: string | null; department: string | null;
+  // Four-tier company resolution (same order as QuickAddTask):
+  company_id: string | null;             // direct FK — fastest, often null
+  task_default_company_id: string | null; // task-specific FK
+  business_unit: string | null;          // short_code match ("UTPL", "IFPL", etc.)
+  company: string | null;               // text name from FlowHCM — always set
   phone_e164: string | null; wa_can_issue_tasks: boolean | null;
 };
+
+type CompanyRow = { id: string; name: string; short_code: string | null };
 
 const fullName = (m: MemberRow) =>
   (`${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || m.email || "Unknown");
@@ -219,14 +226,28 @@ function resolveAssignee(text: string, members: MemberRow[]): { member?: MemberR
 
 async function createTaskFromWhatsApp(opts: {
   sender: MemberRow; assignee: MemberRow; description: string; due: string;
+  companies: CompanyRow[];
 }): Promise<string> {
-  const { sender, assignee, description, due } = opts;
-  if (!assignee.company_id) {
+  const { sender, assignee, description, due, companies } = opts;
+
+  // Four-tier company resolution — mirrors QuickAddTask autoCompany logic.
+  // 1. company_id (direct FK on member row)
+  // 2. task_default_company_id (task-specific FK, added migration 183)
+  // 3. business_unit matches a company short_code
+  // 4. company text field (from FlowHCM — reliably set for all 154 members)
+  const resolvedCompanyId: string | null =
+    assignee.company_id
+    ?? assignee.task_default_company_id
+    ?? companies.find((c) => c.short_code && c.short_code === assignee.business_unit)?.id
+    ?? companies.find((c) => c.name === assignee.company)?.id
+    ?? null;
+
+  if (!resolvedCompanyId) {
     return `⚠ ${fullName(assignee)} has no company set in the dashboard — ask an admin to fix their member record, then resend.`;
   }
   const result = await createTaskCore({
     description,
-    companyId: assignee.company_id,
+    companyId: resolvedCompanyId,
     assignedTo: fullName(assignee),
     assignedToEmail: assignee.email,
     assignedToMemberId: assignee.id,
@@ -296,11 +317,14 @@ export async function POST(request: NextRequest) {
     const logOutcome = (outcome: string) =>
       supabase.from("whatsapp_inbound_log").update({ outcome }).eq("wa_message_id", msg.id!);
 
-    // Load members once per message batch (small table).
-    const { data: allMembers } = await supabase
-      .from("members")
-      .select("id, email, first_name, last_name, name, department, company_id, phone_e164, wa_can_issue_tasks");
-    const members = (allMembers || []) as MemberRow[];
+    // Load members + companies once per message batch.
+    // Four company fields fetched so resolveCompany() can fall back gracefully.
+    const [{ data: allMembers }, { data: allCompanies }] = await Promise.all([
+      supabase.from("members").select("id, email, first_name, last_name, name, department, company_id, task_default_company_id, business_unit, company, phone_e164, wa_can_issue_tasks"),
+      supabase.from("companies").select("id, name, short_code"),
+    ]);
+    const members  = (allMembers  || []) as MemberRow[];
+    const companies = (allCompanies || []) as CompanyRow[];
 
     const sender = members.find((m) => digits(m.phone_e164) && digits(m.phone_e164) === from);
     if (!sender) {
@@ -350,7 +374,7 @@ export async function POST(request: NextRequest) {
         await logOutcome("pending_assignee_gone");
         continue;
       }
-      const reply = await createTaskFromWhatsApp({ sender, assignee, description: pending.description, due });
+      const reply = await createTaskFromWhatsApp({ sender, assignee, description: pending.description, due, companies });
       await sendReply(from, reply);
       await logOutcome(reply.startsWith("✓") ? "task_created" : "task_failed");
       continue;
@@ -407,7 +431,7 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    const reply = await createTaskFromWhatsApp({ sender, assignee, description, due });
+    const reply = await createTaskFromWhatsApp({ sender, assignee, description, due, companies });
     await sendReply(from, reply);
     await logOutcome(reply.startsWith("✓") ? "task_created" : "task_failed");
   }
