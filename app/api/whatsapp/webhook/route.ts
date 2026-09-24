@@ -52,6 +52,56 @@ async function sendReply(to: string, text: string) {
 }
 
 // "Today" in Pakistan time — WhatsApp tasks are issued against PKT dates.
+// ── Priority parsing ────────────────────────────────────────────────────────
+// Scans the raw message text for explicit priority keywords.
+// Active priority model: Critical | Urgent | Normal | Low
+// Legacy mappings: "high" → Urgent, "medium" → Normal (retired labels).
+// Returns "Normal" when no keyword is found.
+
+function parsePriority(text: string): string {
+  const t = text.toLowerCase();
+  if (/\bcritical\b/.test(t))                return "Critical";
+  if (/\burgent\b|\bhigh\b/.test(t))       return "Urgent";   // "high" → Urgent
+  if (/\bmedium\b/.test(t))                  return "Normal";   // "medium" → Normal (retired)
+  if (/\blow\b/.test(t))                     return "Low";
+  return "Normal";
+}
+
+// ── Due date/time auto-calculation ───────────────────────────────────────────
+// When the message contains no explicit due date (or has a date but no time),
+// derive due_date + due_time from now + priority threshold in PKT (UTC+5).
+//
+//   Critical = 6 h · Urgent = 24 h · Normal = 48 h
+//   Low: 17:00 on the given date (end-of-business-day, not threshold-derived)
+//
+// givenDate: if the user provided an explicit date, use it for due_date but
+// still derive due_time from the threshold calculation (Critical/Urgent/Normal).
+// Low never escalates; its due time is always fixed at 17:00 PKT on the chosen date.
+
+function calcDueDateTime(
+  priority: string,
+  givenDate: string | null
+): { due_date: string; due_time: string } {
+  const hoursMap: Record<string, number> = { Critical: 6, Urgent: 24, Normal: 48 };
+  const hours = hoursMap[priority] ?? 48;
+  const dueUtc = new Date(Date.now() + hours * 3600 * 1000);
+
+  // Format in PKT (UTC+5) — same timezone as pktToday()
+  const pktParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Karachi",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(dueUtc);
+  const get = (t: string) => pktParts.find((p) => p.type === t)?.value ?? "00";
+
+  return {
+    due_date: givenDate ?? `${get("year")}-${get("month")}-${get("day")}`,
+    // Low tasks: end-of-business-day (17:00 PKT) on the chosen date — not threshold-derived.
+    // The pending-table flow ensures Low always arrives here with givenDate set.
+    due_time: (priority === "Low" && givenDate) ? "17:00" : `${get("hour")}:${get("minute")}`,
+  };
+}
+
 function pktToday(): Date {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const get = (t: string) => Number(parts.find((p) => p.type === t)?.value || 0);
@@ -225,10 +275,11 @@ function resolveAssignee(text: string, members: MemberRow[]): { member?: MemberR
 }
 
 async function createTaskFromWhatsApp(opts: {
-  sender: MemberRow; assignee: MemberRow; description: string; due: string;
-  companies: CompanyRow[];
+  sender: MemberRow; assignee: MemberRow; description: string;
+  due: string | null; dueTime: string | null; priority: string;
+  companies: CompanyRow[]; autoSetDue?: boolean;
 }): Promise<string> {
-  const { sender, assignee, description, due, companies } = opts;
+  const { sender, assignee, description, due, dueTime, priority, companies, autoSetDue } = opts;
 
   // Four-tier company resolution — mirrors QuickAddTask autoCompany logic.
   // 1. company_id (direct FK on member row)
@@ -252,7 +303,9 @@ async function createTaskFromWhatsApp(opts: {
     assignedToEmail: assignee.email,
     assignedToMemberId: assignee.id,
     assignedToDepartment: assignee.department,
-    dueDate: due,
+    dueDate: due ?? undefined,
+    dueTime: dueTime ?? undefined,
+    priority,
     // sourceType / sourceLabel intentionally omitted — the dedup guard in createTaskCore
     // uses those to skip duplicate cash-escalation tasks (which carry a unique sourceLabel
     // per event). Using a generic label like "WhatsApp" here caused every WhatsApp task
@@ -262,8 +315,10 @@ async function createTaskFromWhatsApp(opts: {
   });
   if (!result.ok) return `⚠ Could not create the task: ${result.error}`;
   if (result.skipped) return `⚠ Task was not saved (internal skip: ${result.reason}). Please try again or use the dashboard.`;
-  const dueLabel = new Date(due + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-  return `✓ Task created for ${fullName(assignee)}, due ${dueLabel}:\n"${description}"`;
+  const dueLabel = new Date((due ?? "") + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const timeLabel = dueTime ? ` at ${dueTime}` : "";
+  const autoNote  = autoSetDue ? ` (auto-set for ${priority} priority)` : "";
+  return `✓ Task created for ${fullName(assignee)}, due ${dueLabel}${timeLabel}${autoNote}:\n"${description}"`;
 }
 
 // ── Webhook verification (Meta calls this once when you set the URL) ─────────
@@ -374,7 +429,17 @@ export async function POST(request: NextRequest) {
         await logOutcome("pending_assignee_gone");
         continue;
       }
-      const reply = await createTaskFromWhatsApp({ sender, assignee, description: pending.description, due, companies });
+      // Detect priority encoded in description: "[Low] description" means Low.
+      // All other pending rows (created before priority tracking) default to Normal.
+      const pendingPriority = pending.description.startsWith("[Low] ") ? "Low" : "Normal";
+      const pendingDescription = pendingPriority === "Low"
+        ? pending.description.slice("[Low] ".length)
+        : pending.description;
+      const pendingDueAt = calcDueDateTime(pendingPriority, due);
+      const reply = await createTaskFromWhatsApp({
+        sender, assignee, description: pendingDescription,
+        due, dueTime: pendingDueAt.due_time, priority: pendingPriority, companies,
+      });
       await sendReply(from, reply);
       await logOutcome(reply.startsWith("✓") ? "task_created" : "task_failed");
       continue;
@@ -412,6 +477,7 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
+    const priority = parsePriority(rest);
     const { description, due } = extractDue(rest);
     if (!description) {
       await sendReply(from, "The task needs a description — e.g. @" + fullName(assignee) + " prepare the June VAT return, due Friday");
@@ -420,18 +486,36 @@ export async function POST(request: NextRequest) {
     }
 
     if (!due) {
-      // Park the draft and ask — every task in the app requires a due date.
-      await supabase.from("whatsapp_pending_tasks").upsert({
-        sender_phone: from, sender_email: sender.email || "", sender_name: fullName(sender),
-        assignee_name: fullName(assignee), assignee_email: assignee.email,
-        assignee_member_id: assignee.id, description, created_at: new Date().toISOString(),
-      }, { onConflict: "sender_phone" });
-      await sendReply(from, `When is this due? Reply with a date (today, tomorrow, Friday, 5 Sep…) — or "cancel".\n\nTask for ${fullName(assignee)}: "${description}"`);
-      await logOutcome("awaiting_due_date");
+      if (priority === "Low") {
+        // Low with no due date — store in pending table and ask for it.
+        // Low tasks do not escalate but still require a due date before creation.
+        // Priority is encoded as "[Low] " prefix in description so it survives
+        // without a schema migration on whatsapp_pending_tasks.
+        await supabase.from("whatsapp_pending_tasks").insert({
+          sender_phone: from,
+          assignee_member_id: assignee.id,
+          description: `[Low] ${description}`,
+        });
+        await sendReply(from, `Got it — when is this due for ${fullName(assignee)}?\n"${description}"\n\nReply with a date (e.g. "next Friday", "15 Oct") or "cancel" to abandon.`);
+        await logOutcome("pending_low_due_date");
+        continue;
+      }
+      // Critical / Urgent / Normal with no due date — auto-calculate from priority threshold.
+      const { due_date, due_time } = calcDueDateTime(priority, null);
+      const reply = await createTaskFromWhatsApp({
+        sender, assignee, description, due: due_date, dueTime: due_time,
+        priority, companies, autoSetDue: true,
+      });
+      await sendReply(from, reply);
+      await logOutcome(reply.startsWith("✓") ? "task_created" : "task_failed");
       continue;
     }
 
-    const reply = await createTaskFromWhatsApp({ sender, assignee, description, due, companies });
+    // Due date given but no explicit time — derive due_time from priority threshold.
+    const { due_time } = calcDueDateTime(priority, due);
+    const reply = await createTaskFromWhatsApp({
+      sender, assignee, description, due, dueTime: due_time, priority, companies,
+    });
     await sendReply(from, reply);
     await logOutcome(reply.startsWith("✓") ? "task_created" : "task_failed");
   }

@@ -10,6 +10,8 @@ import { authFetch, supabase } from "../lib/supabase";
 import { COLOURS, RADII, cardGrid } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
+import FlowHCMLifecycleSection from "./FlowHCMLifecycleSection";
+import EscalationAlertSection from "./EscalationAlertSection";
 
 const {
   NAVY, SLATE, HAIRLINE, GREEN, AMBER, RED, BLUE,
@@ -44,8 +46,12 @@ type WelcomeData = {
   teamOverdueTasks?:   TaskItem[];
   teamMemberStatus?:   TeamMember[];
   // Privileged extras
-  groupOverdueCount?:  number;
-  machineIssueCount?:  number;
+  groupOverdueCount?:         number;
+  machineIssueCount?:         number;
+  lifecycleLeaverCount?:      number;
+  lifecycleDeactivatedCount?: number;
+  lifecycleExemptCount?:      number;
+  lifecycleAmbiguousCount?:   number;
 };
 type Weather = { temp: number; apparent: number; humidity: number; code: number; city: string };
 type FxRates  = { USD: number; GBP: number; CNY: number; AED?: number };
@@ -562,7 +568,7 @@ function TaskRow({ task, today, tomorrow }: { task: TaskItem; today: string; tom
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: INK_700, lineHeight: 1.35 }}>{task.description}</div>
         <div style={{ fontSize: 11, color: INK_400, marginTop: 3 }}>
-          {task.assigned_by ? `From ${task.assigned_by}` : "Self assigned"} · {task.priority ?? "Medium"} priority
+          {task.assigned_by ? `From ${task.assigned_by}` : "Self assigned"} · {task.priority ?? "Normal"} priority
         </div>
       </div>
       <div style={{
@@ -1020,6 +1026,7 @@ function ManagerLayout({ data, tick, weather, email }: { data: WelcomeData; tick
           <QuickLinksCard links={data.quickLinks} showBookingButton />
         </div>
       </div>
+      <EscalationAlertSection />
     </>
   );
 }
@@ -1045,6 +1052,7 @@ function HodLayout({ data, tick, weather, email }: { data: WelcomeData; tick: nu
           <QuickLinksCard links={data.quickLinks} showBookingButton />
         </div>
       </div>
+      <EscalationAlertSection />
     </>
   );
 }
@@ -1674,6 +1682,13 @@ function KhuramLayout({ data, tick, weather, fx, pensionGbp, calEvents }: {
           <QuickLinksCard links={data.quickLinks} />
         </div>
       </div>
+      <FlowHCMLifecycleSection
+        leaverCount={data.lifecycleLeaverCount ?? 0}
+        deactivatedCount={data.lifecycleDeactivatedCount ?? 0}
+        exemptCount={data.lifecycleExemptCount ?? 0}
+        ambiguousCount={data.lifecycleAmbiguousCount ?? 0}
+      />
+      <EscalationAlertSection />
     </>
   );
 }
@@ -1722,6 +1737,13 @@ function KamranLayout({ data, tick, weather, fx }: {
           </div>
         </div>
       </div>
+      <FlowHCMLifecycleSection
+        leaverCount={data.lifecycleLeaverCount ?? 0}
+        deactivatedCount={data.lifecycleDeactivatedCount ?? 0}
+        exemptCount={data.lifecycleExemptCount ?? 0}
+        ambiguousCount={data.lifecycleAmbiguousCount ?? 0}
+      />
+      <EscalationAlertSection />
     </>
   );
 }
@@ -1779,6 +1801,7 @@ function CeoLayout({ data, tick, weather, fx, pensionGbp = null, email }: {
           <QuickLinksCard links={data.quickLinks} showBookingButton />
         </div>
       </div>
+      <EscalationAlertSection />
     </>
   );
 }
@@ -1881,11 +1904,12 @@ function WelcomePageInner() {
     );
   }
 
-  const isKamran  = email === "kamran@unze.co.uk";
-  const isKhuram  = email === "khuram1901@gmail.com" || email === "k.saleem@unzegroup.com";
-  const isPriv    = data.role === "CEO" || data.role === "Admin" || data.role === "Executive";
-  const isManager = data.role === "Manager";
-  const hasTeamOverdue = isManager && (data.teamOverdueTasks ?? []).length > 0;
+  const isKamran    = email === "kamran@unze.co.uk";
+  const isKhuram    = email === "khuram1901@gmail.com" || email === "k.saleem@unzegroup.com";
+  const isPriv      = data.role === "CEO" || data.role === "Admin" || data.role === "Executive";
+  const isDirector  = data.role === "Director";
+  const isManager   = data.role === "Manager";
+  const hasTeamOverdue = (isManager || isDirector) && (data.teamOverdueTasks ?? []).length > 0;
 
   return (
     <div style={{ background: CANVAS, minHeight: "100vh" }}>
@@ -1896,6 +1920,8 @@ function WelcomePageInner() {
         : isPriv
         ? <CeoLayout     data={data} tick={tick} weather={weather} fx={fx} pensionGbp={pensionGbp} email={email} />
         : hasTeamOverdue
+        ? <HodLayout     data={data} tick={tick} weather={weather} email={email} />
+        : isDirector
         ? <HodLayout     data={data} tick={tick} weather={weather} email={email} />
         : isManager
         ? <ManagerLayout data={data} tick={tick} weather={weather} email={email} />

@@ -1466,7 +1466,7 @@ export default function MeetingsPage() {
             setExtracted({ ...extracted, action_items: extracted.action_items.filter((_, i) => i !== index) });
           };
           const addActionItem = () => {
-            setExtracted({ ...extracted, action_items: [...extracted.action_items, { title: "", notes: "", owner_name: "", priority: "Medium", due_date: "", department: "", company_id: "" }] });
+            setExtracted({ ...extracted, action_items: [...extracted.action_items, { title: "", notes: "", owner_name: "", priority: "Normal", due_date: "", department: "", company_id: "" }] });
           };
           const smallField: React.CSSProperties = { ...inputStyle, fontSize: "12px", padding: "6px 8px" };
 
@@ -1623,7 +1623,7 @@ export default function MeetingsPage() {
                   <div>
                     <label style={{ ...labelStyle, fontSize: "12px" }}>Priority</label>
                     <select value={item.priority} onChange={(e) => updateActionItem(i, { priority: e.target.value })} style={smallField}>
-                      {["Low", "Medium", "High", "Urgent"].map((p) => <option key={p}>{p}</option>)}
+                      {["Low", "Normal", "Urgent", "Critical"].map((p) => <option key={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>

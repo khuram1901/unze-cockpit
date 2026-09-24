@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       description, companyId, assignedTo, assignedToEmail, assignedToMemberId, additionalAssignees,
-      assignedToDepartment, assignedToBusinessUnit, dueDate, priority, status, project, stage, notes,
+      assignedToDepartment, assignedToBusinessUnit, dueDate, dueTime, priority, status, project, stage, notes,
       taskType, replyRequired, explanationRequired, exceptionType, meetingId,
       sourceType, sourceRecordId, sourceLabel, notificationStyle,
       systemActor, requiresManagerSignoff,
@@ -51,6 +51,16 @@ export async function POST(request: NextRequest) {
         .eq("email", assignedToEmail)
         .maybeSingle();
       resolvedCompanyId = assigneeMember?.company_id ?? null;
+    }
+
+    // Every app-submitted task that carries a due date must also carry a due time.
+    // System actors (cash escalation, recurring cron) are exempt — they set their
+    // own schedule and are not routed through the user-facing form validation path.
+    if (dueDate && !dueTime && !systemActor) {
+      return Response.json(
+        { error: "A due time is required. Please set a time alongside the due date." },
+        { status: 400 }
+      );
     }
 
     // Server-side capability check, matching canCreateAssignments() —
@@ -92,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     const result = await createTaskCore({
       description, companyId: resolvedCompanyId, assignedTo, assignedToEmail, assignedToMemberId, additionalAssignees,
-      assignedToDepartment, assignedToBusinessUnit, dueDate, priority, status, project, stage, notes,
+      assignedToDepartment, assignedToBusinessUnit, dueDate, dueTime, priority, status, project, stage, notes,
       taskType, replyRequired, explanationRequired, exceptionType, meetingId,
       sourceType, sourceRecordId, sourceLabel, notificationStyle, actor,
       requiresManagerSignoff: typeof requiresManagerSignoff === "boolean" ? requiresManagerSignoff : undefined,

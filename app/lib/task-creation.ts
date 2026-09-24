@@ -32,6 +32,7 @@ export type CreateTaskInput = {
   assignedToDepartment?: string | null;
   assignedToBusinessUnit?: string | null;
   dueDate?: string | null;
+  dueTime?: string | null; // optional HH:MM, used for escalation thresholds
   priority?: string;
   status?: string;
   project?: string | null;
@@ -118,6 +119,17 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
     return { ok: false, error: "A task can't be created already Completed — it must go through Submitted and HOD sign-off first." };
   }
 
+  // Backend priority normalisation — ensures retired values (Medium, High) never
+  // reach the database even if a bot, API client, or un-updated UI sends them.
+  // This is the last-line-of-defence guard; UI dropdowns and bot parsers also
+  // enforce the active model (Critical | Urgent | Normal | Low) upstream.
+  const normalisedPriority = (() => {
+    const raw = (input.priority ?? "Normal").trim();
+    if (raw === "Medium") return "Normal";  // retired → Normal
+    if (raw === "High")   return "Urgent";  // retired → Urgent
+    return raw;
+  })();
+
   const supabase = createServiceClient();
 
   // Dedup for auto-generated tasks tied to a source record (currently:
@@ -164,7 +176,8 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
       assigned_by_email: assignedByEmail,
       assigned_date: new Date().toISOString().slice(0, 10),
       due_date: input.dueDate ?? null,
-      priority: input.priority ?? "Normal",
+      due_time: input.dueTime ?? null,
+      priority: normalisedPriority,
       status: input.status ?? "Not Started",
       project: input.project ?? null,
       stage: input.stage ?? null,

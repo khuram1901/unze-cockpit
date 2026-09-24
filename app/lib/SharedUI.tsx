@@ -191,11 +191,13 @@ export function isStuckStatus(status: string | null): boolean {
 export function priorityColor(priority: string | null): string {
   if (!priority) return COLOURS.BLUE;
   switch (priority) {
+    case "Critical":
+      return COLOURS.RED;         // same chip slot as Urgent — RED
     case "Urgent":
-    case "High":
+    case "High":                   // legacy
       return COLOURS.RED;
-    case "Medium":
     case "Normal":
+    case "Medium":                 // legacy
       return COLOURS.BLUE;
     case "Low":
       return COLOURS.SLATE;

@@ -30,6 +30,7 @@ export type Member = {
   phone_e164: string | null;
   photo_url: string | null;
   employee_code: string | null;
+  task_default_company_id: string | null;
 };
 
 export type Plant = { id: string; name: string };
@@ -106,6 +107,20 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
 });
 
 type ActiveTab = "people" | "ownership" | "offboard" | "orgchart";
+
+type LifecycleLeaver = {
+  memberId:    string;
+  name:        string | null;
+  email:       string | null;
+  isActive:    boolean;
+  department:  string | null;
+  company:     string | null;
+  managerId:   string | null;
+  eventType:   string;
+  eventDetail: string | null;
+  flaggedAt:   string;
+  openTasks:   number;
+};
 
 // Renders one person plus everyone under them as a proper branching tree —
 // node, a stem down, a horizontal bar across siblings, then a stem down to
@@ -245,6 +260,7 @@ export default function MembersManager() {
 
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [cleanupMode, setCleanupMode] = useState<"all" | "missing_company_id" | "missing_dept">("all");
   const [page, setPage] = useState(0);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("people");
@@ -256,6 +272,18 @@ export default function MembersManager() {
   const [stepIntoLine, setStepIntoLine] = useState(true);
   const [offboarding, setOffboarding] = useState(false);
   const [offboardMsg, setOffboardMsg] = useState("");
+  const [lifecycleLeavers, setLifecycleLeavers] = useState<LifecycleLeaver[]>([]);
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
+
+  async function loadLifecycleLeavers() {
+    setLifecycleLoading(true);
+    const res = await authFetch("/api/members/lifecycle-leavers");
+    if (res.ok) {
+      const j = await res.json();
+      setLifecycleLeavers(j.leavers ?? []);
+    }
+    setLifecycleLoading(false);
+  }
 
   async function loadData() {
     const { data: userData } = await supabase.auth.getUser();
@@ -271,7 +299,7 @@ export default function MembersManager() {
       }
     }
     const { data } = await supabase.from("members")
-      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, manager_id, position_title, is_active, notify_email, notify_whatsapp, phone_e164, photo_url, employee_code")
+      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, manager_id, position_title, is_active, notify_email, notify_whatsapp, phone_e164, photo_url, employee_code, task_default_company_id")
       .order("first_name", { ascending: true });
     if (data) setMembers(data);
 
@@ -294,6 +322,9 @@ export default function MembersManager() {
   }
 
   useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    if (activeTab === "offboard") loadLifecycleLeavers();
+  }, [activeTab]);
 
   async function togglePlant(memberId: string, plantId: string, on: boolean) {
     const key = `${memberId}-${plantId}`;
@@ -622,14 +653,20 @@ export default function MembersManager() {
     </main>
   );
 
-  const filtered = filter
+  const filtered = (filter
     ? members.filter((m) => {
         const q = filter.toLowerCase();
         return fullName(m.first_name, m.last_name, m.name).toLowerCase().includes(q) ||
           (m.email || "").toLowerCase().includes(q) || m.role.toLowerCase().includes(q) ||
           (m.department || "").toLowerCase().includes(q);
       })
-    : members;
+    : members).filter((m) => {
+      if (cleanupMode === "missing_company_id") return !m.task_default_company_id && m.is_active !== false;
+      if (cleanupMode === "missing_dept")       return (!m.department || m.department === "") && m.is_active !== false;
+      return true;
+    });
+  const missingCompanyIdCount = members.filter((m) => !m.task_default_company_id && m.is_active !== false).length;
+  const missingDeptCount      = members.filter((m) => (!m.department || m.department === "") && m.is_active !== false).length;
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginatedMembers = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -754,6 +791,47 @@ export default function MembersManager() {
               </div>
             ))}
           </div>
+
+          {/* ── Cleanup alerts strip (admin-only) ─ */}
+          {isAdmin && (missingCompanyIdCount > 0 || missingDeptCount > 0) && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: COLOURS.SLATE, padding: "6px 0", alignSelf: "center" }}>Data issues:</span>
+              {missingCompanyIdCount > 0 && (
+                <button
+                  onClick={() => { setCleanupMode(cleanupMode === "missing_company_id" ? "all" : "missing_company_id"); setPage(0); }}
+                  style={{
+                    fontSize: 12, fontWeight: 700, padding: "4px 12px",
+                    borderRadius: 20, border: "1px solid #e8d4a2", cursor: "pointer",
+                    background: cleanupMode === "missing_company_id" ? "#B4791F" : "#FBF1DE",
+                    color: cleanupMode === "missing_company_id" ? "white" : "#B4791F",
+                  }}
+                >
+                  ⚠ Missing task company · {missingCompanyIdCount}
+                </button>
+              )}
+              {missingDeptCount > 0 && (
+                <button
+                  onClick={() => { setCleanupMode(cleanupMode === "missing_dept" ? "all" : "missing_dept"); setPage(0); }}
+                  style={{
+                    fontSize: 12, fontWeight: 700, padding: "4px 12px",
+                    borderRadius: 20, border: "1px solid #e8d4a2", cursor: "pointer",
+                    background: cleanupMode === "missing_dept" ? "#B4791F" : "#FBF1DE",
+                    color: cleanupMode === "missing_dept" ? "white" : "#B4791F",
+                  }}
+                >
+                  ⚠ Missing department · {missingDeptCount}
+                </button>
+              )}
+              {cleanupMode !== "all" && (
+                <button
+                  onClick={() => { setCleanupMode("all"); setPage(0); }}
+                  style={{ fontSize: 12, color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+          )}
 
           {/* ── Toolbar: search + export/import + add form ─ */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
@@ -1100,6 +1178,12 @@ export default function MembersManager() {
                             <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
                               {dn}
                               {m.is_hod && <span style={{ fontSize: 10, fontWeight: 700, color: COLOURS.AMBER }}>HOD</span>}
+                              {isAdmin && !m.task_default_company_id && m.is_active !== false && (
+                                <span style={{ fontSize: 9, fontWeight: 700, color: "#B4791F", background: "#FBF1DE", padding: "1px 5px", borderRadius: 10, flexShrink: 0 }}>no task co.</span>
+                              )}
+                              {isAdmin && (!m.department || m.department === "") && m.is_active !== false && (
+                                <span style={{ fontSize: 9, fontWeight: 700, color: "#B4791F", background: "#FBF1DE", padding: "1px 5px", borderRadius: 10, flexShrink: 0 }}>no dept</span>
+                              )}
                             </div>
                             <div style={{ fontSize: 11, color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {m.role}{m.department ? ` · ${m.department}` : ""}
@@ -1208,7 +1292,79 @@ export default function MembersManager() {
         const interimManager = leaver?.manager_id ? members.find((m) => m.id === leaver.manager_id) : null;
         const showStepIntoLine = !!replacement && !replacement.manager_id && !!leaver?.manager_id;
         return (
-          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
+          <>
+          {/* FlowHCM Leaver Alerts */}
+          {lifecycleLoading && (
+            <div style={{ padding: "12px 14px", fontSize: 12, color: COLOURS.SLATE }}>Loading FlowHCM lifecycle alerts…</div>
+          )}
+          {!lifecycleLoading && lifecycleLeavers.length > 0 && (
+            <div style={{ border: `1px solid #e8b4b2`, borderRadius: RADII.CARD, backgroundColor: "#fff8f7", overflow: "hidden", marginBottom: 10 }}>
+              <div style={{ backgroundColor: COLOURS.RED, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 14, color: "white", fontWeight: 700 }}>🔄 FlowHCM Leaver Alerts</span>
+                <span style={{ fontSize: 11, fontWeight: 700, background: "rgba(255,255,255,0.25)", color: "white", padding: "1px 8px", borderRadius: 20 }}>
+                  {lifecycleLeavers.length}
+                </span>
+              </div>
+              <div style={{ padding: "6px 0" }}>
+                {lifecycleLeavers.map((lv) => {
+                  const label =
+                    lv.eventType === "leaver_flagged"  ? "Leaver flagged" :
+                    lv.eventType === "deactivated"     ? "Deactivated" :
+                    lv.eventType === "left_but_exempt" ? "Left (exempt)" : lv.eventType;
+                  const urgent = lv.eventType === "leaver_flagged" || lv.eventType === "deactivated";
+                  return (
+                    <div key={lv.memberId} style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "10px 16px",
+                      borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: COLOURS.NAVY }}>
+                          {lv.name ?? lv.email ?? lv.memberId}
+                          <span style={{
+                            marginLeft: 8, fontSize: 10, fontWeight: 700,
+                            background: urgent ? "#F8E4E2" : "#FBF1DE",
+                            color: urgent ? COLOURS.RED : "#B4791F",
+                            padding: "1px 7px", borderRadius: 20,
+                          }}>{label}</span>
+                          {!lv.isActive && (
+                            <span style={{ marginLeft: 6, fontSize: 10, color: COLOURS.SLATE, fontWeight: 600 }}>· inactive</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: COLOURS.SLATE, marginTop: 2 }}>
+                          {lv.email}{lv.department ? ` · ${lv.department}` : ""}
+                          {" · "}<strong style={{ color: lv.openTasks > 0 ? COLOURS.RED : COLOURS.GREEN }}>{lv.openTasks} open task{lv.openTasks !== 1 ? "s" : ""}</strong>
+                          {lv.eventDetail ? ` · ${lv.eventDetail}` : ""}
+                        </div>
+                      </div>
+                      {lv.isActive && (
+                        <button
+                          onClick={() => {
+                            setLeavingId(lv.memberId);
+                            setOffboardMsg("");
+                            // scroll offboard form into view
+                            setTimeout(() => {
+                              document.getElementById("offboard-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }, 100);
+                          }}
+                          style={{
+                            fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                            background: COLOURS.RED, color: "white",
+                            border: "none", borderRadius: RADII.PILL,
+                            padding: "6px 14px", cursor: "pointer",
+                          }}
+                        >
+                          Prepare handover →
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div id="offboard-form" style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
             <div style={{ backgroundColor: COLOURS.NAVY, padding: "14px 18px" }}>
               <div style={{ fontSize: "14px", fontWeight: 600, color: "white", fontFamily: "var(--font-display)" }}>
                 Offboard a Team Member
@@ -1258,6 +1414,7 @@ export default function MembersManager() {
               )}
             </div>
           </div>
+          </>
         );
       })()}
 

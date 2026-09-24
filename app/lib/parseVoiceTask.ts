@@ -17,7 +17,31 @@ export type ParsedVoiceTask = {
   description: string;
   assigneeName: string | null;  // raw spoken name — caller resolves to a Member
   dueDate: string | null;       // YYYY-MM-DD or null
+  priority: string;             // Critical | Urgent | Normal | Low  (default: Normal)
 };
+
+// ── Priority extraction ───────────────────────────────────────────────────────
+// Scans the transcript for explicit priority keywords.
+// Mapping: critical → Critical, urgent/high → Urgent, medium/normal → Normal, low → Low.
+// "high" is treated as Urgent (retired label). "medium" maps to Normal (retired label).
+
+function extractPriority(text: string): { priority: string; clean: string } {
+  const t = text.toLowerCase();
+  if (/\bcritical\b/.test(t)) {
+    return { priority: "Critical", clean: text.replace(/\bcritical\b/gi, "").replace(/\s{2,}/g, " ").trim() };
+  }
+  if (/\burgent\b|\bhigh[- ]priority\b/.test(t)) {
+    return { priority: "Urgent", clean: text.replace(/\burgent\b|\bhigh[- ]priority\b/gi, "").replace(/\s{2,}/g, " ").trim() };
+  }
+  if (/\blow\b/.test(t)) {
+    return { priority: "Low", clean: text.replace(/\blow\b/gi, "").replace(/\s{2,}/g, " ").trim() };
+  }
+  // medium → Normal (retired label, remap silently)
+  if (/\bmedium\b|\bnormal\b/.test(t)) {
+    return { priority: "Normal", clean: text.replace(/\bmedium\b|\bnormal\b/gi, "").replace(/\s{2,}/g, " ").trim() };
+  }
+  return { priority: "Normal", clean: text };
+}
 
 // ── Date extraction ───────────────────────────────────────────────────────────
 
@@ -131,11 +155,15 @@ export function parseVoiceTask(transcript: string): ParsedVoiceTask {
   // Strip trailing punctuation the STT engine sometimes appends
   text = text.replace(/[.!?]+$/, "").trim();
 
-  // 1. Pull the date out first so it doesn't confuse the name matcher
+  // 1. Extract priority keywords before date/name matching (they can appear anywhere)
+  const { priority, clean: afterPriority } = extractPriority(text);
+  text = afterPriority;
+
+  // 2. Pull the date out so it doesn't confuse the name matcher
   const { date, clean } = extractDate(text);
   text = clean;
 
-  // 2. Try each trigger rule
+  // 3. Try each trigger rule
   for (const { pattern, assigneeGroup, taskGroup } of TRIGGER_RULES) {
     const m = text.match(pattern);
     if (m) {
@@ -143,6 +171,7 @@ export function parseVoiceTask(transcript: string): ParsedVoiceTask {
         description: m[taskGroup].trim(),
         assigneeName: cleanName(m[assigneeGroup]),
         dueDate: date,
+        priority,
       };
     }
   }
@@ -152,6 +181,7 @@ export function parseVoiceTask(transcript: string): ParsedVoiceTask {
     description: text,
     assigneeName: null,
     dueDate: date,
+    priority,
   };
 }
 

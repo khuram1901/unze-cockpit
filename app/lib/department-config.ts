@@ -169,7 +169,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "project", label: "Company", type: "select", required: true, options: ["Unze Trading", "Imperial Footwear", "HD", "Baranh", "K&K Jhang"] },
       { key: "assigned_to", label: "Assigned To", type: "text", required: true, placeholder: "Person name" },
       { key: "due_date", label: "Due Date", type: "date", required: true },
-      { key: "priority", label: "Priority", type: "select", options: ["Low", "Normal", "High", "Urgent"] },
+      { key: "priority", label: "Priority", type: "select", options: ["Low", "Normal", "Urgent", "Critical"] },
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
@@ -200,7 +200,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "description", label: "Task Description", type: "text", required: true, placeholder: "e.g. Set up new laptop for Finance" },
       { key: "assigned_to", label: "Assigned To", type: "text", required: true, placeholder: "Person name" },
       { key: "due_date", label: "Due Date", type: "date", required: true },
-      { key: "priority", label: "Priority", type: "select", options: ["Low", "Normal", "High", "Urgent"] },
+      { key: "priority", label: "Priority", type: "select", options: ["Low", "Normal", "Urgent", "Critical"] },
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
@@ -231,7 +231,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "description", label: "Task Description", type: "text", required: true, placeholder: "e.g. Machine maintenance schedule" },
       { key: "assigned_to", label: "Assigned To", type: "text", required: true, placeholder: "Person name" },
       { key: "due_date", label: "Due Date", type: "date", required: true },
-      { key: "priority", label: "Priority", type: "select", options: ["Low", "Normal", "High", "Urgent"] },
+      { key: "priority", label: "Priority", type: "select", options: ["Low", "Normal", "Urgent", "Critical"] },
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [

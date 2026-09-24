@@ -378,7 +378,7 @@ export default function QuickAddTask({
       body: JSON.stringify({
         taskType: "Task", description: description.trim(),
         companyId: autoCompany.id, project: selected.department || null,
-        stage: null, priority: "Medium", status: "Not Started", dueDate,
+        stage: null, priority: "Normal", status: "Not Started", dueDate,
         assignedTo: selected.name, assignedToEmail: selected.email,
         assignedToMemberId: selected.id, additionalAssignees: [],
         assignedToDepartment: selected.department || null,
@@ -578,7 +578,7 @@ export default function QuickAddTask({
                     {[
                       { label: "Company",    value: autoCompany?.name ?? "—" },
                       { label: "Department", value: selected.department ?? "—" },
-                      { label: "Priority",   value: "Medium" },
+                      { label: "Priority",   value: "Normal" },
                     ].map(({ label, value }) => (
                       <div key={label} style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
                         <span style={{ fontSize: "9.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: ACCENT.text, opacity: 0.6 }}>{label}</span>

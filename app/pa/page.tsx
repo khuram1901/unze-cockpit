@@ -73,7 +73,7 @@ type PaDividend = {
 
 const today = new Date().toISOString().slice(0, 10);
 const STATUSES = ["Not Started", "In Progress", "Waiting Reply", "Completed", "Cancelled"];
-const PRIORITIES = ["Low", "Normal", "High", "Urgent"];
+const PRIORITIES = ["Low", "Normal", "Urgent", "Critical"];
 
 function sevenDaysFromNow() {
   const d = new Date();

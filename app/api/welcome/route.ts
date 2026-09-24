@@ -264,18 +264,47 @@ export async function GET(request: NextRequest) {
 
   // ── 4. Privileged (CEO / Admin / Exec): group stats ────────
   if (isPrivileged(ctx)) {
-    const [grpOvRes, machRes] = await Promise.all([
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const sevenDaysAgo  = new Date(Date.now() -  7 * 86400000).toISOString();
+
+    const [grpOvRes, machRes, lifecycleRes] = await Promise.all([
       supabase.from("tasks").select("id", { count: "exact", head: true })
         .not("status", "in", "(Completed,Cancelled)")
         .lt("due_date", today),
       supabase.from("machine_issues").select("id", { count: "exact", head: true })
         .neq("issue_status", "Resolved"),
+      // Lifecycle events — fetch raw rows and deduplicate in JS
+      supabase.from("flw_lifecycle_events")
+        .select("member_id, event_type, detail, created_at")
+        .in("event_type", ["leaver_flagged", "deactivated", "left_but_exempt", "manager_ambiguous"])
+        .gte("created_at", thirtyDaysAgo),
     ]);
+
+    // Deduplicate: one entry per (member_id, event_type) — keep latest
+    const lcRows = (lifecycleRes.data ?? []) as { member_id: string; event_type: string; detail: string; created_at: string }[];
+    const seen = new Map<string, typeof lcRows[0]>();
+    for (const row of lcRows) {
+      const key = `${row.member_id}::${row.event_type}`;
+      const existing = seen.get(key);
+      if (!existing || row.created_at > existing.created_at) seen.set(key, row);
+    }
+    const deduped = Array.from(seen.values());
+
+    const leaverFlagged = deduped.filter(r => r.event_type === "leaver_flagged");
+    const deactivated   = deduped.filter(r => r.event_type === "deactivated");
+    const exemptLeavers = deduped.filter(r => r.event_type === "left_but_exempt");
+    const ambiguous7d   = deduped.filter(
+      r => r.event_type === "manager_ambiguous" && r.created_at >= sevenDaysAgo
+    );
 
     return Response.json({
       ...base,
-      groupOverdueCount: grpOvRes.count ?? 0,
-      machineIssueCount: machRes.count  ?? 0,
+      groupOverdueCount:          grpOvRes.count ?? 0,
+      machineIssueCount:          machRes.count  ?? 0,
+      lifecycleLeaverCount:       leaverFlagged.length,
+      lifecycleDeactivatedCount:  deactivated.length,
+      lifecycleExemptCount:       exemptLeavers.length,
+      lifecycleAmbiguousCount:    ambiguous7d.length,
     });
   }
 

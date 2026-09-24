@@ -21,7 +21,11 @@ type Company = { id: string; name: string; short_code: string };
 type DepartmentOwner = { id: string; department_name: string };
 type MemberLite = { id: string; name: string; email: string | null; department: string | null; business_unit: string | null; employee_code?: string | null };
 
-const PRIORITY_OPTIONS = ["Urgent", "High", "Medium", "Normal", "Low"];
+const PRIORITY_OPTIONS = ["Critical", "Urgent", "Normal", "Low"];
+// Medium and High are legacy values that may exist on older tasks.
+// They are kept as selectable options so existing tasks can still be
+// displayed and changed, but are not offered for NEW tasks.
+const PRIORITY_OPTIONS_LEGACY = ["High", "Medium"];
 
 // Shared by both the department/weekly/monthly/quarterly list rows
 // (TasksList.tsx) and the Board view (TasksBoard.tsx) so the task detail
@@ -296,6 +300,9 @@ export default function TaskDetailPanel({
                   <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Priority</span>
                   <select value={editPriority} onChange={(e) => { setEditPriority(e.target.value); updateTaskField({ priority: e.target.value }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
                     {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    <optgroup label="— Legacy —">
+                      {PRIORITY_OPTIONS_LEGACY.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </optgroup>
                   </select>
                 </label>
                 <label>

@@ -47,7 +47,7 @@ export default function HRTasksLive() {
   const [adding, setAdding]   = useState(false);
   const [saving, setSaving]   = useState(false);
   const [members, setMembers] = useState<{ id: string; name: string; email: string }[]>([]);
-  const [form, setForm] = useState({ description: "", assignedToEmail: "", dueDate: "", priority: "Medium" });
+  const [form, setForm] = useState({ description: "", assignedToEmail: "", dueDate: "", priority: "Normal" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,7 +89,7 @@ export default function HRTasksLive() {
       const j = await res.json();
       if (!res.ok) { show(j.error ?? "Could not create task.", "error"); return; }
       show("Task created.", "success");
-      setForm({ description: "", assignedToEmail: "", dueDate: "", priority: "Medium" });
+      setForm({ description: "", assignedToEmail: "", dueDate: "", priority: "Normal" });
       setAdding(false);
       load();
     } finally { setSaving(false); }

@@ -22,7 +22,7 @@ type Task = {
   assigned_to:    string | null;
   department:     string | null;
   employee_name:  string | null;
-  priority:       "High" | "Medium" | "Low";
+  priority:       "Critical" | "Urgent" | "Normal" | "Low" | "High" | "Medium";  // High/Medium are legacy
   status:         "Open" | "In Progress" | "Done" | "Cancelled";
   due_date:       string | null;
   is_recurring:   boolean;
@@ -65,11 +65,14 @@ function isDueToday(task: Task): boolean {
 
 function PriorityPill({ priority }: { priority: string }) {
   const map: Record<string, { bg: string; color: string }> = {
-    High:   { bg: COLOURS.DANGER_SOFT,  color: COLOURS.RED   },
-    Medium: { bg: COLOURS.WARNING_SOFT, color: COLOURS.AMBER },
+    Critical: { bg: COLOURS.DANGER_SOFT,   color: COLOURS.RED   },
+    Urgent:   { bg: COLOURS.DANGER_SOFT,   color: COLOURS.RED   },
+    Normal:   { bg: "#EEF1FC",             color: COLOURS.BLUE  },
+    High:     { bg: COLOURS.DANGER_SOFT,   color: COLOURS.RED   },   // legacy
+    Medium:   { bg: "#EEF1FC",             color: COLOURS.BLUE  },   // legacy
     Low:    { bg: COLOURS.HAIRLINE,     color: COLOURS.SLATE },
   };
-  const c = map[priority] ?? map["Medium"];
+  const c = map[priority] ?? map["Normal"];
   return (
     <span style={{
       fontSize: "10px", fontWeight: 700, padding: "2px 7px",
@@ -252,7 +255,7 @@ function AddTaskForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
     assigned_to:   "",
     department:    "",
     employee_name: "",
-    priority:      "Medium",
+    priority:      "Normal",
     due_date:      "",
     is_recurring:  false,
     recurrence:    "Monthly",
@@ -352,8 +355,9 @@ function AddTaskForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
           <div>
             <label style={labelStyle}>Priority</label>
             <select value={form.priority} onChange={e => set("priority", e.target.value)} style={inputStyle}>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
+              <option value="Critical">Critical</option>
+              <option value="Urgent">Urgent</option>
+              <option value="Normal">Normal</option>
               <option value="Low">Low</option>
             </select>
           </div>
@@ -492,7 +496,7 @@ export default function HRTasks() {
           <button key={v} style={pillStyle(filterStatus, v)} onClick={() => setFilterStatus(v)}>{v}</button>
         ))}
         <div style={{ width: "1px", backgroundColor: COLOURS.HAIRLINE, margin: "0 2px" }} />
-        {["All","High","Medium","Low"].map(v => (
+        {["All","Critical","Urgent","Normal","Low"].map(v => (
           <button key={v} style={pillStyle(filterPriority, v)} onClick={() => setFilterPriority(v)}>{v}</button>
         ))}
         {canWrite(member?.role) && (

@@ -377,7 +377,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [taskDesc, setTaskDesc] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
-  const [taskPriority, setTaskPriority] = useState("Medium");
+  const [taskPriority, setTaskPriority] = useState("Normal");
   const [taskAssigneeEmail, setTaskAssigneeEmail] = useState("");
   const [submittingTask, setSubmittingTask] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
@@ -549,7 +549,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     setShowTaskForm(false);
     setTaskDesc("");
     setTaskDueDate("");
-    setTaskPriority("Medium");
+    setTaskPriority("Normal");
     if (!activeConv) return;
     loadMessages(activeConv.conversation_id);
     setConversations((prev) =>
@@ -672,7 +672,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     setTaskAssigneeEmail(firstParticipant?.email ?? "");
     setTaskDesc("");
     setTaskDueDate("");
-    setTaskPriority("Medium");
+    setTaskPriority("Normal");
     setTaskError(null);
     setShowTaskForm(true);
     setNewMessage(""); // clear the @task trigger text

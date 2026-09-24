@@ -35,6 +35,48 @@ async function sendMessage(chatId: number, text: string) {
 
 // ── Date parsing (identical to WhatsApp webhook) ──────────────────────────────
 
+// ── Priority parsing ────────────────────────────────────────────────────────
+// Scans the raw message for explicit priority keywords.
+// Active priorities: Critical | Urgent | Normal | Low
+// Legacy: "high" → Urgent, "medium" → Normal (retired labels).
+
+function parsePriority(text: string): string {
+  const t = text.toLowerCase();
+  if (/\bcritical\b/.test(t))          return "Critical";
+  if (/\burgent\b|\bhigh\b/.test(t)) return "Urgent";
+  if (/\bmedium\b/.test(t))            return "Normal";
+  if (/\blow\b/.test(t))               return "Low";
+  return "Normal";
+}
+
+// ── Due date/time auto-calculation ───────────────────────────────────────────
+// Derives due_date + due_time from now + priority threshold in PKT (UTC+5).
+// Critical = 6 h · Urgent = 24 h · Normal = 48 h
+// Low: 17:00 on the given date (end-of-business-day, not threshold-derived)
+// Low never escalates; its due time is always fixed at 17:00 PKT on the chosen date.
+// givenDate: use caller's explicit date but still derive due_time from threshold.
+
+function calcDueDateTime(
+  priority: string,
+  givenDate: string | null
+): { due_date: string; due_time: string } {
+  const hoursMap: Record<string, number> = { Critical: 6, Urgent: 24, Normal: 48 };
+  const hours = hoursMap[priority] ?? 48;
+  const dueUtc = new Date(Date.now() + hours * 3600 * 1000);
+  const pktParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Karachi",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(dueUtc);
+  const get = (t: string) => pktParts.find((p) => p.type === t)?.value ?? "00";
+  return {
+    due_date: givenDate ?? `${get("year")}-${get("month")}-${get("day")}`,
+    // Low tasks: end-of-business-day (17:00 PKT) on the chosen date — not threshold-derived.
+    // The pending-table flow ensures Low always arrives here with givenDate set.
+    due_time: (priority === "Low" && givenDate) ? "17:00" : `${get("hour")}:${get("minute")}`,
+  };
+}
+
 function pktToday(): Date {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit",
@@ -139,9 +181,10 @@ function resolveAssignee(text: string, members: MemberRow[]): {
 }
 
 async function createTaskFromTelegram(opts: {
-  sender: MemberRow; assignee: MemberRow; description: string; due: string;
+  sender: MemberRow; assignee: MemberRow; description: string;
+  due: string | null; dueTime: string | null; priority: string; autoSetDue?: boolean;
 }): Promise<string> {
-  const { sender, assignee, description, due } = opts;
+  const { sender, assignee, description, due, dueTime, priority, autoSetDue } = opts;
   if (!assignee.company_id) {
     return `⚠ ${fullName(assignee)} has no company set in the dashboard — ask an admin to fix their member record, then resend.`;
   }
@@ -152,17 +195,21 @@ async function createTaskFromTelegram(opts: {
     assignedToEmail: assignee.email,
     assignedToMemberId: assignee.id,
     assignedToDepartment: assignee.department,
-    dueDate: due,
+    dueDate: due ?? undefined,
+    dueTime: dueTime ?? undefined,
+    priority,
     sourceType: "telegram",
     sourceLabel: "Telegram",
     notificationStyle: "task_assigned",
     actor: { kind: "user", name: fullName(sender), email: sender.email || "" },
   });
   if (!result.ok) return `⚠ Could not create the task: ${result.error}`;
-  const dueLabel = new Date(due + "T00:00:00Z").toLocaleDateString("en-GB", {
+  const dueLabel = new Date((due ?? "") + "T00:00:00Z").toLocaleDateString("en-GB", {
     weekday: "short", day: "numeric", month: "short", timeZone: "UTC",
   });
-  return `✓ Task created for ${fullName(assignee)}, due ${dueLabel}:\n"${description}"`;
+  const timeLabel = dueTime ? ` at ${dueTime}` : "";
+  const autoNote  = autoSetDue ? ` (auto-set for ${priority} priority)` : "";
+  return `✓ Task created for ${fullName(assignee)}, due ${dueLabel}${timeLabel}${autoNote}:\n"${description}"`;
 }
 
 // ── Webhook (Telegram POSTs updates here) ────────────────────────────────────
@@ -273,7 +320,17 @@ export async function POST(request: NextRequest) {
       await logOutcome("pending_assignee_gone");
       return new Response("ok", { status: 200 });
     }
-    const reply = await createTaskFromTelegram({ sender, assignee, description: pending.description, due });
+    // Detect priority encoded in description: "[Low] description" means Low.
+    // All other pending rows (created before priority tracking) default to Normal.
+    const pendingPriority = pending.description.startsWith("[Low] ") ? "Low" : "Normal";
+    const pendingDescription = pendingPriority === "Low"
+      ? pending.description.slice("[Low] ".length)
+      : pending.description;
+    const pendingDueAt = calcDueDateTime(pendingPriority, due);
+    const reply = await createTaskFromTelegram({
+      sender, assignee, description: pendingDescription,
+      due, dueTime: pendingDueAt.due_time, priority: pendingPriority,
+    });
     await sendMessage(chatId, reply);
     await logOutcome(reply.startsWith("✓") ? "task_created" : "task_failed");
     return new Response("ok", { status: 200 });
@@ -312,6 +369,7 @@ export async function POST(request: NextRequest) {
     return new Response("ok", { status: 200 });
   }
 
+  const priority = parsePriority(rest);
   const { description, due } = extractDue(rest);
   if (!description) {
     await sendMessage(chatId,
@@ -321,24 +379,36 @@ export async function POST(request: NextRequest) {
   }
 
   if (!due) {
-    // Park the draft and ask for the due date.
-    await supabase.from("telegram_pending_tasks").upsert({
-      sender_chat_id: chatId,
-      sender_email: sender.email || "",
-      sender_name: fullName(sender),
-      assignee_name: fullName(assignee),
-      assignee_email: assignee.email,
-      assignee_member_id: assignee.id,
-      description,
-      created_at: new Date().toISOString(),
-    }, { onConflict: "sender_chat_id" });
-    await sendMessage(chatId,
-      `When is this due? Reply with a date (today, tomorrow, Friday, 5 Sep…) — or "cancel".\n\nTask for ${fullName(assignee)}: "${description}"`);
-    await logOutcome("awaiting_due_date");
+    if (priority === "Low") {
+      // Low with no due date — store in pending table and ask for it.
+      // Low tasks do not escalate but still require a due date before creation.
+      // Priority is encoded as "[Low] " prefix in description so it survives
+      // without a schema migration on telegram_pending_tasks.
+      await supabase.from("telegram_pending_tasks").insert({
+        sender_chat_id: chatId,
+        assignee_member_id: assignee.id,
+        description: `[Low] ${description}`,
+      });
+      await sendMessage(chatId, `Got it — when is this due for ${fullName(assignee)}?\n"${description}"\n\nReply with a date (e.g. "next Friday", "15 Oct") or "cancel" to abandon.`);
+      await logOutcome("pending_low_due_date");
+      return new Response("ok", { status: 200 });
+    }
+    // Critical / Urgent / Normal — auto-calculate due date/time from priority threshold.
+    const { due_date, due_time } = calcDueDateTime(priority, null);
+    const reply = await createTaskFromTelegram({
+      sender, assignee, description, due: due_date, dueTime: due_time,
+      priority, autoSetDue: true,
+    });
+    await sendMessage(chatId, reply);
+    await logOutcome(reply.startsWith("✓") ? "task_created" : "task_failed");
     return new Response("ok", { status: 200 });
   }
 
-  const reply = await createTaskFromTelegram({ sender, assignee, description, due });
+  // Due date given but no time — derive due_time from priority threshold.
+  const { due_time } = calcDueDateTime(priority, due);
+  const reply = await createTaskFromTelegram({
+    sender, assignee, description, due, dueTime: due_time, priority,
+  });
   await sendMessage(chatId, reply);
   await logOutcome(reply.startsWith("✓") ? "task_created" : "task_failed");
   return new Response("ok", { status: 200 });

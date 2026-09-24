@@ -55,3 +55,6 @@ _to_delete/
 
 # Claude web generated context copy
 CLAUDE_SKILLS_CONTEXT.md
+
+# Claude-generated data exports (never commit)
+Claude outputs/

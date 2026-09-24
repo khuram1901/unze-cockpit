@@ -1693,7 +1693,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             </select>
             <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
               <option value="all">All priorities</option>
-              <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
+              <option>Critical</option><option>Urgent</option><option>Normal</option><option>Low</option>
             </select>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
               <option value="all">All statuses</option>
