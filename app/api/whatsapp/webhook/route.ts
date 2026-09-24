@@ -187,7 +187,9 @@ function resolveAssignee(text: string, members: MemberRow[]): { member?: MemberR
     const matches = members.filter((m) => {
       const fn = (m.first_name || "").trim().toLowerCase();
       const ln = (m.last_name || "").trim().toLowerCase();
-      const full = fullName(m).toLowerCase();
+      // Normalise internal whitespace — some member names have double spaces
+      // (e.g. "Asad  Maqsood") which break exact-match when the sender uses one space.
+      const full = fullName(m).toLowerCase().replace(/\s+/g, " ").trim();
       return (
         full === candidate ||
         fn === candidate ||
