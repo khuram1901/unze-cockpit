@@ -33,7 +33,26 @@ export default function EscalationAlertSection() {
       });
   }, []);
 
-  if (loading || tasks.length === 0) return null;
+  if (loading) return null;
+
+  if (tasks.length === 0) {
+    return (
+      <div style={{
+        border: "1.5px solid #D1FAE5",
+        borderRadius: RADII.CARD,
+        padding: "12px 16px",
+        marginTop: "16px",
+        background: "#F0FDF4",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+      }}>
+        <span style={{ fontSize: "13px", fontWeight: 600, color: "#0F7B5F" }}>
+          ✓ No escalated tasks — all caught up
+        </span>
+      </div>
+    );
+  }
 
   const l1 = tasks.filter((t) => t.escalation_level === 1);
   const l2 = tasks.filter((t) => t.escalation_level === 2);
