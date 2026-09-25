@@ -266,6 +266,7 @@ export default function MembersManager() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("people");
 
   const [departments, setDepartments] = useState<DepartmentOwner[]>([]);
+  const [allDeptNames, setAllDeptNames] = useState<string[]>([]);
   const [openTasks, setOpenTasks] = useState<TaskSummary[]>([]);
   const [leavingId, setLeavingId] = useState("");
   const [replacementId, setReplacementId] = useState("");
@@ -313,6 +314,10 @@ export default function MembersManager() {
 
     const { data: deptData } = await supabase.from("department_owners").select("id, department_name, primary_owner_member_id, primary_owner_name").order("department_name");
     setDepartments(deptData || []);
+
+    // Load canonical department list from departments table (dynamic, synced from FlowHCM)
+    const { data: deptsTableData } = await supabase.from("departments").select("department_name").eq("active", true).order("department_name");
+    setAllDeptNames((deptsTableData || []).map((d: { department_name: string }) => d.department_name));
 
     const OPEN_STATUSES = ["Not Started", "In Progress", "Waiting Reply"];
     const { data: taskData } = await supabase.from("tasks").select("id, assigned_to, status").in("status", OPEN_STATUSES);
@@ -975,7 +980,7 @@ export default function MembersManager() {
               <div style={{ display: "grid", gridTemplateColumns: cardGrid(240), gap: "8px", marginTop: "8px" }}>
                 <div><label style={lbl}>Department</label>
                   <select style={inp} value={department} onChange={(e) => { setDepartment(e.target.value); setBusinessUnit(""); }}>
-                    <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+                    <option value="">Select</option>{(allDeptNames.length ? allDeptNames : DEPARTMENTS).map((d) => <option key={d}>{d}</option>)}
                   </select>
                 </div>
                 <div><label style={lbl}>Business Unit</label>
@@ -1221,6 +1226,7 @@ export default function MembersManager() {
                         onSendPwReset={sendPwReset}
                         onSetPw={setPwDirectly}
                         onPhotoSaved={(memberId, url) => setMembers((prev) => prev.map((x) => x.id === memberId ? { ...x, photo_url: url } : x))}
+                        allDeptNames={allDeptNames}
                         onPhotoRemoved={(memberId) => setMembers((prev) => prev.map((x) => x.id === memberId ? { ...x, photo_url: null } : x))}
                       />
                     ) : (

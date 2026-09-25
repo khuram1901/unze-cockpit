@@ -277,6 +277,11 @@ const DEPT_DEFAULT_COMPANY: Record<string, string> = {
   "Marketing":             "Imperial Footwear",
   "Retail Operations":     "Imperial Footwear",
   "Fit Out & Maintenance": "Imperial Footwear",
+  // Baranh departments
+  "Restaurant":             "Baranh",
+  "Restaurant Head Office": "Baranh",
+  "Accounts Baranh":        "Baranh",
+  "Chocofay":               "Baranh",
 };
 // Company list for member assignment — imported from constants (single source of truth)
 const MEMBER_COMPANIES = MEMBER_COMPANY_NAMES;
@@ -463,6 +468,8 @@ export type MemberDrawerProps = {
   onSetPw: (email: string, name: string, pw: string) => void;
   onPhotoSaved: (memberId: string, url: string) => void;
   onPhotoRemoved: (memberId: string) => void;
+  /** Canonical department list loaded from the departments table. Falls back to hardcoded list if not provided. */
+  allDeptNames?: string[];
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -472,7 +479,7 @@ export type MemberDrawerProps = {
 export default function MemberDrawer({
   member, me, members, plants, assignments, savingAssignment, myAssignableRoles,
   onClose, onUpdate, onTogglePlant, onToggleTeam, onDelete,
-  onSendPwReset, onSetPw, onPhotoSaved, onPhotoRemoved,
+  onSendPwReset, onSetPw, onPhotoSaved, onPhotoRemoved, allDeptNames,
 }: MemberDrawerProps) {
   const toast = useToast();
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("access");
@@ -1086,7 +1093,7 @@ export default function MemberDrawer({
                     onUpdate(member.id, updates);
                   }}>
                   <option value="">—</option>
-                  {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+                  {(allDeptNames && allDeptNames.length ? allDeptNames : DEPARTMENTS).map((d) => <option key={d}>{d}</option>)}
                 </select>
               </Field>
               <Field label="Business unit" disabled={!canEdit}>
