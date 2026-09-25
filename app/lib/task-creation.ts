@@ -214,8 +214,9 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
     return true;
   });
   if (assigneeRows.length > 0) {
-    const { error: assigneeError } = await supabase.from("task_assignees").insert(
-      assigneeRows.map((a) => ({ task_id: newTask.id, member_id: a.memberId ?? null, member_name: a.name, member_email: a.email }))
+    const { error: assigneeError } = await supabase.from("task_assignees").upsert(
+      assigneeRows.map((a) => ({ task_id: newTask.id, member_id: a.memberId ?? null, member_name: a.name, member_email: a.email, assigned_via: "main_task" as const })),
+      { onConflict: "task_id,member_email" } // upgrades 'subtask' → 'main_task' if they were added via a subtask first
     );
     if (assigneeError) console.error("Task created but task_assignees insert failed", newTask.id, assigneeError);
   }

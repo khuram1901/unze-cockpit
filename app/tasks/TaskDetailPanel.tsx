@@ -147,7 +147,7 @@ export default function TaskDetailPanel({
         supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name"),
         supabase.from("department_owners").select("id, department_name").order("department_name"),
         supabase.from("members").select("id, name, email, department, business_unit, employee_code").eq("is_active", true).order("name"),
-        supabase.from("task_assignees").select("member_id, member_email").eq("task_id", task.id),
+        supabase.from("task_assignees").select("member_id, member_email").eq("task_id", task.id).eq("assigned_via", "main_task"),
       ]);
       setCompanies(companiesRes.data || []);
       setDeptOwners(deptRes.data || []);
@@ -190,9 +190,10 @@ export default function TaskDetailPanel({
       return;
     }
 
-    await supabase.from("task_assignees").delete().eq("task_id", task.id);
-    const { error: assigneeError } = await supabase.from("task_assignees").insert(
-      selected.map((m) => ({ task_id: task.id, member_id: m.id, member_name: m.name, member_email: m.email }))
+    await supabase.from("task_assignees").delete().eq("task_id", task.id).eq("assigned_via", "main_task");
+    const { error: assigneeError } = await supabase.from("task_assignees").upsert(
+      selected.map((m) => ({ task_id: task.id, member_id: m.id, member_name: m.name, member_email: m.email, assigned_via: "main_task" as const })),
+      { onConflict: "task_id,member_email" } // upgrades subtask-only row to main_task if needed
     );
     if (assigneeError) { alert("Task saved, but the owner list failed to update: " + assigneeError.message); }
     onChanged();

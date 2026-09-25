@@ -169,7 +169,8 @@ export default function NewTaskForm({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const [subtasks, setSubtasks] = useState<string[]>([]);
+  type SubtaskDraft = { title: string; assignees: { id: string; name: string; email: string }[] };
+  const [subtasks, setSubtasks] = useState<SubtaskDraft[]>([]);
   const [subtaskInput, setSubtaskInput] = useState("");
   const [assigneeSearch, setAssigneeSearch] = useState("");
 
@@ -259,12 +260,27 @@ export default function NewTaskForm({
   function addSubtask() {
     const text = subtaskInput.trim();
     if (!text) return;
-    setSubtasks((prev) => [...prev, text]);
+    setSubtasks((prev) => [...prev, { title: text, assignees: [] }]);
     setSubtaskInput("");
   }
 
   function removeSubtask(index: number) {
     setSubtasks((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addSubtaskAssignee(index: number, member: Member) {
+    if (!member.email) return; // skip members without an email address
+    setSubtasks((prev) => prev.map((s, i) =>
+      i === index
+        ? { ...s, assignees: [...s.assignees, { id: member.id, name: member.name, email: member.email as string }] }
+        : s
+    ));
+  }
+
+  function removeSubtaskAssignee(index: number, email: string) {
+    setSubtasks((prev) => prev.map((s, i) =>
+      i === index ? { ...s, assignees: s.assignees.filter((a) => a.email !== email) } : s
+    ));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -331,11 +347,25 @@ export default function NewTaskForm({
     const newTaskId: string | undefined = result?.taskId;
 
     if (subtasks.length > 0 && newTaskId) {
-      const { error: subtaskError } = await supabase.from("task_subtasks").insert(
-        subtasks.map((title, i) => ({ task_id: newTaskId, title, position: i }))
-      );
+      const { data: insertedSubtasks, error: subtaskError } = await supabase
+        .from("task_subtasks")
+        .insert(subtasks.map((s, i) => ({ task_id: newTaskId, title: s.title, position: i })))
+        .select("id, position");
       if (subtaskError) {
         toast.show("Task created, but subtasks failed to save: " + subtaskError.message, "error");
+      } else if (insertedSubtasks) {
+        // Assign per-subtask members via API route (handles task_assignees visibility + notifications)
+        for (const row of insertedSubtasks) {
+          const draft = subtasks[row.position];
+          if (!draft?.assignees.length) continue;
+          for (const a of draft.assignees) {
+            await authFetch(`/api/tasks/${newTaskId}/subtask-assignees`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ subtaskId: row.id, memberEmail: a.email, memberName: a.name, memberId: a.id }),
+            });
+          }
+        }
       }
     }
 
@@ -631,15 +661,35 @@ export default function NewTaskForm({
             {subtasks.length > 0 && (
               <div style={{ marginTop: "6px", marginBottom: "6px" }}>
                 {subtasks.map((s, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                    <span style={{ fontSize: "13.5px", color: COLOURS.NAVY }}>{s}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeSubtask(i)}
-                      style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "11.5px", fontWeight: 600, cursor: "pointer" }}
-                    >
-                      Remove
-                    </button>
+                  <div key={i} style={{ padding: "6px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: "13.5px", color: COLOURS.NAVY }}>{s.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeSubtask(i)}
+                        style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "11.5px", fontWeight: 600, cursor: "pointer" }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
+                      {s.assignees.map((a) => (
+                        <span key={a.email} style={{ fontSize: "11px", backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "2px 8px", color: COLOURS.NAVY, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          {a.name}
+                          <button type="button" onClick={() => removeSubtaskAssignee(i, a.email)} style={{ background: "none", border: "none", color: COLOURS.SLATE, cursor: "pointer", padding: 0, fontSize: "12px", lineHeight: 1 }}>×</button>
+                        </span>
+                      ))}
+                      <select
+                        value=""
+                        onChange={(e) => { const m = members.find((m) => m.id === e.target.value); if (m) addSubtaskAssignee(i, m); }}
+                        style={{ fontSize: "11px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "2px 6px", color: COLOURS.SLATE, backgroundColor: COLOURS.CARD, cursor: "pointer" }}
+                      >
+                        <option value="">+ Assign</option>
+                        {members.filter((m) => !s.assignees.some((a) => a.id === m.id)).map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 ))}
               </div>

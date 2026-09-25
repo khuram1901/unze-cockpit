@@ -54,11 +54,13 @@ type Task = {
   meeting_id?: string | null;
 };
 
+type SubtaskAssigneeRow = { member_id: string | null; member_name: string; member_email: string };
 type Subtask = {
   id: string;
   title: string;
   is_complete: boolean;
   position: number;
+  task_subtask_assignees?: SubtaskAssigneeRow[];
 };
 
 type DueDateHistoryRow = {
@@ -178,10 +180,10 @@ export default function TaskStatus({
   async function loadSubtasks() {
     const { data } = await supabase
       .from("task_subtasks")
-      .select("id, title, is_complete, position")
+      .select("id, title, is_complete, position, task_subtask_assignees(member_id, member_name, member_email)")
       .eq("task_id", task.id)
       .order("position", { ascending: true });
-    setSubtasks(data || []);
+    setSubtasks((data || []) as Subtask[]);
   }
 
   useEffect(() => {
@@ -234,8 +236,8 @@ export default function TaskStatus({
     }).eq("id", task.id);
     if (error) { setSaving(false); toast.show("Error returning task: " + error.message, "error"); return; }
     // tasks update succeeded — now sync task_assignees to match
-    await supabase.from("task_assignees").delete().eq("task_id", task.id);
-    await supabase.from("task_assignees").insert({ task_id: task.id, member_id: original.id, member_name: original.name, member_email: original.email });
+    await supabase.from("task_assignees").delete().eq("task_id", task.id).eq("assigned_via", "main_task");
+    await supabase.from("task_assignees").upsert({ task_id: task.id, member_id: original.id, member_name: original.name, member_email: original.email, assigned_via: "main_task" as const }, { onConflict: "task_id,member_email" });
     setSaving(false);
     logAction("Updated", "tasks", `Returned to ${original.name}: ${task.id}`, task.id);
     setStatus("In Progress");
@@ -292,8 +294,8 @@ export default function TaskStatus({
 
     // tasks saved — now sync task_assignees to match
     if (__assignee?.id) {
-      await supabase.from("task_assignees").delete().eq("task_id", task.id);
-      await supabase.from("task_assignees").insert({ task_id: task.id, member_id: __assignee.id, member_name: __assignee.name, member_email: __assignee.email });
+      await supabase.from("task_assignees").delete().eq("task_id", task.id).eq("assigned_via", "main_task");
+      await supabase.from("task_assignees").upsert({ task_id: task.id, member_id: __assignee.id, member_name: __assignee.name, member_email: __assignee.email, assigned_via: "main_task" as const }, { onConflict: "task_id,member_email" });
     }
 
     logAction("Updated", "tasks", `Waiting Reply set — routed to ${route.assigned_to || "manager"}: ${task.id}`, task.id);
@@ -335,8 +337,8 @@ export default function TaskStatus({
 
     // tasks saved — now sync task_assignees to match
     if (__assignee?.id) {
-      await supabase.from("task_assignees").delete().eq("task_id", task.id);
-      await supabase.from("task_assignees").insert({ task_id: task.id, member_id: __assignee.id, member_name: __assignee.name, member_email: __assignee.email });
+      await supabase.from("task_assignees").delete().eq("task_id", task.id).eq("assigned_via", "main_task");
+      await supabase.from("task_assignees").upsert({ task_id: task.id, member_id: __assignee.id, member_name: __assignee.name, member_email: __assignee.email, assigned_via: "main_task" as const }, { onConflict: "task_id,member_email" });
     }
 
     logAction("Updated", "tasks", `Reply & Return to ${task.waiting_reply_by_name || task.waiting_reply_by_email}: ${task.id}`, task.id);
@@ -409,13 +411,14 @@ export default function TaskStatus({
         .ilike("email", extraFields.assigned_to_email as string)
         .maybeSingle();
       if (submitterMember?.id) {
-        await supabase.from("task_assignees").delete().eq("task_id", task.id);
-        await supabase.from("task_assignees").insert({
+        await supabase.from("task_assignees").delete().eq("task_id", task.id).eq("assigned_via", "main_task");
+        await supabase.from("task_assignees").upsert({
           task_id: task.id,
           member_id: submitterMember.id,
           member_name: submitterMember.name,
           member_email: submitterMember.email,
-        });
+          assigned_via: "main_task" as const,
+        }, { onConflict: "task_id,member_email" });
       }
     }
 
@@ -1102,10 +1105,54 @@ export default function TaskStatus({
         )}
         <div style={{ marginTop: subtasks.length > 0 ? "8px" : 0 }}>
           {subtasks.map((s) => (
-            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 0" }}>
-              <input type="checkbox" checked={s.is_complete} disabled={locked} onChange={() => toggleSubtask(s)} style={{ width: "15px", height: "15px", accentColor: COLOURS.GREEN, cursor: locked ? "default" : "pointer" }} />
-              <span style={{ fontSize: "13px", color: s.is_complete ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: s.is_complete ? "line-through" : "none", flex: 1 }}>{s.title}</span>
-              {!locked && <button onClick={() => removeSubtask(s)} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Remove</button>}
+            <div key={s.id} style={{ padding: "4px 0", borderBottom: `1px solid ${COLOURS.TRACK}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input type="checkbox" checked={s.is_complete} disabled={locked} onChange={() => toggleSubtask(s)} style={{ width: "15px", height: "15px", accentColor: COLOURS.GREEN, cursor: locked ? "default" : "pointer" }} />
+                <span style={{ fontSize: "13px", color: s.is_complete ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: s.is_complete ? "line-through" : "none", flex: 1 }}>{s.title}</span>
+                {!locked && <button onClick={() => removeSubtask(s)} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Remove</button>}
+              </div>
+              {/* Subtask assignees */}
+              <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap", marginTop: "4px", marginLeft: "23px" }}>
+                {(s.task_subtask_assignees || []).map((a) => (
+                  <span key={a.member_email} style={{ fontSize: "10.5px", backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "1px 7px", color: COLOURS.NAVY, display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                    {a.member_name}
+                    {!locked && (
+                      <button
+                        onClick={async () => {
+                          await authFetch(`/api/tasks/${task.id}/subtask-assignees`, {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ subtaskId: s.id, memberEmail: a.member_email }),
+                          });
+                          loadSubtasks();
+                        }}
+                        style={{ background: "none", border: "none", color: COLOURS.SLATE, cursor: "pointer", padding: 0, fontSize: "11px", lineHeight: 1 }}
+                      >×</button>
+                    )}
+                  </span>
+                ))}
+                {!locked && (
+                  <select
+                    value=""
+                    onChange={async (e) => {
+                      const m = memberNames.find((x) => x.name === e.target.value);
+                      if (!m) return;
+                      await authFetch(`/api/tasks/${task.id}/subtask-assignees`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ subtaskId: s.id, memberEmail: m.email, memberName: m.name, memberId: m.id }),
+                      });
+                      loadSubtasks();
+                    }}
+                    style={{ fontSize: "10.5px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "1px 5px", color: COLOURS.SLATE, backgroundColor: COLOURS.CARD, cursor: "pointer" }}
+                  >
+                    <option value="">+ Assign</option>
+                    {memberNames
+                      .filter((m) => !(s.task_subtask_assignees || []).some((a) => a.member_email === m.email))
+                      .map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+                  </select>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -1237,8 +1284,8 @@ export default function TaskStatus({
                 // this one person, matching the Owner(s) editor's
                 // pattern in TaskDetailPanel.tsx.
                 if (m?.id) {
-                  await supabase.from("task_assignees").delete().eq("task_id", task.id);
-                  await supabase.from("task_assignees").insert({ task_id: task.id, member_id: m.id, member_name: m.name, member_email: m.email });
+                  await supabase.from("task_assignees").delete().eq("task_id", task.id).eq("assigned_via", "main_task");
+                  await supabase.from("task_assignees").upsert({ task_id: task.id, member_id: m.id, member_name: m.name, member_email: m.email, assigned_via: "main_task" as const }, { onConflict: "task_id,member_email" });
                 }
                 logAction("Updated", "tasks", `Reassigned to ${e.target.value}`, task.id);
                 onChanged();

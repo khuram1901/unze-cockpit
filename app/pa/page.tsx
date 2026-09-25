@@ -256,8 +256,8 @@ export default function PADashboardPage() {
         updated_at: new Date().toISOString(),
       }).eq("id", id);
       if (!error && member?.id) {
-        await supabase.from("task_assignees").delete().eq("task_id", id);
-        await supabase.from("task_assignees").insert({ task_id: id, member_id: member.id, member_name: newPerson, member_email: member.email });
+        await supabase.from("task_assignees").delete().eq("task_id", id).eq("assigned_via", "main_task");
+        await supabase.from("task_assignees").upsert({ task_id: id, member_id: member.id, member_name: newPerson, member_email: member.email, assigned_via: "main_task" as const }, { onConflict: "task_id,member_email" });
       }
     }
     logAction("Updated", "tasks", `Bulk reassigned ${selectedTasks.size} tasks to ${newPerson} (from: ${Array.from(previousAssignees).join(", ")})`);
@@ -430,8 +430,8 @@ export default function PADashboardPage() {
                 // Only sync task_assignees if tasks.update succeeded —
                 // prevents split-brain (same fix as Civil Defense task, Jul 2026).
                 if (!reassignError && m?.id) {
-                  await supabase.from("task_assignees").delete().eq("task_id", task.id);
-                  await supabase.from("task_assignees").insert({ task_id: task.id, member_id: m.id, member_name: newOwner, member_email: m.email });
+                  await supabase.from("task_assignees").delete().eq("task_id", task.id).eq("assigned_via", "main_task");
+                  await supabase.from("task_assignees").upsert({ task_id: task.id, member_id: m.id, member_name: newOwner, member_email: m.email, assigned_via: "main_task" as const }, { onConflict: "task_id,member_email" });
                 }
               }} style={controlStyle}>
                 <option value="">Reassign...</option>
