@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import { logAction } from "../lib/audit-log";
@@ -79,7 +79,19 @@ const kickerStyle: React.CSSProperties = {
   display: "block",
 };
 
-export default function NewTaskForm({ onCreated, prefillDescription = "" }: { onCreated?: () => void; prefillDescription?: string } = {}) {
+export default function NewTaskForm({
+  onCreated,
+  prefillDescription = "",
+  prefillAssigneeId,
+  prefillDueDate,
+  prefillPriority,
+}: {
+  onCreated?: () => void;
+  prefillDescription?: string;
+  prefillAssigneeId?: string;
+  prefillDueDate?: string;
+  prefillPriority?: string;
+} = {}) {
   const router = useRouter();
   const toast = useToast();
   const today = todayDate();
@@ -94,20 +106,42 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
   // in the same session — React 18 batching means the state update and the modal open land
   // in the same render, but this guard covers edge cases where the prop arrives late).
   useEffect(() => { setDescription(prefillDescription); }, [prefillDescription]);
+  useEffect(() => { if (prefillDueDate) setDueDate(prefillDueDate); }, [prefillDueDate]);
+  useEffect(() => { if (prefillPriority) setPriority(prefillPriority); }, [prefillPriority]);
+
+  // When a prefilled assignee ID arrives (from QuickAddTask → More Options),
+  // auto-select them and fill company + department — mirrors the toggleAssignee logic
+  // but runs after members have loaded (they may not be ready at initial render).
+  const prefillAssigneeApplied = useRef(false);
+  useEffect(() => {
+    if (!prefillAssigneeId || members.length === 0 || prefillAssigneeApplied.current) return;
+    prefillAssigneeApplied.current = true;
+    const m = members.find((x) => x.id === prefillAssigneeId);
+    if (!m) return;
+    setAssignedToIds((prev) => prev.includes(prefillAssigneeId) ? prev : [prefillAssigneeId, ...prev]);
+    if (!companyTouched && m.task_default_company_id) {
+      setCompanyId(m.task_default_company_id);
+      setCompanyTouched(true);
+    }
+    if (!project && m.department && projectAreas.includes(m.department)) {
+      setProject(m.department);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillAssigneeId, members, projectAreas]);
   const [companyId, setCompanyId] = useState<string>(""); // "" = Group / needs review
   const [companyTouched, setCompanyTouched] = useState(false); // must actively pick, "" is a real choice not a default
   const [project, setProject] = useState("");
   const [stage, setStage] = useState("");
-  const [priority, setPriority] = useState("Normal");
+  const [priority, setPriority] = useState(prefillPriority || "Normal");
   const [status, setStatus] = useState("Not Started");
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(prefillDueDate || "");
   const [dueTime, setDueTime] = useState(""); // optional HH:MM — combined with due_date for escalation
   // Multi-owner: Khuram wants the same task assignable to more than one
   // person, each seeing it as their own — not just a heads-up. First
   // person ticked stays the "primary" owner for every existing report/
   // notification/WhatsApp reminder that only knows about one; the rest
   // are additive co-owners stored in task_assignees.
-  const [assignedToIds, setAssignedToIds] = useState<string[]>([]);
+  const [assignedToIds, setAssignedToIds] = useState<string[]>(prefillAssigneeId ? [prefillAssigneeId] : []);
   const [assignedBy, setAssignedBy] = useState("");
   const [assignedByEmail, setAssignedByEmail] = useState("");
   const [notes, setNotes] = useState("");
@@ -218,10 +252,7 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
       toast.show("Due date is required — every task must have a deadline.", "error");
       return;
     }
-    if (!dueTime) {
-      toast.show("A due time is required for every task.", "error");
-      return;
-    }
+    // dueTime is optional — the API defaults to 17:00 when omitted.
     if (!companyTouched || !companyId) {
       toast.show("Please choose a Company.", "error");
       return;
@@ -564,13 +595,12 @@ export default function NewTaskForm({ onCreated, prefillDescription = "" }: { on
           </label>
 
           <label>
-            <span style={kickerStyle}>Due time</span>
+            <span style={kickerStyle}>Due time <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional — defaults to 17:00)</span></span>
             <input
               type="time"
               style={{ ...inputStyle, marginTop: "4px" }}
               value={dueTime}
               onChange={(e) => setDueTime(e.target.value)}
-              required
             />
           </label>
 

@@ -53,14 +53,41 @@ export async function POST(request: NextRequest) {
       resolvedCompanyId = assigneeMember?.company_id ?? null;
     }
 
-    // Every app-submitted task that carries a due date must also carry a due time.
-    // System actors (cash escalation, recurring cron) are exempt — they set their
-    // own schedule and are not routed through the user-facing form validation path.
-    if (dueDate && !dueTime && !systemActor) {
-      return Response.json(
-        { error: "A due time is required. Please set a time alongside the due date." },
-        { status: 400 }
-      );
+    // Due-date / due-time policy (updated to match UX policy):
+    // • No dueDate (non-system): auto-compute from priority; Low → error.
+    // • dueDate set but no dueTime: default to 17:00.
+    // System actors (cash escalation, recurring cron) set their own schedule
+    // and already include dueTime — they are not subject to these defaults.
+    let resolvedDueDate: string | null = (dueDate as string) || null;
+    let resolvedDueTime: string | null = (dueTime as string) || null;
+
+    if (!systemActor) {
+      if (!resolvedDueDate) {
+        // Normalise priority in advance so the threshold uses the canonical value.
+        const normP = (() => {
+          const raw = ((priority as string) ?? "Normal").trim();
+          if (raw === "Medium") return "Normal";
+          if (raw === "High")   return "Urgent";
+          return raw || "Normal";
+        })();
+        if (normP === "Low") {
+          return Response.json(
+            { error: "Low priority tasks require a due date — please set one before creating the task." },
+            { status: 400 }
+          );
+        }
+        // Critical → +6 h, Urgent → +24 h, Normal (and anything else) → +48 h
+        const hoursOffset = normP === "Critical" ? 6 : normP === "Urgent" ? 24 : 48;
+        const deadline = new Date(Date.now() + hoursOffset * 60 * 60 * 1000);
+        resolvedDueDate = deadline.toISOString().slice(0, 10);
+        // Derive time from the computed deadline so Critical tasks don't silently
+        // get a 5pm EOD when they're due in 6 hours.
+        if (!resolvedDueTime) resolvedDueTime = deadline.toISOString().slice(11, 16);
+      }
+      // User picked a date but left the time blank → default end-of-business.
+      if (resolvedDueDate && !resolvedDueTime) {
+        resolvedDueTime = "17:00";
+      }
     }
 
     // Server-side capability check, matching canCreateAssignments() —
@@ -102,7 +129,7 @@ export async function POST(request: NextRequest) {
 
     const result = await createTaskCore({
       description, companyId: resolvedCompanyId, assignedTo, assignedToEmail, assignedToMemberId, additionalAssignees,
-      assignedToDepartment, assignedToBusinessUnit, dueDate, dueTime, priority, status, project, stage, notes,
+      assignedToDepartment, assignedToBusinessUnit, dueDate: resolvedDueDate, dueTime: resolvedDueTime, priority, status, project, stage, notes,
       taskType, replyRequired, explanationRequired, exceptionType, meetingId,
       sourceType, sourceRecordId, sourceLabel, notificationStyle, actor,
       requiresManagerSignoff: typeof requiresManagerSignoff === "boolean" ? requiresManagerSignoff : undefined,

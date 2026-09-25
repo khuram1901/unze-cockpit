@@ -14,6 +14,14 @@ import QuickAddTask from "./QuickAddTask";
 import TasksList from "./TasksList";
 import AuditTasksPanel from "./AuditTasksPanel";
 
+type QuickPrefill = {
+  description: string;
+  assigneeId?: string;
+  dueDate?: string;
+  priority?: string;
+};
+
+
 export default function TasksPageClient() {
   const { ctx, loading } = useUserCtx();
   const searchParams = useSearchParams();
@@ -29,7 +37,7 @@ export default function TasksPageClient() {
 
   const [showQuick,      setShowQuick]      = useState(voiceParam || !!textParam);
   const [showFull,       setShowFull]       = useState(false);
-  const [fullPrefill,    setFullPrefill]    = useState("");
+  const [fullPrefill,    setFullPrefill]    = useState<QuickPrefill | null>(null);
   // Increments every time openFull() is called — used as the key on NewTaskForm
   // so React always unmounts/remounts with fresh state, regardless of whether
   // the prefill text changed (key={fullPrefill} silently fails when the same
@@ -47,7 +55,10 @@ export default function TasksPageClient() {
   const impExp    = ctx ? canImportExport(ctx) : false;
   const scopedEmail = ctx ? scopedToMemberEmail(ctx) : null;
 
-  function openFull(prefill = "") {
+  function openFull(payload: QuickPrefill | string = "") {
+    const prefill: QuickPrefill = typeof payload === "string"
+      ? { description: payload }
+      : payload;
     setFullOpenCount((c) => c + 1); // always force a fresh NewTaskForm mount
     setFullPrefill(prefill);
     setShowQuick(false);
@@ -99,7 +110,14 @@ export default function TasksPageClient() {
           {/* key={fullOpenCount} forces a fresh mount every time More Options is clicked —
               even if the prefill text hasn't changed — so useState(prefillDescription) in
               NewTaskForm always initialises from the latest value rather than reusing stale state. */}
-          <NewTaskForm key={fullOpenCount} onCreated={() => setShowFull(false)} prefillDescription={fullPrefill} />
+          <NewTaskForm
+            key={fullOpenCount}
+            onCreated={() => setShowFull(false)}
+            prefillDescription={fullPrefill?.description ?? ""}
+            prefillAssigneeId={fullPrefill?.assigneeId}
+            prefillDueDate={fullPrefill?.dueDate}
+            prefillPriority={fullPrefill?.priority}
+          />
         </Modal>
       )}
 
