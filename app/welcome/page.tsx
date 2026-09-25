@@ -780,48 +780,103 @@ function HodStatStrip({ data }: { data: WelcomeData }) {
 /* ─── CEO dark stat strip ────────────────────────────────────── */
 function CeoStatStrip({ data }: { data: WelcomeData }) {
   const isMobile = useMobile();
+  const [escalationCount, setEscalationCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    supabase
+      .rpc("get_my_escalated_tasks")
+      .then(({ data: rows, error }) => {
+        setEscalationCount(!error && rows ? (rows as unknown[]).length : 0);
+      });
+  }, []);
+
+  const flowTotal =
+    (data.lifecycleLeaverCount    ?? 0) +
+    (data.lifecycleDeactivatedCount ?? 0) +
+    (data.lifecycleExemptCount    ?? 0) +
+    (data.lifecycleAmbiguousCount ?? 0);
+  const showFlowHCM = data.lifecycleLeaverCount !== undefined;
+  const esc = escalationCount ?? 0;
+  const escLoaded = escalationCount !== null;
+
+  const BLOCK_SEP: CSSProperties = { paddingRight: 32, marginRight: 32, borderRight: "1px solid rgba(255,255,255,0.07)" };
+  const LABEL_STYLE: CSSProperties = { fontSize: 10, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 };
+  const BIG_NUM: CSSProperties = { fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 26, letterSpacing: "-0.03em", lineHeight: 1 };
+  const SM_NUM: CSSProperties  = { fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 18 };
+  const SUB_LBL: CSSProperties = { fontSize: 9.5, color: "rgba(255,255,255,0.3)" };
+
   return (
     <div style={{
       background: "linear-gradient(90deg, #0a1118 0%, #0f1820 100%)",
       borderBottom: "1px solid rgba(255,255,255,0.06)",
       padding: isMobile ? "10px 16px" : "14px 40px", display: "flex", gap: 0, alignItems: "center", flexWrap: "wrap" as any,
     }}>
-      {[
-        {
-          label: "Group tasks",
-          sub: [
-            { n: data.groupOverdueCount ?? 0,  l: "Overdue", c: "#F8E4E2" },
-            { n: data.myTodayCount,             l: "Today",   c: "#FBF1DE" },
-          ],
-        },
-        { label: "Machine issues", single: { n: data.machineIssueCount ?? 0, c: data.machineIssueCount ? "#FBF1DE" : "#7DD9C2" } },
-        {
-          label: "My tasks",
-          sub: [
-            { n: data.myOverdueCount, l: "Overdue", c: data.myOverdueCount > 0 ? "#F8E4E2" : "#7DD9C2" },
-            { n: data.myTodayCount,   l: "Today",   c: "#FBF1DE" },
-          ],
-        },
-      ].map((block, bi) => (
-        <div key={block.label} style={{
-          paddingRight: 32, marginRight: 32,
-          borderRight: bi < 2 ? "1px solid rgba(255,255,255,0.07)" : undefined,
-        }}>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>{block.label}</div>
-          {block.single ? (
-            <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 26, color: block.single.c, letterSpacing: "-0.03em", lineHeight: 1 }}>{block.single.n}</div>
-          ) : (
-            <div style={{ display: "flex", gap: 16 }}>
-              {(block.sub ?? []).map(s => (
-                <div key={s.l}>
-                  <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 18, color: s.c }}>{s.n}</div>
-                  <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)" }}>{s.l}</div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Group tasks */}
+      <div style={BLOCK_SEP}>
+        <div style={LABEL_STYLE}>Group tasks</div>
+        <div style={{ display: "flex", gap: 16 }}>
+          <div>
+            <div style={{ ...SM_NUM, color: "#F8E4E2" }}>{data.groupOverdueCount ?? 0}</div>
+            <div style={SUB_LBL}>Overdue</div>
+          </div>
+          <div>
+            <div style={{ ...SM_NUM, color: "#FBF1DE" }}>{data.myTodayCount}</div>
+            <div style={SUB_LBL}>Today</div>
+          </div>
         </div>
-      ))}
+      </div>
+
+      {/* Machine issues */}
+      <div style={BLOCK_SEP}>
+        <div style={LABEL_STYLE}>Machine issues</div>
+        <div style={{ ...BIG_NUM, color: data.machineIssueCount ? "#FBF1DE" : "#7DD9C2" }}>{data.machineIssueCount ?? 0}</div>
+      </div>
+
+      {/* My tasks */}
+      <div style={BLOCK_SEP}>
+        <div style={LABEL_STYLE}>My tasks</div>
+        <div style={{ display: "flex", gap: 16 }}>
+          <div>
+            <div style={{ ...SM_NUM, color: data.myOverdueCount > 0 ? "#F8E4E2" : "#7DD9C2" }}>{data.myOverdueCount}</div>
+            <div style={SUB_LBL}>Overdue</div>
+          </div>
+          <div>
+            <div style={{ ...SM_NUM, color: "#FBF1DE" }}>{data.myTodayCount}</div>
+            <div style={SUB_LBL}>Today</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Escalations KPI — clickable, links to /tasks */}
+      <Link
+        href="/tasks"
+        style={{ ...(showFlowHCM ? BLOCK_SEP : {}), textDecoration: "none" }}
+      >
+        <div style={LABEL_STYLE}>Escalations</div>
+        {escLoaded ? (
+          <div>
+            <div style={{ ...BIG_NUM, color: esc > 0 ? "#F8E4E2" : "#7DD9C2" }}>{esc}</div>
+            <div style={{ fontSize: 9.5, color: esc > 0 ? "rgba(248,228,226,0.55)" : "rgba(125,217,194,0.55)" }}>
+              {esc > 0 ? "Needs attention" : "All clear"}
+            </div>
+          </div>
+        ) : (
+          <div style={{ ...BIG_NUM, color: "rgba(255,255,255,0.2)" }}>—</div>
+        )}
+      </Link>
+
+      {/* FlowHCM KPI — admin/privileged only, clickable, links to /members */}
+      {showFlowHCM && (
+        <Link href="/members" style={{ textDecoration: "none" }}>
+          <div style={LABEL_STYLE}>FlowHCM</div>
+          <div>
+            <div style={{ ...BIG_NUM, color: flowTotal > 0 ? (flowTotal > 2 ? "#F8E4E2" : "#FBF1DE") : "#7DD9C2" }}>{flowTotal}</div>
+            <div style={{ fontSize: 9.5, color: flowTotal > 0 ? "rgba(251,241,222,0.55)" : "rgba(125,217,194,0.55)" }}>
+              {flowTotal > 0 ? "Lifecycle alerts" : "All clear"}
+            </div>
+          </div>
+        </Link>
+      )}
     </div>
   );
 }
@@ -1682,13 +1737,6 @@ function KhuramLayout({ data, tick, weather, fx, pensionGbp, calEvents }: {
           <QuickLinksCard links={data.quickLinks} />
         </div>
       </div>
-      <FlowHCMLifecycleSection
-        leaverCount={data.lifecycleLeaverCount ?? 0}
-        deactivatedCount={data.lifecycleDeactivatedCount ?? 0}
-        exemptCount={data.lifecycleExemptCount ?? 0}
-        ambiguousCount={data.lifecycleAmbiguousCount ?? 0}
-      />
-      <EscalationAlertSection />
     </>
   );
 }
@@ -1703,6 +1751,7 @@ function KamranLayout({ data, tick, weather, fx }: {
   return (
     <>
       <KamranHero data={data} tick={tick} weather={weather} fx={fx} />
+      <CeoStatStrip data={data} />
       <PurposeBanner />
       <TaskBanner
         myOverdue={data.myOverdueCount} myToday={data.myTodayCount}
@@ -1737,13 +1786,6 @@ function KamranLayout({ data, tick, weather, fx }: {
           </div>
         </div>
       </div>
-      <FlowHCMLifecycleSection
-        leaverCount={data.lifecycleLeaverCount ?? 0}
-        deactivatedCount={data.lifecycleDeactivatedCount ?? 0}
-        exemptCount={data.lifecycleExemptCount ?? 0}
-        ambiguousCount={data.lifecycleAmbiguousCount ?? 0}
-      />
-      <EscalationAlertSection />
     </>
   );
 }
@@ -1801,7 +1843,6 @@ function CeoLayout({ data, tick, weather, fx, pensionGbp = null, email }: {
           <QuickLinksCard links={data.quickLinks} showBookingButton />
         </div>
       </div>
-      <EscalationAlertSection />
     </>
   );
 }
