@@ -26,12 +26,12 @@ import { notifyTaskAssigned } from "../../../../lib/task-notifications";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
-  const taskId = params.id;
+  const { id: taskId } = await params;
   const callerEmail: string = (auth as { email: string }).email;
 
   let body: { subtaskId?: string; memberEmail?: string; memberName?: string; memberId?: string };
@@ -124,12 +124,12 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
-  const taskId = params.id;
+  const { id: taskId } = await params;
   const callerEmail: string = (auth as { email: string }).email;
 
   let body: { subtaskId?: string; memberEmail?: string };
