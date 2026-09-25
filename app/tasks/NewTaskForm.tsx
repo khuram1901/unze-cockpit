@@ -85,12 +85,15 @@ export default function NewTaskForm({
   prefillAssigneeId,
   prefillDueDate,
   prefillPriority,
+  openVersion = 0,
 }: {
   onCreated?: () => void;
   prefillDescription?: string;
   prefillAssigneeId?: string;
   prefillDueDate?: string;
   prefillPriority?: string;
+  /** Increments on every "More Options" click; drives the prefill sync effect. */
+  openVersion?: number;
 } = {}) {
   const router = useRouter();
   const toast = useToast();
@@ -102,9 +105,28 @@ export default function NewTaskForm({
   const [projectAreas, setProjectAreas] = useState<string[]>([]);
 
   const [description, setDescription] = useState(prefillDescription);
-  // Re-sync if the parent updates the prefill after mount (e.g. "More options" called twice
-  // in the same session — React 18 batching means the state update and the modal open land
-  // in the same render, but this guard covers edge cases where the prop arrives late).
+
+  // PREFILL SYNC: fires when openVersion increments (every "More Options" click).
+  // This is the primary mechanism: because openVersion and the prefill props change
+  // atomically (same parent setState call), this effect always sees the correct
+  // description/dueDate/priority values for the new invocation.
+  // The guard (appliedVersion.current) prevents overwriting user edits if the
+  // parent re-renders without actually opening the form again.
+  const appliedVersion = useRef(0);
+  useEffect(() => {
+    if (openVersion === 0 || openVersion === appliedVersion.current) return;
+    appliedVersion.current = openVersion;
+    setDescription(prefillDescription);
+    if (prefillDueDate) setDueDate(prefillDueDate);
+    if (prefillPriority) setPriority(prefillPriority);
+    // Assignee is handled by the separate prefillAssigneeApplied effect below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openVersion]);
+
+  // Fallback: if the key-based remount works correctly, useState(prefillDescription)
+  // already has the right value on mount and this effect is a no-op. If for any
+  // reason the component stays mounted and openVersion hasn't fired yet, this
+  // catches prop-level description changes.
   useEffect(() => { setDescription(prefillDescription); }, [prefillDescription]);
   useEffect(() => { if (prefillDueDate) setDueDate(prefillDueDate); }, [prefillDueDate]);
   useEffect(() => { if (prefillPriority) setPriority(prefillPriority); }, [prefillPriority]);

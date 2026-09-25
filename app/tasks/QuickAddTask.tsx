@@ -122,6 +122,9 @@ export default function QuickAddTask({
 
   // Form state
   const [description, setDescription] = useState("");
+  // Keep a ref in sync with description state so the More Options click handler
+  // always captures the LATEST typed value, regardless of closure staleness.
+  const descriptionRef = useRef("");
   const [search,      setSearch]      = useState("");
   const [selected,    setSelected]    = useState<Member | null>(null);
   const [showDrop,    setShowDrop]    = useState(false);
@@ -526,7 +529,11 @@ export default function QuickAddTask({
             <textarea
               placeholder="What needs to be done?"
               value={description}
-              onChange={(e) => setDescription(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))}
+              onChange={(e) => {
+                const v = e.target.value.slice(0, TASK_DESCRIPTION_LIMIT);
+                descriptionRef.current = v;
+                setDescription(v);
+              }}
               rows={2}
               required
               style={{
@@ -694,7 +701,7 @@ export default function QuickAddTask({
                 borderRadius: RADII.SM, padding: "7px 10px",
               }}>
                 ⚠ Company not set for {selected.name} yet.{" "}
-                <button type="button" onClick={() => onMoreOptions?.({ description, assigneeId: selected?.id, dueDate, priority: "Normal" })} style={{
+                <button type="button" onClick={() => onMoreOptions?.({ description: descriptionRef.current, assigneeId: selected?.id, dueDate, priority: "Normal" })} style={{
                   background: "none", border: "none", padding: 0,
                   color: COLOURS.AMBER, fontWeight: 600, cursor: "pointer",
                   textDecoration: "underline", fontSize: "11px",
@@ -707,7 +714,11 @@ export default function QuickAddTask({
         {/* ── Footer ────────────────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
           {!isListening ? (
-            <button type="button" onClick={() => onMoreOptions?.({ description, assigneeId: selected?.id, dueDate, priority: "Normal" })} style={{
+            <button type="button" onClick={() => {
+              // Use ref so we always get the latest typed value even if the
+              // React closure over `description` state is one render behind.
+              onMoreOptions?.({ description: descriptionRef.current, assigneeId: selected?.id, dueDate, priority: "Normal" });
+            }} style={{
               background: "none", border: "none", padding: 0,
               fontSize: "12px", color: COLOURS.SLATE,
               cursor: "pointer", textDecoration: "underline",

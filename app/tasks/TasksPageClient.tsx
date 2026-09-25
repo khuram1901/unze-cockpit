@@ -37,12 +37,15 @@ export default function TasksPageClient() {
 
   const [showQuick,      setShowQuick]      = useState(voiceParam || !!textParam);
   const [showFull,       setShowFull]       = useState(false);
-  const [fullPrefill,    setFullPrefill]    = useState<QuickPrefill | null>(null);
-  // Increments every time openFull() is called — used as the key on NewTaskForm
-  // so React always unmounts/remounts with fresh state, regardless of whether
-  // the prefill text changed (key={fullPrefill} silently fails when the same
-  // text is typed twice because React bails out of the no-op state update).
-  const [fullOpenCount,  setFullOpenCount]  = useState(0);
+  // fullState is a single atomic object so that the key (openCount) and the prefill
+  // values ALWAYS change in the same React render — preventing the race where the
+  // key increments first (mounting NewTaskForm with empty props) and the prefill
+  // arrives a render later (a prop update that useState() ignores on an already-
+  // mounted component).
+  const [fullState, setFullState] = useState<{ openCount: number; prefill: QuickPrefill | null }>({
+    openCount: 0,
+    prefill: null,
+  });
   const [autoStartVoice, setAutoStartVoice] = useState(voiceParam);
 
   if (loading) return <p style={{ color: COLOURS.SLATE }}>Loading tasks…</p>;
@@ -59,8 +62,9 @@ export default function TasksPageClient() {
     const prefill: QuickPrefill = typeof payload === "string"
       ? { description: payload }
       : payload;
-    setFullOpenCount((c) => c + 1); // always force a fresh NewTaskForm mount
-    setFullPrefill(prefill);
+    // Single atomic setState: openCount (key) and prefill change in the same render,
+    // guaranteeing NewTaskForm always mounts with the correct prefillDescription prop.
+    setFullState(prev => ({ openCount: prev.openCount + 1, prefill }));
     setShowQuick(false);
     setShowFull(true);
   }
@@ -107,16 +111,17 @@ export default function TasksPageClient() {
       {/* ── Full form modal ──────────────────────────────────────────── */}
       {canCreate && (
         <Modal open={showFull} onClose={() => setShowFull(false)}>
-          {/* key={fullOpenCount} forces a fresh mount every time More Options is clicked —
-              even if the prefill text hasn't changed — so useState(prefillDescription) in
-              NewTaskForm always initialises from the latest value rather than reusing stale state. */}
+          {/* key={fullState.openCount} forces a fresh mount on every More Options click.
+              openCount and prefill live in the same state object so they always change
+              in the same render — the component never mounts with a stale (empty) prop. */}
           <NewTaskForm
-            key={fullOpenCount}
+            key={fullState.openCount}
             onCreated={() => setShowFull(false)}
-            prefillDescription={fullPrefill?.description ?? ""}
-            prefillAssigneeId={fullPrefill?.assigneeId}
-            prefillDueDate={fullPrefill?.dueDate}
-            prefillPriority={fullPrefill?.priority}
+            openVersion={fullState.openCount}
+            prefillDescription={fullState.prefill?.description ?? ""}
+            prefillAssigneeId={fullState.prefill?.assigneeId}
+            prefillDueDate={fullState.prefill?.dueDate}
+            prefillPriority={fullState.prefill?.priority}
           />
         </Modal>
       )}
