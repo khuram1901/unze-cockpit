@@ -142,6 +142,19 @@ export async function sendNotificationEmail({
 
     if (!notifToken) {
       console.error("[send-email] No Google account found for notifications. Connect a dedicated Gmail account and set NOTIFICATION_GMAIL in Vercel env vars.");
+      // Log to notification_log so no-account failures are visible in the DB, not only in Vercel console.
+      try {
+        await supabaseForTokens.from("notification_log").insert({
+          recipient_email: to,
+          recipient_name: recipientName || null,
+          channel: "email",
+          subject,
+          body_preview: `FAILED: ${heading}`,
+          trigger_type: triggerType,
+          trigger_record_id: triggerRecordId || null,
+          status: "failed",
+        });
+      } catch { /* non-fatal */ }
       return { success: false, error: "No notification Gmail account connected" };
     }
 
@@ -188,7 +201,23 @@ export async function sendNotificationEmail({
 
     return { success: true };
   } catch (err) {
-    console.error("Email send failed:", err instanceof Error ? err.message : err);
-    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+    const errMsg = err instanceof Error ? err.message : "Unknown error";
+    console.error("[send-email] Email send failed:", errMsg);
+    // Log to notification_log so Gmail/OAuth failures are visible in the DB.
+    // errMsg is safe to store: it comes from the Gmail API or Node runtime, never from token values.
+    try {
+      const supabaseFail = createServiceClient();
+      await supabaseFail.from("notification_log").insert({
+        recipient_email: to,
+        recipient_name: recipientName || null,
+        channel: "email",
+        subject,
+        body_preview: `FAILED: ${heading}`,
+        trigger_type: triggerType,
+        trigger_record_id: triggerRecordId || null,
+        status: "failed",
+      });
+    } catch { /* non-fatal — do not mask the original send error */ }
+    return { success: false, error: errMsg };
   }
 }

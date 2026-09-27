@@ -42,7 +42,7 @@ export async function notifyTaskAssigned(
   // Email — only if the member has email notifications enabled.
   if (!member?.notify_email) return { skipped: "email notifications disabled" };
 
-  await sendNotificationEmail({
+  const result = await sendNotificationEmail({
     to: recipientEmail,
     subject: `[TASK] ${task.description?.slice(0, 60)}`,
     heading: "New Task Assigned to You",
@@ -63,6 +63,25 @@ export async function notifyTaskAssigned(
     whatsAppPhone: null, // push already sent above; button in email no longer needed
     whatsAppMessage: undefined,
   });
+
+  // Belt-and-suspenders: if sendNotificationEmail returned { success: false }
+  // without throwing (e.g. the no-account early-return path), surface it in
+  // notification_log here too. send-email.ts already logs thrown errors in
+  // its own catch block and the no-account path; this catches any gap.
+  if (result && !("skipped" in result) && !result.success) {
+    try {
+      await supabase.from("notification_log").insert({
+        recipient_email: recipientEmail,
+        recipient_name: memberName,
+        channel: "email",
+        subject: `[TASK] ${task.description?.slice(0, 60)}`,
+        body_preview: "FAILED: New Task Assigned to You",
+        trigger_type: TRIGGER_TASK_ASSIGNED,
+        trigger_record_id: taskId,
+        status: "failed",
+      });
+    } catch { /* non-fatal */ }
+  }
 }
 
 // Sent to the HOD/manager the moment a task arrives in their queue as
@@ -157,4 +176,80 @@ export async function notifyEscalationTask(
     whatsAppPhone: member.notify_whatsapp ? member.phone_e164 : null,
     whatsAppMessage: `Escalation: ${task.description?.slice(0, 100)}. Please check the dashboard and respond.`,
   });
+}
+
+// Sent when a member is assigned to a specific subtask.
+// Includes the subtask title and parent task context in the email body.
+// Falls back gracefully if the subtask row is not found.
+export async function notifySubtaskAssigned(
+  supabase: SupabaseClient,
+  taskId: string,
+  subtaskId: string,
+  recipientEmail: string
+): Promise<{ skipped?: string } | void> {
+  const { data: member } = await supabase
+    .from("members")
+    .select("first_name, last_name, name, employee_code, notify_email, phone_e164")
+    .eq("email", recipientEmail)
+    .maybeSingle();
+
+  if (!member?.notify_email) return { skipped: "email notifications disabled" };
+
+  const memberName = member
+    ? (`${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || recipientEmail)
+    : recipientEmail;
+  const memberDisplay = member?.employee_code ? `${memberName} (${member.employee_code})` : memberName;
+
+  const [{ data: task }, { data: subtask }] = await Promise.all([
+    supabase.from("tasks").select("description, priority, due_date, assigned_by").eq("id", taskId).single(),
+    supabase.from("task_subtasks").select("title").eq("id", subtaskId).maybeSingle(),
+  ]);
+  if (!task) return;
+
+  const subtaskTitle = subtask?.title ?? "Subtask";
+  const parentTitle = task.description ?? "Task";
+
+  const result = await sendNotificationEmail({
+    to: recipientEmail,
+    subject: `[SUBTASK] ${subtaskTitle.slice(0, 60)}`,
+    heading: "You've Been Assigned a Subtask",
+    body: `
+      <p><strong>${memberDisplay}</strong>, you have a new subtask to action:</p>
+      <p style="background:#f1f5f9;padding:12px;border-radius:6px;border-left:3px solid #2563eb">
+        ${subtaskTitle}
+      </p>
+      <p style="margin-top:8px;color:#64748b;font-size:13px">
+        Part of: <em>${parentTitle}</em>
+      </p>
+      <p><strong>Priority:</strong> ${task.priority || "Normal"}<br>
+      <strong>Due:</strong> ${task.due_date ? task.due_date.split("-").reverse().join("/") : "No due date"}<br>
+      <strong>Assigned by:</strong> ${task.assigned_by || "System"}</p>
+    `,
+    linkUrl: `${APP_URL}/tasks`,
+    linkLabel: "View Tasks",
+    triggerType: TRIGGER_TASK_ASSIGNED,
+    triggerRecordId: taskId,
+    recipientName: memberName,
+    whatsAppPhone: null,
+    whatsAppMessage: undefined,
+  });
+
+  // Surface failures in notification_log so silent Gmail errors become visible in the DB.
+  // sendNotificationEmail returns {success:false} on Gmail/auth error rather than throwing.
+  if (result && !("skipped" in result) && !result.success) {
+    try {
+      await supabase.from("notification_log").insert({
+        recipient_email: recipientEmail,
+        recipient_name: memberName,
+        channel: "email",
+        subject: `[SUBTASK] ${subtaskTitle.slice(0, 60)}`,
+        body_preview: "You've Been Assigned a Subtask",
+        trigger_type: TRIGGER_TASK_ASSIGNED,
+        trigger_record_id: taskId,
+        status: "failed",
+      });
+    } catch {
+      // notification_log insert failure is non-fatal; don't mask the original send error
+    }
+  }
 }
