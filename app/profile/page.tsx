@@ -1059,7 +1059,7 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <a
-                  href="/api/google/auth?returnTo=/profile"
+                  href="/api/google/auth-notifications"
                   style={{ ...primaryButtonStyle, textDecoration: "none", display: "inline-block", whiteSpace: "nowrap" }}
                 >
                   {googleConnected ? "Reconnect Google Account" : "Connect Google Account"}
