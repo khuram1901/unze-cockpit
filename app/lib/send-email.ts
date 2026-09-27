@@ -127,35 +127,48 @@ export async function sendNotificationEmail({
   }
 
   try {
-    // Pick the dedicated notification Gmail account (set NOTIFICATION_GMAIL in Vercel env vars).
-    // Falls back to the most recently updated token if the env var is not set.
+    // NOTIFICATION_GMAIL is required — no fallback. Only the configured sender account is used for all notification emails.
     const supabaseForTokens = createServiceClient();
     const notificationEmail = process.env.NOTIFICATION_GMAIL?.toLowerCase();
 
-    const query = supabaseForTokens
-      .from("google_oauth_tokens")
-      .select("id, user_email, access_token, refresh_token, token_expiry");
-
-    const { data: notifToken } = notificationEmail
-      ? await query.ilike("user_email", notificationEmail).limit(1).single()
-      : await query.order("updated_at", { ascending: false }).limit(1).single();
-
-    if (!notifToken) {
-      console.error("[send-email] No Google account found for notifications. Connect a dedicated Gmail account and set NOTIFICATION_GMAIL in Vercel env vars.");
-      // Log to notification_log so no-account failures are visible in the DB, not only in Vercel console.
+    if (!notificationEmail) {
+      console.error("[send-email] NOTIFICATION_GMAIL env var is not set. Cannot send notification email.");
       try {
         await supabaseForTokens.from("notification_log").insert({
           recipient_email: to,
           recipient_name: recipientName || null,
           channel: "email",
           subject,
-          body_preview: `FAILED: ${heading}`,
+          body_preview: `FAILED: ${heading} — NOTIFICATION_GMAIL not configured`,
           trigger_type: triggerType,
           trigger_record_id: triggerRecordId || null,
           status: "failed",
         });
       } catch { /* non-fatal */ }
-      return { success: false, error: "No notification Gmail account connected" };
+      return { success: false, error: "NOTIFICATION_GMAIL env var not configured" };
+    }
+
+    const query = supabaseForTokens
+      .from("google_oauth_tokens")
+      .select("id, user_email, access_token, refresh_token, token_expiry");
+
+    const { data: notifToken } = await query.ilike("user_email", notificationEmail).limit(1).single();
+
+    if (!notifToken) {
+      console.error(`[send-email] No OAuth token found for ${notificationEmail}. Connect this account at /api/google/connect.`);
+      try {
+        await supabaseForTokens.from("notification_log").insert({
+          recipient_email: to,
+          recipient_name: recipientName || null,
+          channel: "email",
+          subject,
+          body_preview: `FAILED: ${heading} — no OAuth token for ${notificationEmail}`,
+          trigger_type: triggerType,
+          trigger_record_id: triggerRecordId || null,
+          status: "failed",
+        });
+      } catch { /* non-fatal */ }
+      return { success: false, error: `No OAuth token found for notification Gmail account: ${notificationEmail}` };
     }
 
     const oauth2Client = new google.auth.OAuth2(
