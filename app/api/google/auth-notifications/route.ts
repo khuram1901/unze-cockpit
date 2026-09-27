@@ -20,7 +20,7 @@ export async function GET() {
     scope: scopes.join(" "),
     access_type: "offline",
     prompt: "consent",
-    login_hint: "k.saleem@unzegroup.com",
+    login_hint: process.env.NOTIFICATION_GMAIL || "unzegrouppk@gmail.com",
   });
 
   const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
