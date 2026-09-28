@@ -18,6 +18,10 @@ export async function GET(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  if (!(await checkCanManage(auth, supabase))) {
+    return Response.json({ error: "Not authorised" }, { status: 403 });
+  }
+
   const { data, error } = await supabase.rpc("get_admin_registrations");
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ data });
