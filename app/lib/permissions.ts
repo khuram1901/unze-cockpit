@@ -640,7 +640,11 @@ export function canEditTask(u: UserCtx, assignedByEmail: string | null | undefin
 
 export function canDeleteTask(u: UserCtx, assignedByEmail: string | null | undefined): boolean {
   if (isAdminTier(u) || isPA(u)) return true;
-  return !isTaskProtected(assignedByEmail);
+  // Mirror DB RLS: only the task creator (assigned_by_email) can delete their own tasks.
+  // Previously gate was isTaskProtected() which only blocked deletion of Khuram/Kamran/PA tasks —
+  // any other member could (visually) delete anyone else's tasks. This aligns UI with RLS.
+  if (!u.email || !assignedByEmail) return false;
+  return u.email.toLowerCase() === assignedByEmail.toLowerCase();
 }
 
 // Khuram: "once the task is completed then it should be greyed out. I
