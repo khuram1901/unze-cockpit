@@ -159,7 +159,14 @@ export default function TaskDetailPanel({
       const ids = (assigneesRes.data || [])
         .map((a) => a.member_id || memberList.find((m) => m.email === a.member_email)?.id)
         .filter((id): id is string => !!id);
-      setEditOwnerIds(Array.from(new Set(ids)));
+      // Always put the canonical primary (task.assigned_to_email) first so
+      // the "(primary)" tag and toggleEditOwner's selected[0] are both
+      // deterministic regardless of Postgres row-return order.
+      const _primaryId = memberList.find((m) => m.email === task.assigned_to_email)?.id;
+      const _sortedIds = _primaryId
+        ? [_primaryId, ...ids.filter((id) => id !== _primaryId)]
+        : ids;
+      setEditOwnerIds(Array.from(new Set(_sortedIds)));
     })();
   }, [taskEditable, task.id, myEmail]);
 
@@ -374,7 +381,7 @@ export default function TaskDetailPanel({
               }}>
                 {members.map((m) => {
                   const checked = editOwnerIds.includes(m.id);
-                  const isPrimary = editOwnerIds[0] === m.id;
+                  const isPrimary = m.email === task.assigned_to_email;
                   return (
                     <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12.5px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer", fontWeight: checked ? 600 : 400 }}>
                       <input type="checkbox" checked={checked} onChange={(e) => toggleEditOwner(m.id, e.target.checked)} style={{ width: "13px", height: "13px" }} />
