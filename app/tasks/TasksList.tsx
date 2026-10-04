@@ -756,8 +756,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         if (toMe) return true;
         // 2. Co-assigned to me
         if (myCoAssignedTaskIds.has(t.id)) return true;
-        // 3. I assigned it and the team has Submitted it back for my sign-off
-        if (byMe && t.status === "Submitted") return true;
+        // 3. I assigned it and the team has Submitted it back for my sign-off.
+        // Bug #3 fix: exclude tasks where *I* was the submitter (submitted_by_email = me).
+        // After route_submitted_task fires, assigned_by_email is set to the submitter's email.
+        // Without this guard, a person who submits a task sees it loop back into their own Mine
+        // as if they need to take action — they don't, they already submitted it to their manager.
+        if (byMe && t.status === "Submitted" &&
+            !myEmails.includes((t.submitted_by_email || "").toLowerCase())) return true;
         // 4. I assigned it and the team is waiting for my reply
         if (byMe && t.status === "Waiting Reply" && t.reply_required) return true;
         // 5. I assigned it and it's now Stuck — I need to unblock it too
@@ -1121,6 +1126,28 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   </>
                 );
               })()}
+              {/* Bug #5 fix: "📋 for sign-off" badge — makes it clear to the recipient (e.g. Khuram)
+                  WHY a Submitted task is in their Mine. Previously the task appeared without context,
+                  looking like a random task assigned to them. The badge signals it was submitted by
+                  a team member and is awaiting their review/approval. */}
+              {task.status === "Submitted" &&
+               task.submitted_by_email &&
+               myIdentities.includes((task.assigned_to_email || "").toLowerCase()) && (
+                <>
+                  <span>·</span>
+                  <span style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    color: "#6941C6",
+                    backgroundColor: "#F4EBFF",
+                    whiteSpace: "nowrap",
+                  }}>
+                    📋 for sign-off
+                  </span>
+                </>
+              )}
               <span>·</span>
               {(() => {
                 const badge = companyBadge(task.company_id);

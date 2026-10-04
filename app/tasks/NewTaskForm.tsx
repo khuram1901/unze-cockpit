@@ -244,17 +244,11 @@ export default function NewTaskForm({
   function handleProjectChange(value: string) {
     setProject(value);
 
-    // E4 fix: only auto-suggest the department owner when no assignee has been
-    // manually chosen yet. Changing the department/project must NOT silently
-    // override an explicit assignee selection — that was causing Rimsha's form
-    // to default to Sundas (Executive Office dept owner) instead of her intended
-    // assignee. We use the app manager_id hierarchy for routing, not name/dept matching.
-    if (assignedToIds.length === 0) {
-      const owner = departmentOwners.find((d) => d.department_name === value);
-      if (owner?.primary_owner_member_id && members.some((m) => m.id === owner.primary_owner_member_id)) {
-        setAssignedToIds([owner.primary_owner_member_id]);
-      }
-    }
+    // Bug #2 fix: do NOT auto-add the department default owner to assignedToIds.
+    // The previous auto-fill caused the default owner (e.g. Shahida in Accounts) to
+    // silently become the primary assignee even when the user intended someone else
+    // (e.g. Osama). The "Default owner:" info panel below now shows a quick-add button
+    // so users can optionally click to select the default owner — never forced.
   }
 
   function addSubtask() {
@@ -420,6 +414,14 @@ export default function NewTaskForm({
     });
   }
 
+  // Bug #1 fix: allow the user to promote any co-assignee to primary.
+  // Previously the only way to control primary was the order in which checkboxes
+  // were clicked — unintuitive and caused wrong routing. Now an explicit "(↑ make primary)"
+  // link appears next to every non-primary checked member.
+  function promoteAssigneeToPrimary(id: string) {
+    setAssignedToIds((prev) => [id, ...prev.filter((x) => x !== id)]);
+  }
+
   return (
     <>
       {toast.element}
@@ -502,6 +504,30 @@ export default function NewTaskForm({
             >
               Default owner:{" "}
               <strong style={{ color: COLOURS.NAVY }}>{selectedOwner?.primary_owner_name || "No owner set for this department"}</strong>
+              {/* Bug #2 fix: quick-add button. Dept default is informational only — never auto-selected.
+                  User clicks here to optionally add them, keeping full control over who is primary. */}
+              {selectedOwner?.primary_owner_member_id &&
+                members.some((m) => m.id === selectedOwner.primary_owner_member_id) &&
+                !assignedToIds.includes(selectedOwner.primary_owner_member_id) && (
+                <button
+                  type="button"
+                  onClick={() => setAssignedToIds((prev) => [...prev, selectedOwner.primary_owner_member_id!])}
+                  style={{
+                    marginLeft: "8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: COLOURS.BLUE,
+                    background: "none",
+                    border: `1px solid ${COLOURS.BLUE}`,
+                    borderRadius: "4px",
+                    padding: "1px 6px",
+                    cursor: "pointer",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  + Add as assignee
+                </button>
+              )}
             </div>
           )}
 
@@ -571,7 +597,21 @@ export default function NewTaskForm({
                   return (
                     <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer", fontWeight: checked ? 600 : 400 }}>
                       <input type="checkbox" checked={checked} onChange={(e) => toggleAssignee(m.id, e.target.checked)} style={{ width: "14px", height: "14px" }} />
-                      {m.name}{isPrimary && <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.BLUE }}> (primary)</span>}{!m.task_default_company_id && <span title="No task company set — please select company manually" style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.AMBER }}> ⚠ no co.</span>}
+                      {m.name}
+                      {isPrimary && <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.BLUE }}> (primary)</span>}
+                      {/* Bug #1 fix: let the user explicitly promote any co-assignee to primary.
+                          Previously clicking members first made them primary — unintuitive. */}
+                      {checked && !isPrimary && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); promoteAssigneeToPrimary(m.id); }}
+                          style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", padding: "0 2px", marginLeft: "2px", textDecoration: "underline" }}
+                          title="Make this person the primary owner — task will be assigned to them first"
+                        >
+                          ↑ make primary
+                        </button>
+                      )}
+                      {!m.task_default_company_id && <span title="No task company set — please select company manually" style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.AMBER }}> ⚠ no co.</span>}
                     </label>
                   );
                 });
