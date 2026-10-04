@@ -153,7 +153,15 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
   }
 
   const assignedBy = input.actor.kind === "user" ? input.actor.name : input.actor.label;
-  const assignedByEmail = input.actor.kind === "user" ? input.actor.email : "khuram1901@gmail.com";
+  // For system actors (recurring cron, cash escalations, etc.) there is no
+  // human creator. Using the assignee's own email as assigned_by_email makes
+  // the route_submitted_task trigger treat submitted recurring tasks as
+  // "self-assigned", which causes it to walk up the assignee's own manager
+  // chain and find the correct first active manager — rather than routing to
+  // the old bootstrap Gmail account that used to be hardcoded here.
+  const assignedByEmail = input.actor.kind === "user"
+    ? input.actor.email
+    : (input.assignedToEmail ?? null);
 
   // See requiresManagerSignoff's doc comment above. Default rule when a
   // caller doesn't specify: a meeting-linked task, or one where the
