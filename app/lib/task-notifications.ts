@@ -253,3 +253,115 @@ export async function notifySubtaskAssigned(
     }
   }
 }
+
+// ── notifySubtaskSubmitted ────────────────────────────────────────────────────
+// Tells the subtask assigner that the assignee has submitted for review.
+export async function notifySubtaskSubmitted(
+  supabase: SupabaseClient,
+  taskId: string,
+  subtaskId: string,
+  assignerEmail: string,
+  submitterEmail: string
+): Promise<void> {
+  const { data: member } = await supabase
+    .from("members")
+    .select("first_name, last_name, name, notify_email")
+    .eq("email", assignerEmail)
+    .maybeSingle();
+
+  if (!member?.notify_email) return;
+
+  const assignerName = member
+    ? (`${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || assignerEmail)
+    : assignerEmail;
+
+  const [{ data: task }, { data: subtask }, { data: submitter }] = await Promise.all([
+    supabase.from("tasks").select("description, priority, due_date").eq("id", taskId).single(),
+    supabase.from("task_subtasks").select("title").eq("id", subtaskId).maybeSingle(),
+    supabase.from("members").select("first_name, last_name, name").eq("email", submitterEmail).maybeSingle(),
+  ]);
+  if (!task) return;
+
+  const submitterName = submitter
+    ? (`${submitter.first_name || ""} ${submitter.last_name || ""}`.trim() || submitter.name || submitterEmail)
+    : submitterEmail;
+  const subtaskTitle = subtask?.title ?? "Subtask";
+  const parentTitle = task.description ?? "Task";
+
+  await sendNotificationEmail({
+    to: assignerEmail,
+    subject: `[SUBTASK SUBMITTED] ${subtaskTitle.slice(0, 55)}`,
+    heading: "Subtask Submitted for Your Review",
+    body: `
+      <p><strong>${assignerName}</strong>, <strong>${submitterName}</strong> has submitted a subtask for your approval:</p>
+      <p style="background:#fef9ec;padding:12px;border-radius:6px;border-left:3px solid #f59e0b">
+        ${subtaskTitle}
+      </p>
+      <p style="margin-top:8px;color:#64748b;font-size:13px">
+        Part of: <em>${parentTitle}</em>
+      </p>
+      <p><strong>Priority:</strong> ${task.priority || "Normal"}<br>
+      <strong>Due:</strong> ${task.due_date ? task.due_date.split("-").reverse().join("/") : "No due date"}</p>
+      <p style="margin-top:12px">Open the task to review and mark it complete.</p>
+    `,
+    linkUrl: `${APP_URL}/tasks`,
+    linkLabel: "Review Subtask",
+    triggerType: TRIGGER_TASK_SUBMITTED,
+    triggerRecordId: taskId,
+    recipientName: assignerName,
+    whatsAppPhone: null,
+    whatsAppMessage: undefined,
+  });
+}
+
+// ── notifySubtaskApproved ─────────────────────────────────────────────────────
+// Tells the subtask assignee that their work has been approved and marked complete.
+export async function notifySubtaskApproved(
+  supabase: SupabaseClient,
+  taskId: string,
+  subtaskId: string,
+  assigneeEmail: string
+): Promise<void> {
+  const { data: member } = await supabase
+    .from("members")
+    .select("first_name, last_name, name, notify_email")
+    .eq("email", assigneeEmail)
+    .maybeSingle();
+
+  if (!member?.notify_email) return;
+
+  const assigneeName = member
+    ? (`${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || assigneeEmail)
+    : assigneeEmail;
+
+  const [{ data: task }, { data: subtask }] = await Promise.all([
+    supabase.from("tasks").select("description").eq("id", taskId).single(),
+    supabase.from("task_subtasks").select("title").eq("id", subtaskId).maybeSingle(),
+  ]);
+  if (!task) return;
+
+  const subtaskTitle = subtask?.title ?? "Subtask";
+  const parentTitle = task.description ?? "Task";
+
+  await sendNotificationEmail({
+    to: assigneeEmail,
+    subject: `[SUBTASK DONE] ${subtaskTitle.slice(0, 58)}`,
+    heading: "Your Subtask Has Been Approved ✓",
+    body: `
+      <p><strong>${assigneeName}</strong>, your subtask has been reviewed and marked complete:</p>
+      <p style="background:#f0fdf4;padding:12px;border-radius:6px;border-left:3px solid #22c55e">
+        ${subtaskTitle}
+      </p>
+      <p style="margin-top:8px;color:#64748b;font-size:13px">
+        Part of: <em>${parentTitle}</em>
+      </p>
+    `,
+    linkUrl: `${APP_URL}/tasks`,
+    linkLabel: "View Tasks",
+    triggerType: TRIGGER_TASK_SUBMITTED,
+    triggerRecordId: taskId,
+    recipientName: assigneeName,
+    whatsAppPhone: null,
+    whatsAppMessage: undefined,
+  });
+}
