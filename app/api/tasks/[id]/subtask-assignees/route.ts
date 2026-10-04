@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "../../../../lib/api-auth";
 import { createServiceClient } from "../../../../lib/supabase-server";
-import { notifyTaskAssigned } from "../../../../lib/task-notifications";
+import { notifySubtaskAssigned } from "../../../../lib/task-notifications";
 
 // POST  /api/tasks/[id]/subtask-assignees — assign a member to a subtask
 // DELETE /api/tasks/[id]/subtask-assignees — unassign a member from a subtask
@@ -17,7 +17,7 @@ import { notifyTaskAssigned } from "../../../../lib/task-notifications";
 //   5. Validates subtask belongs to task before writing
 //   6. Upserts visibility row in task_assignees with assigned_via='subtask'
 //      (skipped if they already have a 'main_task' row — do not downgrade)
-//   7. Sends notifyTaskAssigned if assigning someone other than yourself
+//   7. Sends notifySubtaskAssigned if assigning someone other than yourself
 //
 // DELETE also:
 //   5. After removing from task_subtask_assignees, checks if the member
@@ -111,11 +111,15 @@ export async function POST(
   // If existingRow exists (either 'main_task' or 'subtask'), leave it as-is.
 
   // ── 7. Notification ───────────────────────────────────────────────────
+  // Uses notifySubtaskAssigned (not the generic notifyTaskAssigned) so the
+  // email includes the subtask title and parent task context. The helper also
+  // writes a 'failed' row to notification_log when the Gmail send errors, so
+  // silent OAuth failures become visible rather than swallowed by the try/catch.
   if (memberEmail.toLowerCase() !== callerEmail.toLowerCase()) {
     try {
-      await notifyTaskAssigned(supabase, taskId, memberEmail);
+      await notifySubtaskAssigned(supabase, taskId, subtaskId, memberEmail);
     } catch (e) {
-      console.error("Subtask assignee notified failed (non-fatal):", taskId, memberEmail, e);
+      console.error("[subtask-assignees] notification failed (non-fatal):", taskId, subtaskId, memberEmail, e);
     }
   }
 
