@@ -169,7 +169,7 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
   // task someone created and assigned to themselves doesn't.
   const requiresManagerSignoff = input.requiresManagerSignoff !== undefined
     ? input.requiresManagerSignoff
-    : !!input.meetingId || (input.assignedToEmail || "").trim().toLowerCase() !== assignedByEmail.trim().toLowerCase();
+    : !!input.meetingId || (input.assignedToEmail || "").trim().toLowerCase() !== (assignedByEmail ?? "").trim().toLowerCase();
 
   const { data: newTask, error } = await supabase
     .from("tasks")
