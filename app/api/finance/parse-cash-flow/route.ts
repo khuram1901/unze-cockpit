@@ -87,6 +87,25 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
+  // Permission gate (2026-10-07 access audit): cash-flow parsing reads and
+  // writes financial data (daily_cash_position, pdc_maturity_buckets,
+  // cash_sheet_uploads). Restrict to Finance Managers, Admin and CEO only.
+  // Store users (can_access_daily_sales) must never reach this route.
+  {
+    const supabase = createServiceClient();
+    const { data: member } = await supabase
+      .from("members")
+      .select("role, department")
+      .eq("email", auth.email)
+      .maybeSingle();
+    const role = member?.role ?? "";
+    const dept = member?.department ?? "";
+    const allowed =
+      role === "Admin" || role === "CEO" ||
+      (role === "Manager" && dept === "Finance");
+    if (!allowed) return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const formData = await request.formData();
     const cashFlowFile = formData.get("cashFlow") as File | null;
