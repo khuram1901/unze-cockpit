@@ -1,114 +1,728 @@
 "use client";
 
-// /daily-sales — Retail Sales entry point for store users.
-//
-// PLACEHOLDER — Screen design not yet approved. This page exists so that:
-//   1. Store users redirected here (via STORE_USER_RE) don't hit a 404.
-//   2. The route can be tested end-to-end before the UI is designed.
-//
-// DO NOT build out this screen's UI until Khuram gives the explicit go-ahead
-// (STOP condition A from the retail-sales plan).
+/**
+ * /daily-sales — Mobile-first daily sales entry form for store users.
+ *
+ * Four screens implemented as a state machine:
+ *   "loading"  — auth check + store lookup
+ *   "form"     — entry form with live calculated totals
+ *   "confirm"  — bottom-sheet review before final submit
+ *   "success"  — post-submit confirmation
+ *   "already"  — today already submitted
+ *
+ * Hidden from nav. Store users are sent here after login.
+ * Admins are also allowed (for testing) but see a no-store banner.
+ *
+ * Calculated totals (total_credit_card_sale, total_sale,
+ * net_cash_movement, closing_balance) come from Postgres via a
+ * lightweight preview call — never computed in JS.
+ */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { STORE_USER_RE } from "../lib/useRouteGuard";
+import { formatDateUK } from "../lib/dateUtils";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type Screen = "loading" | "form" | "confirm" | "success" | "already";
+
+interface FormFields {
+  cash_sale: string;
+  campaign_float_cash: string;
+  expenses: string;
+  other_income: string;
+  deposit: string;
+  allied_bank_cc_sale: string;
+  hbl_cc_sale: string;
+  gift_karte: string;
+  gift_vouchers: string;
+  credit_notes_issue: string;
+  remarks: string;
+}
+
+interface Totals {
+  total_credit_card_sale: number;
+  total_sale: number;
+  net_cash_movement: number;
+  opening_balance: number | null;
+  closing_balance: number | null;
+}
+
+interface SubmittedSummary {
+  sales_date: string;
+  total_sale: number;
+  net_cash_movement: number;
+  closing_balance: number | null;
+}
+
+interface StoreInfo {
+  id: string | null;
+  name: string | null;
+  fm_code: string | null;
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const EMPTY_FIELDS: FormFields = {
+  cash_sale: "", campaign_float_cash: "", expenses: "", other_income: "",
+  deposit: "", allied_bank_cc_sale: "", hbl_cc_sale: "",
+  gift_karte: "", gift_vouchers: "", credit_notes_issue: "", remarks: "",
+};
+
+const ZERO_TOTALS: Totals = {
+  total_credit_card_sale: 0, total_sale: 0, net_cash_movement: 0,
+  opening_balance: null, closing_balance: null,
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function getToken(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? "";
+}
+
+async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
+  const token = await getToken();
+  return fetch(url, {
+    ...opts,
+    headers: {
+      ...(opts.headers ?? {}),
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+/** Parse a numeric input string; returns 0 for blank / NaN. */
+function num(s: string): number {
+  const n = parseFloat(s.replace(/,/g, ""));
+  return isNaN(n) ? 0 : n;
+}
+
+/** Format a PKR amount, or "—" for null. */
+function pkr(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return "₨ " + n.toLocaleString("en-PK");
+}
+
+/** Today as YYYY-MM-DD in local time. */
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Long display date, e.g. "Wednesday, 07 October 2026" */
+function longDate(): string {
+  return new Date().toLocaleDateString("en-GB", {
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+  });
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DailySalesPage() {
   const router = useRouter();
-  const [checking, setChecking] = useState(true);
-  const [email, setEmail] = useState<string | null>(null);
 
+  const [screen, setScreen]               = useState<Screen>("loading");
+  const [store, setStore]                 = useState<StoreInfo>({ id: null, name: null, fm_code: null });
+  const [fields, setFields]               = useState<FormFields>(EMPTY_FIELDS);
+  const [totals, setTotals]               = useState<Totals>(ZERO_TOTALS);
+  const [totalsLoading, setTotalsLoading] = useState(false);
+  const [fieldErrors, setFieldErrors]     = useState<Partial<Record<keyof FormFields, string>>>({});
+  const [submitError, setSubmitError]     = useState<string | null>(null);
+  const [submitting, setSubmitting]       = useState(false);
+  const [submitted, setSubmitted]         = useState<SubmittedSummary | null>(null);
+
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Auth + boot ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    async function check() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.email) {
-        router.replace("/login");
-        return;
-      }
-      // Only store users and admin/CEO may access this page.
-      // Regular staff who navigate here are bounced back to /welcome.
-      const e = session.user.email;
-      const isStoreUser = STORE_USER_RE.test(e);
-      const isAdmin = e === "k.saleem@unzegroup.com" || e === "kamran@unze.co.uk";
-      // Allow if store user OR admin (admins can preview/test the page)
-      if (!isStoreUser && !isAdmin) {
-        router.replace("/welcome");
-        return;
-      }
-      setEmail(e);
-      setChecking(false);
-    }
-    check();
-  }, [router]);
+    void boot();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  if (checking) {
+  async function boot() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.email) { router.replace("/login"); return; }
+
+    const email = session.user.email;
+    const isStoreUser = STORE_USER_RE.test(email);
+    const isAdmin = /k\.saleem@unzegroup\.com|kamran@unze\.co\.uk/i.test(email);
+    if (!isStoreUser && !isAdmin) { router.replace("/welcome"); return; }
+
+    // Fetch store assignment
+    const storeRes = await apiFetch("/api/daily-sales/my-store");
+    let storeInfo: StoreInfo = { id: null, name: null, fm_code: null };
+    if (storeRes.ok) {
+      storeInfo = await storeRes.json() as StoreInfo;
+      setStore(storeInfo);
+    }
+
+    // If no store (admin without store), skip today-check and go to form
+    if (!storeInfo.id) {
+      setScreen("form");
+      return;
+    }
+
+    // Check if today already has an entry
+    const today = todayIso();
+    const year  = today.slice(0, 4);
+    const month = today.slice(5, 7);
+    const rowsRes = await apiFetch(
+      `/api/daily-sales/rows?store_id=${storeInfo.id}&year=${year}&month=${month}`
+    );
+    if (rowsRes.ok) {
+      const jr = await rowsRes.json() as { rows: SubmittedSummary[] };
+      const todayRow = jr.rows?.find((r) => r.sales_date === today);
+      if (todayRow) {
+        setSubmitted(todayRow);
+        setScreen("already");
+        return;
+      }
+    }
+
+    setScreen("form");
+  }
+
+  // ── Live totals via preview ─────────────────────────────────────────────────
+  const refreshTotals = useCallback(async (f: FormFields, storeId: string) => {
+    setTotalsLoading(true);
+    try {
+      const row = {
+        sales_date:           todayIso(),
+        cash_sale:            num(f.cash_sale),
+        campaign_float_cash:  num(f.campaign_float_cash),
+        expenses:             num(f.expenses),
+        other_income:         num(f.other_income),
+        deposit:              num(f.deposit),
+        allied_bank_cc_sale:  num(f.allied_bank_cc_sale),
+        hbl_cc_sale:          num(f.hbl_cc_sale),
+        gift_karte:           num(f.gift_karte),
+        gift_vouchers:        num(f.gift_vouchers),
+        credit_notes_issue:   num(f.credit_notes_issue),
+        remarks:              f.remarks || null,
+      };
+      const res = await apiFetch("/api/daily-sales/import-preview", {
+        method: "POST",
+        body: JSON.stringify({ store_id: storeId, rows: [row] }),
+      });
+      if (res.ok) {
+        const j = await res.json() as { preview?: (Totals & { sales_date: string })[] };
+        if (j.preview?.[0]) {
+          const p = j.preview[0];
+          setTotals({
+            total_credit_card_sale: p.total_credit_card_sale ?? 0,
+            total_sale:             p.total_sale             ?? 0,
+            net_cash_movement:      p.net_cash_movement      ?? 0,
+            opening_balance:        p.opening_balance        ?? null,
+            closing_balance:        p.closing_balance        ?? null,
+          });
+        }
+      }
+    } finally {
+      setTotalsLoading(false);
+    }
+  }, []);
+
+  function handleFieldChange(key: keyof FormFields, value: string) {
+    const next = { ...fields, [key]: value };
+    setFields(next);
+    setFieldErrors((e) => ({ ...e, [key]: undefined }));
+
+    if (store.id) {
+      if (previewTimer.current) clearTimeout(previewTimer.current);
+      previewTimer.current = setTimeout(() => void refreshTotals(next, store.id!), 600);
+    }
+  }
+
+  // ── Validation ──────────────────────────────────────────────────────────────
+  function validate(): boolean {
+    const errs: Partial<Record<keyof FormFields, string>> = {};
+    if (!fields.cash_sale.trim()) errs.cash_sale = "Cash Sale is required";
+    else if (num(fields.cash_sale) < 0) errs.cash_sale = "Must be 0 or more";
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
+  async function submit() {
+    if (!store.id) { setSubmitError("No store assigned to your account."); return; }
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const body = {
+        store_id:             store.id,
+        sales_date:           todayIso(),
+        cash_sale:            num(fields.cash_sale),
+        campaign_float_cash:  num(fields.campaign_float_cash),
+        expenses:             num(fields.expenses),
+        other_income:         num(fields.other_income),
+        deposit:              num(fields.deposit),
+        allied_bank_cc_sale:  num(fields.allied_bank_cc_sale),
+        hbl_cc_sale:          num(fields.hbl_cc_sale),
+        gift_karte:           num(fields.gift_karte),
+        gift_vouchers:        num(fields.gift_vouchers),
+        credit_notes_issue:   num(fields.credit_notes_issue),
+        remarks:              fields.remarks || null,
+      };
+
+      const res = await apiFetch("/api/daily-sales/submit", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const j = await res.json() as { ok?: boolean; error?: string };
+
+      if (!res.ok) {
+        setSubmitError(j.error ?? "Submission failed — please try again.");
+        return;
+      }
+
+      // Fetch the saved row so we can show exact figures on the success screen
+      const today = body.sales_date;
+      const year  = today.slice(0, 4);
+      const month = today.slice(5, 7);
+      const rowsRes = await apiFetch(
+        `/api/daily-sales/rows?store_id=${store.id}&year=${year}&month=${month}`
+      );
+      if (rowsRes.ok) {
+        const jr = await rowsRes.json() as { rows: SubmittedSummary[] };
+        const saved = jr.rows?.find((r) => r.sales_date === today);
+        if (saved) setSubmitted(saved);
+      }
+
+      setScreen("success");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ── Reset (submit another day) ──────────────────────────────────────────────
+  function resetForm() {
+    setFields(EMPTY_FIELDS);
+    setTotals(ZERO_TOTALS);
+    setSubmitError(null);
+    setSubmitted(null);
+    setScreen("form");
+  }
+
+  // ── Sign out ────────────────────────────────────────────────────────────────
+  async function signOut() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
+
+  // ── Style helpers ─────────────────────────────────────────────────────────
+  const inputStyle = (err?: string, readOnly?: boolean): React.CSSProperties => ({
+    width: "100%", padding: "10px 12px", borderRadius: 8,
+    border: `1.5px solid ${err ? "#B3261E" : "#EEF0F3"}`,
+    fontSize: 15, fontFamily: "inherit", outline: "none",
+    background: err ? "#FFF5F5" : readOnly ? "#F4F7FF" : "#fff",
+    color: readOnly ? "#3B5EA6" : "#0F1720",
+    fontWeight: readOnly ? 700 : 400,
+    fontVariantNumeric: "tabular-nums",
+    cursor: readOnly ? "not-allowed" : "auto",
+    boxSizing: "border-box" as const,
+  });
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11, fontWeight: 700, color: "#64748B",
+    display: "block", marginBottom: 4, letterSpacing: ".03em",
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    fontSize: 10, fontWeight: 700, color: "#94A3B8",
+    letterSpacing: ".09em", textTransform: "uppercase",
+    padding: "12px 0 8px", borderBottom: "1px solid #EEF0F3",
+    marginBottom: 14, marginTop: 6,
+  };
+
+  const fieldWrap: React.CSSProperties = { marginBottom: 14 };
+  const twoCol: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
+  const autoBadge: React.CSSProperties = {
+    display: "inline-block", fontSize: 9, fontWeight: 800, color: "#3B5EA6",
+    background: "#EDF2FF", padding: "2px 5px", borderRadius: 3, marginBottom: 4,
+    letterSpacing: ".05em",
+  };
+
+  // ── Shared header ──────────────────────────────────────────────────────────
+  function Header() {
+    return (
+      <div style={{
+        background: "#0F1720", padding: "14px 18px 16px",
+        position: "sticky", top: 0, zIndex: 10,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.5)", letterSpacing: ".05em" }}>
+            {store.name ? store.name.toUpperCase() : "UNZE"} · IFPL
+          </span>
+          <button
+            onClick={() => void signOut()}
+            style={{
+              fontSize: 11, color: "rgba(255,255,255,.35)", background: "none",
+              border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0,
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", letterSpacing: "-.4px" }}>
+          Daily Sales Entry
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,.45)", marginTop: 2 }}>
+          {longDate()}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Summary card (reused on both already + success screens) ──────────────
+  function SummaryCard({ data }: { data: SubmittedSummary }) {
+    return (
+      <div style={{
+        background: "#fff", borderRadius: 12, padding: "14px 20px",
+        width: "100%", maxWidth: 380, border: "1px solid #EEF0F3",
+      }}>
+        {([
+          ["Total Sale",        pkr(data.total_sale),        "#0F1720"],
+          ["Net Cash Movement", pkr(data.net_cash_movement), "#0F7B5F"],
+          ["Closing Balance",   pkr(data.closing_balance),   "#0F1720"],
+        ] as [string, string, string][]).map(([lbl, val, color], i, arr) => (
+          <div key={lbl} style={{
+            display: "flex", justifyContent: "space-between", alignItems: "baseline",
+            padding: "8px 0",
+            borderBottom: i < arr.length - 1 ? "1px solid #EEF0F3" : "none",
+          }}>
+            <span style={{ fontSize: 12, color: "#64748B" }}>{lbl}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color, fontVariantNumeric: "tabular-nums" }}>{val}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── SCREEN: Loading ────────────────────────────────────────────────────────
+  if (screen === "loading") {
     return (
       <main style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#f4f6f9",
+        minHeight: "100dvh", display: "flex", alignItems: "center",
+        justifyContent: "center", background: "#F4F6F9", fontFamily: "system-ui, sans-serif",
       }}>
-        <p style={{ color: "#64748B", fontFamily: "var(--font-source-sans, system-ui)" }}>
-          Loading…
-        </p>
+        <span style={{ fontSize: 14, color: "#64748B" }}>Loading…</span>
       </main>
     );
   }
 
-  // ── Placeholder UI ─────────────────────────────────────────────────────────
-  // Replace this block when the screen design is approved.
+  // ── SCREEN: Already submitted today ───────────────────────────────────────
+  if (screen === "already") {
+    return (
+      <main style={{ minHeight: "100dvh", background: "#F4F6F9", fontFamily: "system-ui, sans-serif" }}>
+        <Header />
+        <div style={{ padding: "36px 20px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: "50%", background: "#E8F5F1",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 26, color: "#0F7B5F", marginBottom: 16,
+          }}>✓</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#0F1720", marginBottom: 6 }}>
+            Already Submitted
+          </div>
+          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 24 }}>
+            Today&apos;s entry for {formatDateUK(todayIso())} has already been submitted.
+          </div>
+          {submitted && <SummaryCard data={submitted} />}
+          <p style={{ fontSize: 12, color: "#94A3B8", marginTop: 20, maxWidth: 320 }}>
+            Contact your area manager if you need to amend this entry.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // ── SCREEN: Success ────────────────────────────────────────────────────────
+  if (screen === "success") {
+    return (
+      <main style={{ minHeight: "100dvh", background: "#F4F6F9", fontFamily: "system-ui, sans-serif" }}>
+        <Header />
+        <div style={{ padding: "36px 20px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: "50%", background: "#E8F5F1",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 26, color: "#0F7B5F", marginBottom: 16,
+          }}>✓</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#0F1720", marginBottom: 6 }}>Submitted</div>
+          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 24 }}>
+            {formatDateUK(todayIso())} · saved successfully
+          </div>
+          {submitted && <SummaryCard data={submitted} />}
+          <button
+            onClick={resetForm}
+            style={{
+              width: "100%", maxWidth: 380, padding: 14, borderRadius: 10,
+              background: "#0F1720", color: "#fff", fontSize: 14, fontWeight: 700,
+              border: "none", cursor: "pointer", fontFamily: "inherit", marginTop: 16,
+            }}
+          >
+            Submit Another Day
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // ── SCREEN: Form + Confirm sheet ──────────────────────────────────────────
   return (
-    <main style={{
-      minHeight: "100vh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "#f4f6f9",
-      padding: "20px",
-      fontFamily: "var(--font-source-sans, system-ui)",
-    }}>
-      <div style={{
-        background: "#ffffff",
-        border: "1px solid #EEF0F3",
-        borderRadius: "12px",
-        padding: "40px 32px",
-        maxWidth: "480px",
-        width: "100%",
-        textAlign: "center",
-      }}>
-        {/* Unze wordmark */}
-        <p style={{ fontSize: "13px", color: "#64748B", marginBottom: "8px", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-          Unze Group
-        </p>
-        <h1 style={{ fontSize: "22px", fontWeight: 700, color: "#0F1720", margin: "0 0 8px" }}>
-          Daily Sales
-        </h1>
-        <p style={{ fontSize: "15px", color: "#64748B", margin: "0 0 32px" }}>
-          This page is being set up. Check back soon.
-        </p>
-        <p style={{ fontSize: "13px", color: "#94A3B8" }}>
-          Signed in as {email}
-        </p>
+    <main style={{ minHeight: "100dvh", background: "#F4F6F9", fontFamily: "system-ui, sans-serif" }}>
+      <Header />
+
+      {/* Admin no-store banner */}
+      {!store.id && (
+        <div style={{
+          margin: "12px 16px 0", padding: "12px 14px",
+          background: "#FFF9E6", border: "1px solid #F3D97E",
+          borderRadius: 10, fontSize: 12, color: "#B4791F",
+        }}>
+          You are signed in as an admin. No store is assigned to this account.
+        </div>
+      )}
+
+      {/* Error banner */}
+      {submitError && (
+        <div style={{
+          margin: "12px 16px 0", padding: "12px 14px",
+          background: "#FFF5F5", border: "1px solid #FDECEA",
+          borderRadius: 10, display: "flex", gap: 10, alignItems: "flex-start",
+        }}>
+          <span style={{ fontSize: 15, lineHeight: 1.2, flexShrink: 0 }}>⚠</span>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#B3261E", marginBottom: 2 }}>Submission Error</div>
+            <div style={{ fontSize: 12, color: "#0F1720" }}>{submitError}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Form body */}
+      <div style={{ padding: "0 16px 40px" }}>
+
+        {/* Cash Movement */}
+        <div style={sectionHeaderStyle}>Cash Movement</div>
+
+        <div style={fieldWrap}>
+          <label style={labelStyle}>
+            Cash Sale <span style={{ color: "#B3261E" }}>*</span>
+          </label>
+          <input
+            style={inputStyle(fieldErrors.cash_sale)}
+            type="text" inputMode="decimal"
+            value={fields.cash_sale} placeholder="0"
+            onChange={(e) => handleFieldChange("cash_sale", e.target.value)}
+          />
+          {fieldErrors.cash_sale && (
+            <div style={{ fontSize: 11, color: "#B3261E", marginTop: 3 }}>{fieldErrors.cash_sale}</div>
+          )}
+        </div>
+
+        <div style={twoCol}>
+          {([ ["campaign_float_cash", "Campaign Float"], ["expenses", "Expenses"] ] as const).map(([k, lbl]) => (
+            <div key={k} style={fieldWrap}>
+              <label style={labelStyle}>{lbl}</label>
+              <input style={inputStyle()} type="text" inputMode="decimal"
+                value={fields[k]} placeholder="0"
+                onChange={(e) => handleFieldChange(k, e.target.value)} />
+            </div>
+          ))}
+        </div>
+
+        <div style={twoCol}>
+          {([ ["other_income", "Other Income"], ["deposit", "Deposit"] ] as const).map(([k, lbl]) => (
+            <div key={k} style={fieldWrap}>
+              <label style={labelStyle}>{lbl}</label>
+              <input style={inputStyle()} type="text" inputMode="decimal"
+                value={fields[k]} placeholder="0"
+                onChange={(e) => handleFieldChange(k, e.target.value)} />
+            </div>
+          ))}
+        </div>
+
+        {/* Card Sales */}
+        <div style={sectionHeaderStyle}>Card Sales</div>
+        <div style={twoCol}>
+          {([ ["allied_bank_cc_sale", "Allied Bank CC"], ["hbl_cc_sale", "HBL CC"] ] as const).map(([k, lbl]) => (
+            <div key={k} style={fieldWrap}>
+              <label style={labelStyle}>{lbl}</label>
+              <input style={inputStyle()} type="text" inputMode="decimal"
+                value={fields[k]} placeholder="0"
+                onChange={(e) => handleFieldChange(k, e.target.value)} />
+            </div>
+          ))}
+        </div>
+
+        {/* Other Sales */}
+        <div style={sectionHeaderStyle}>Other Sales</div>
+        <div style={twoCol}>
+          {([ ["gift_karte", "Gift Karte"], ["gift_vouchers", "Gift Vouchers"] ] as const).map(([k, lbl]) => (
+            <div key={k} style={fieldWrap}>
+              <label style={labelStyle}>{lbl}</label>
+              <input style={inputStyle()} type="text" inputMode="decimal"
+                value={fields[k]} placeholder="0"
+                onChange={(e) => handleFieldChange(k, e.target.value)} />
+            </div>
+          ))}
+        </div>
+        <div style={fieldWrap}>
+          <label style={labelStyle}>Credit Notes Issued</label>
+          <input style={inputStyle()} type="text" inputMode="decimal"
+            value={fields.credit_notes_issue} placeholder="0"
+            onChange={(e) => handleFieldChange("credit_notes_issue", e.target.value)} />
+        </div>
+
+        {/* Calculated Totals */}
+        <div style={sectionHeaderStyle}>Calculated Totals</div>
+        <div style={twoCol}>
+          <div style={fieldWrap}>
+            <span style={autoBadge}>AUTO</span>
+            <label style={labelStyle}>Total Card Sale</label>
+            <input style={inputStyle(undefined, true)} readOnly type="text"
+              value={totalsLoading ? "…" : totals.total_credit_card_sale.toLocaleString("en-PK")} />
+          </div>
+          <div style={fieldWrap}>
+            <span style={autoBadge}>AUTO</span>
+            <label style={labelStyle}>Total Sale</label>
+            <input style={inputStyle(undefined, true)} readOnly type="text"
+              value={totalsLoading ? "…" : totals.total_sale.toLocaleString("en-PK")} />
+          </div>
+        </div>
+        <div style={fieldWrap}>
+          <span style={autoBadge}>AUTO</span>
+          <label style={labelStyle}>Net Cash Movement</label>
+          <input style={inputStyle(undefined, true)} readOnly type="text"
+            value={totalsLoading ? "…" : totals.net_cash_movement.toLocaleString("en-PK")} />
+          {totals.opening_balance != null && (
+            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+              Opening {pkr(totals.opening_balance)} + Net Cash {pkr(totals.net_cash_movement)} = Closing {pkr(totals.closing_balance)}
+            </div>
+          )}
+        </div>
+
+        {/* Remarks */}
+        <div style={sectionHeaderStyle}>Remarks</div>
+        <div style={fieldWrap}>
+          <textarea
+            style={{ ...inputStyle(), height: 76, resize: "none", fontSize: 14, lineHeight: "1.45" }}
+            value={fields.remarks}
+            placeholder="Optional notes for today's trading…"
+            onChange={(e) => handleFieldChange("remarks", e.target.value)}
+          />
+        </div>
+
         <button
-          onClick={() => supabase.auth.signOut().then(() => router.replace("/login"))}
+          onClick={() => { if (validate()) setScreen("confirm"); }}
           style={{
-            marginTop: "24px",
-            padding: "10px 24px",
-            borderRadius: "8px",
-            border: "1px solid #EEF0F3",
-            background: "transparent",
-            color: "#64748B",
-            fontSize: "14px",
-            cursor: "pointer",
+            width: "100%", padding: 15, borderRadius: 12, background: "#0F1720",
+            color: "#fff", fontSize: 15, fontWeight: 800, border: "none",
+            cursor: "pointer", fontFamily: "inherit", marginTop: 4,
           }}
         >
-          Sign out
+          Review &amp; Submit →
         </button>
       </div>
+
+      {/* Confirmation bottom sheet */}
+      {screen === "confirm" && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(15,23,32,.65)", zIndex: 50,
+          display: "flex", flexDirection: "column", justifyContent: "flex-end",
+        }}>
+          <div style={{
+            background: "#fff", borderRadius: "20px 20px 0 0",
+            padding: "0 20px 36px", maxHeight: "88dvh", overflowY: "auto",
+          }}>
+            {/* Handle bar */}
+            <div style={{ display: "flex", justifyContent: "center", padding: "14px 0 10px" }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: "#EEF0F3" }} />
+            </div>
+
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1720" }}>Confirm Submission</div>
+            <div style={{ fontSize: 12, color: "#64748B", marginBottom: 18, marginTop: 2 }}>
+              {formatDateUK(todayIso())} · {store.name ?? "Store"}
+            </div>
+
+            {/* Line-item summary */}
+            {([
+              ["Cash Sale",              pkr(num(fields.cash_sale)),                                       null],
+              ["Allied CC + HBL CC",     pkr(num(fields.allied_bank_cc_sale) + num(fields.hbl_cc_sale)),  null],
+              ["Gift Karte + Vouchers",  pkr(num(fields.gift_karte) + num(fields.gift_vouchers)),         null],
+              ["Campaign Float",         pkr(num(fields.campaign_float_cash)),                            null],
+              ["Expenses",               pkr(num(fields.expenses)),                                       "#B4791F"],
+              ["Deposit",                pkr(num(fields.deposit)),                                        null],
+            ] as [string, string, string | null][]).map(([lbl, val, color]) => (
+              <div key={lbl} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                padding: "9px 0", borderBottom: "1px solid #EEF0F3",
+              }}>
+                <span style={{ fontSize: 12, color: "#64748B" }}>{lbl}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: color ?? "#0F1720", fontVariantNumeric: "tabular-nums" }}>{val}</span>
+              </div>
+            ))}
+
+            {/* Separator */}
+            <div style={{ height: 1, background: "#0F1720", opacity: .08, margin: "14px 0" }} />
+
+            {/* Calculated totals */}
+            {([
+              ["Total Sale",        pkr(totals.total_sale),        "#0F1720", 16],
+              ["Net Cash Movement", pkr(totals.net_cash_movement), "#0F7B5F", 16],
+              ["Closing Balance",   pkr(totals.closing_balance),   "#0F1720", 16],
+            ] as [string, string, string, number][]).map(([lbl, val, color, sz]) => (
+              <div key={lbl} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                padding: "7px 0", borderBottom: "1px solid #EEF0F3",
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#0F1720" }}>{lbl}</span>
+                <span style={{ fontSize: sz, fontWeight: 800, color, fontVariantNumeric: "tabular-nums" }}>{val}</span>
+              </div>
+            ))}
+
+            {submitError && (
+              <div style={{
+                marginTop: 14, padding: "10px 14px",
+                background: "#FFF5F5", border: "1px solid #FDECEA",
+                borderRadius: 8, color: "#B3261E", fontSize: 12,
+              }}>
+                {submitError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button
+                onClick={() => { setScreen("form"); setSubmitError(null); }}
+                disabled={submitting}
+                style={{
+                  flex: 1, padding: 13, borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  border: "none", cursor: "pointer", background: "#F4F6F9",
+                  color: "#0F1720", fontFamily: "inherit",
+                }}
+              >
+                ← Edit
+              </button>
+              <button
+                onClick={() => void submit()}
+                disabled={submitting}
+                style={{
+                  flex: 2, padding: 13, borderRadius: 10, fontSize: 14, fontWeight: 800,
+                  border: "none", cursor: submitting ? "default" : "pointer",
+                  background: "#0F7B5F", color: "#fff", fontFamily: "inherit",
+                  opacity: submitting ? 0.7 : 1,
+                }}
+              >
+                {submitting ? "Submitting…" : "Submit ✓"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
