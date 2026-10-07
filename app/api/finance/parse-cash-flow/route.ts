@@ -178,6 +178,27 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // ── Math guard: reject if the accounting equation is too far off ──
+      // opening + receipts - payments = closing (allow ±100 for rounding)
+      const _eqErr = Math.abs(
+        cashFlow.openingBalanceTotal +
+        cashFlow.receiptsTotal -
+        cashFlow.paymentsTotal -
+        cashFlow.closingBalanceUnzeTrading
+      );
+      if (_eqErr > 100) {
+        return Response.json(
+          {
+            error:
+              `Cash sheet equation failed for ${positionDate}: ` +
+              `opening(${cashFlow.openingBalanceTotal}) + receipts(${cashFlow.receiptsTotal}) ` +
+              `- payments(${cashFlow.paymentsTotal}) ≠ closing(${cashFlow.closingBalanceUnzeTrading}) ` +
+              `(difference: ${_eqErr.toFixed(0)}). Please check the PDF or enter values manually.`,
+          },
+          { status: 422 }
+        );
+      }
+
       const { error: cashError } = await supabase.from("daily_cash_position").upsert(
         {
           company_id: companyId,

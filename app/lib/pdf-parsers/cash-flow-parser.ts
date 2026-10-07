@@ -352,10 +352,29 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     if (m) receiptsTotal = parseAmount(m[1]);
   }
 
+  // ── Swap detection: some IFPL PDF dates have Payments/Receipts sections swapped ──
+  // Guard: if equation fails by > 1000 but holds when swapped, swap them.
+  const closingRaw =
+    extractInlineAmount(text, "Today Closing Balance") ?? null;
+  if (closingRaw !== null && paymentsTotal !== 0 && receiptsTotal !== 0) {
+    const errNormal = Math.abs(openingBalance + receiptsTotal - paymentsTotal - closingRaw);
+    const errSwapped = Math.abs(openingBalance + paymentsTotal - receiptsTotal - closingRaw);
+    if (errSwapped < errNormal && errSwapped < 1000 && errNormal > 1000) {
+      const tmp = paymentsTotal;
+      paymentsTotal = receiptsTotal;
+      receiptsTotal = tmp;
+    }
+  }
+  // If paymentsTotal is still 0 and equation fails, derive from accounting equation
+  if (paymentsTotal === 0 && closingRaw !== null && receiptsTotal !== 0) {
+    const derived = openingBalance + receiptsTotal - closingRaw;
+    if (derived > 0) paymentsTotal = derived;
+  }
+
   // ── Closing balance ──
   // Format: "Today Closing Balance(15,731,695)" or "Closing Balance   (15,731,695)"
   const closingBalance =
-    extractInlineAmount(text, "Today Closing Balance") ??
+    closingRaw ??
     (openingBalance + receiptsTotal - paymentsTotal);
 
   // ── PDC total ──
@@ -420,8 +439,10 @@ function parseBaranhStyle(
 ): CashFlowParsed {
   const openingBalance = findAmount(text, "Opening Balance Total");
 
-  // Payments section ends where Receipts section begins
-  const paymentsTotal = findTotalInSection(text, "Payments", "Receipts");
+  // Payments section ends at "Closing Balance Total" (NOT "Receipts" — in BRNH PDFs
+  // the Receipts section appears before Payments in extracted text, so using "Receipts"
+  // as end boundary makes findTotalInSection always return 0).
+  const paymentsTotal = findTotalInSection(text, "Payments", "Closing Balance Total");
 
   // Receipts section ends where Closing Balance Total appears
   let receiptsTotal = 0;
@@ -445,20 +466,11 @@ function parseBaranhStyle(
     pdcTotal = chunk.includes("(") ? -parseAmount(pdcMatch[1]) : parseAmount(pdcMatch[1]);
   }
 
-  // Closing balance after PDC — appears as "(2,288,354)" or similar right after
-  // the "Closing Balance" label that follows the PDC section.
-  let closingAfterPDC = pdcTotal !== 0 ? closingBalance - pdcTotal : closingBalance;
-  const pdcSectionIdx = text.search(/Total\s+PDC[''']?s?\s+Balance/i);
-  if (pdcSectionIdx >= 0) {
-    const afterPDC = text.slice(pdcSectionIdx);
-    // Look for "Closing Balance" (NOT "Total") followed by a number or (number)
-    const m = afterPDC.match(/Closing Balance\s*\n?\s*(\(?\s*[\d,]+(?:\.\d+)?\s*\)?)/i);
-    if (m) {
-      const raw = m[1].trim();
-      const barIsNeg = raw.startsWith("(") || raw.startsWith("-");
-      closingAfterPDC = barIsNeg ? -parseAmount(raw) : parseAmount(raw);
-    }
-  }
+  // Closing balance after PDC — always use formula: closingBalance - pdcTotal.
+  // BRNH PDFs print an incorrect value in the "Closing Balance" line after the PDC
+  // section (they show |closing + pdc| instead of closing - pdc). Reading that line
+  // overrides the correct result, so we do NOT read the PDF here.
+  const closingAfterPDC = closingBalance - pdcTotal;
 
   return {
     openingBalanceTotal: openingBalance,
