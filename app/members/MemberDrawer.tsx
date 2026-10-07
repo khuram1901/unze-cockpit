@@ -695,11 +695,11 @@ export default function MemberDrawer({
           </p>
 
           {/* Security actions (password reset / active toggle) */}
-          {me && canChangePasswordFor(me, member.email || "", member.role) && (
+          {me && canChangePasswordFor(me, { email: member.email || "", role: member.role || "Staff" } as UserCtx) && (
             <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: 16 }}>
               <p style={{ fontSize: 12, fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px" }}>Security</p>
               <button
-                onClick={() => onSendPwReset(member.email || "")}
+                onClick={() => onSendPwReset(member.email || "", fullName(member))}
                 style={{ fontSize: 13, padding: "8px 16px", borderRadius: 8, border: `1px solid ${COLOURS.HAIRLINE}`, background: "transparent", cursor: "pointer", color: COLOURS.NAVY }}
               >
                 Send password reset email
