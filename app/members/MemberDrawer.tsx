@@ -695,7 +695,7 @@ export default function MemberDrawer({
           </p>
 
           {/* Security actions (password reset / active toggle) */}
-          {me && canChangePasswordFor(me, { email: member.email || "", role: member.role || "Staff" } as UserCtx) && (
+          {me && canChangePasswordFor(me, member) && (
             <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: 16 }}>
               <p style={{ fontSize: 12, fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px" }}>Security</p>
               <button
