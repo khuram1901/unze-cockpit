@@ -1,8 +1,13 @@
 "use client";
 
 import { useContext, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase, loadMyPermissions } from "./supabase";
+
+// Store users have email addresses of the form store{3-digit-code}@unze.co.uk.
+// They are restricted to /daily-sales only. This regex is the single source of
+// truth for detecting store users — used both here and in app/page.tsx.
+export const STORE_USER_RE = /^store\d{3}@unze\.co\.uk$/;
 import {
   canViewFinance, canViewReceivables, canViewExecutiveDashboard, canViewDepartment,
   canViewOperations, canSeeAllMinutes, canSeeAllTasks, canManageRecurringTasks,
@@ -88,6 +93,11 @@ async function loadUserCtx(email: string): Promise<UserCtx> {
 // if the context fails the page's test. Only that last test differs, so it is
 // the only thing the public hooks below pass in.
 //
+// Store users (email matches STORE_USER_RE) are additionally bounced to
+// /daily-sales if they navigate to any other route — this is the
+// client-side equivalent of a middleware redirect, since the project uses
+// localStorage-based auth and @supabase/ssr is not installed.
+//
 // `allow` is read through a ref rather than listed as an effect dependency:
 // callers pass an inline arrow that is a new function on every render, which
 // would re-run the guard (and re-redirect) on every render if it were a dep.
@@ -97,6 +107,7 @@ function useAuthGuard(
   guardKey: string,
 ): { checking: boolean; ctx: UserCtx | null } {
   const router = useRouter();
+  const pathname = usePathname();
   // Fast path: AuthWrapper has already loaded the session; read it from context
   // so this hook costs zero extra network round-trips on every page navigation.
   const ctxValue = useContext(UserCtxContext);
@@ -111,10 +122,16 @@ function useAuthGuard(
   useEffect(() => {
     if (ctxValue === null) return; // not inside AuthWrapper — slow path handles it
     if (!ctxValue.userCtx) { router.replace("/login"); return; }
+    // Store users must stay on /daily-sales
+    if (ctxValue.userEmail && STORE_USER_RE.test(ctxValue.userEmail) &&
+        !pathname.startsWith("/daily-sales")) {
+      router.replace("/daily-sales");
+      return;
+    }
     if (!allowRef.current(ctxValue.userCtx)) { router.replace("/welcome"); return; }
     setCtx(ctxValue.userCtx);
     setChecking(false);
-  }, [ctxValue, router]);
+  }, [ctxValue, router, pathname]);
 
   // Slow path — independent load when rendered outside AuthWrapper
   useEffect(() => {
@@ -126,6 +143,11 @@ function useAuthGuard(
       const { data: { session } } = await supabase.auth.getSession();
       if (!active) return;
       if (!session?.user?.email) { router.replace("/login"); return; }
+      // Store users must stay on /daily-sales
+      if (STORE_USER_RE.test(session.user.email) && !pathname.startsWith("/daily-sales")) {
+        router.replace("/daily-sales");
+        return;
+      }
       const loaded = await loadUserCtx(session.user.email);
       if (!active) return;
       if (!allowRef.current(loaded)) {
@@ -141,7 +163,7 @@ function useAuthGuard(
       if (active) router.replace("/login");
     });
     return () => { active = false; };
-  }, [guardKey, router, ctxValue]);
+  }, [guardKey, router, ctxValue, pathname]);
 
   return { checking, ctx };
 }

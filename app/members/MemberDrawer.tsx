@@ -34,6 +34,7 @@ import {
 import PhotoCropModal from "../lib/PhotoCropModal";
 import { WIDGET_REGISTRY } from "../lib/widgetRegistry";
 import { FINANCE_COMPANIES, MEMBER_COMPANY_NAMES } from "../lib/constants";
+import { STORE_USER_RE } from "../lib/useRouteGuard";
 
 /* ── Types ────────────────────────────────────────────────────────────── */
 
@@ -652,6 +653,63 @@ export default function MemberDrawer({
   const showsDept = member.role === "Manager" || member.role === "Member";
 
   const dn = fullName(member);
+
+  /* ── Store-user simplified drawer ────────────────────────────────── */
+  // Store users (store{3-digit}@unze.co.uk) have no app permissions and no
+  // widget toggles — they only access /daily-sales. Show a minimal drawer that
+  // confirms their store mapping and provides the security actions only.
+  const isStoreUser = !!member.email && STORE_USER_RE.test(member.email);
+  if (isStoreUser) {
+    const fmCode = (member.email || "").replace(/^store(\d{3})@.*$/, "$1");
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 480 }}>
+        {toast.element}
+        {/* Header */}
+        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", alignItems: "center", gap: 12, background: COLOURS.CARD }}>
+          {onClose && (
+            <button onClick={onClose} style={{ fontSize: 13, padding: "4px 8px", borderRadius: 6, border: `1px solid ${COLOURS.HAIRLINE}`, background: "transparent", cursor: "pointer", color: COLOURS.SLATE }}>
+              ←
+            </button>
+          )}
+          <div style={{ width: 42, height: 42, borderRadius: "50%", flexShrink: 0, background: COLOURS.NAVY, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 600 }}>
+            {((member.first_name?.[0] || "") + (member.last_name?.[0] || "")).toUpperCase() || "S"}
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: COLOURS.NAVY }}>{dn}</div>
+            <div style={{ fontSize: 12, color: COLOURS.SLATE }}>{member.email}</div>
+          </div>
+        </div>
+
+        {/* Store-user info */}
+        <div style={{ padding: "18px 18px", flex: 1, overflowY: "auto" }}>
+          {/* Store badge */}
+          <div style={{ marginBottom: 20 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#0F7B5F", background: "#E6F4F0", border: "1px solid #B2DFD4", borderRadius: 8, padding: "6px 12px" }}>
+              <span style={{ fontSize: 16 }}>🏪</span>
+              Store login — FM code {fmCode}
+            </span>
+          </div>
+          <p style={{ fontSize: 13, color: COLOURS.SLATE, margin: "0 0 16px" }}>
+            This is a store-level account. It has access to <strong>/daily-sales</strong> only. No app
+            permissions, widget toggles or department assignments apply to this account type.
+          </p>
+
+          {/* Security actions (password reset / active toggle) */}
+          {me && canChangePasswordFor(me, member.email || "", member.role) && (
+            <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: 16 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px" }}>Security</p>
+              <button
+                onClick={() => onSendPwReset(member.email || "")}
+                style={{ fontSize: 13, padding: "8px 16px", borderRadius: 8, border: `1px solid ${COLOURS.HAIRLINE}`, background: "transparent", cursor: "pointer", color: COLOURS.NAVY }}
+              >
+                Send password reset email
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   /* ─────────────────────────────────────────────────────────────────── */
 
