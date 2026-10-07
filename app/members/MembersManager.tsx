@@ -10,6 +10,7 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import MemberDrawer from "./MemberDrawer";
 import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, isMainAdmin, canAddMembers, canImportExport, PROTECTED_EMAILS, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { MEMBER_COMPANY_NAMES } from "../lib/constants";
+import { STORE_USER_RE } from "../lib/useRouteGuard";
 
 export type Member = {
   id: string;
@@ -260,6 +261,7 @@ export default function MembersManager() {
 
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [userTypeFilter, setUserTypeFilter] = useState<"all" | "staff" | "store">("all");
   const [cleanupMode, setCleanupMode] = useState<"all" | "missing_company_id" | "missing_dept">("all");
   const [page, setPage] = useState(0);
 
@@ -669,6 +671,10 @@ export default function MembersManager() {
       if (cleanupMode === "missing_company_id") return !m.task_default_company_id && m.is_active !== false;
       if (cleanupMode === "missing_dept")       return (!m.department || m.department === "") && m.is_active !== false;
       return true;
+    }).filter((m) => {
+      if (userTypeFilter === "store") return !!m.email && STORE_USER_RE.test(m.email);
+      if (userTypeFilter === "staff") return !m.email || !STORE_USER_RE.test(m.email);
+      return true; // "all"
     });
   const missingCompanyIdCount = members.filter((m) => !m.task_default_company_id && m.is_active !== false).length;
   const missingDeptCount      = members.filter((m) => (!m.department || m.department === "") && m.is_active !== false).length;
@@ -839,7 +845,7 @@ export default function MembersManager() {
           )}
 
           {/* ── Toolbar: search + export/import + add form ─ */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
             <input
               type="text"
               placeholder="Search by name, email, role, department..."
@@ -919,6 +925,32 @@ export default function MembersManager() {
               )}
             </div>
           </div>
+
+          {/* ── User-type filter chips ─────────────────── */}
+          {isAdmin && (
+            <div style={{ display: "flex", gap: "6px", marginBottom: "16px", flexWrap: "wrap" }}>
+              {(["all", "staff", "store"] as const).map((t) => {
+                const labels = { all: "All members", staff: "Staff only", store: "Store users" };
+                const active = userTypeFilter === t;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => { setUserTypeFilter(t); setPage(0); }}
+                    style={{
+                      fontSize: 12, fontWeight: active ? 600 : 400,
+                      padding: "4px 12px", borderRadius: 20,
+                      border: `1px solid ${active ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                      background: active ? COLOURS.NAVY : "transparent",
+                      color: active ? "#fff" : COLOURS.SLATE,
+                      cursor: "pointer", whiteSpace: "nowrap",
+                    }}
+                  >
+                    {labels[t]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* ── Add form ──────────────────────────────── */}
           {isAdmin && showAddForm && (
@@ -1179,21 +1211,34 @@ export default function MembersManager() {
                               : initials}
                           </div>
                           {/* Name + role */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
-                              {dn}
-                              {m.is_hod && <span style={{ fontSize: 10, fontWeight: 700, color: COLOURS.AMBER }}>HOD</span>}
-                              {isAdmin && !m.task_default_company_id && m.is_active !== false && (
-                                <span style={{ fontSize: 9, fontWeight: 700, color: "#B4791F", background: "#FBF1DE", padding: "1px 5px", borderRadius: 10, flexShrink: 0 }}>no task co.</span>
-                              )}
-                              {isAdmin && (!m.department || m.department === "") && m.is_active !== false && (
-                                <span style={{ fontSize: 9, fontWeight: 700, color: "#B4791F", background: "#FBF1DE", padding: "1px 5px", borderRadius: 10, flexShrink: 0 }}>no dept</span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: 11, color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {m.role}{m.department ? ` · ${m.department}` : ""}
-                            </div>
-                          </div>
+                          {(() => {
+                            const isStoreUser = !!m.email && STORE_USER_RE.test(m.email);
+                            const fmCode = isStoreUser ? (m.email || "").replace(/^store(\d{3})@.*$/, "$1") : null;
+                            return (
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
+                                  {dn}
+                                  {m.is_hod && <span style={{ fontSize: 10, fontWeight: 700, color: COLOURS.AMBER }}>HOD</span>}
+                                  {isStoreUser && fmCode && (
+                                    <span style={{ fontSize: 9, fontWeight: 700, color: "#0F7B5F", background: "#E6F4F0", padding: "1px 6px", borderRadius: 10, flexShrink: 0, letterSpacing: "0.03em" }}>
+                                      FM {fmCode}
+                                    </span>
+                                  )}
+                                  {isAdmin && !isStoreUser && !m.task_default_company_id && m.is_active !== false && (
+                                    <span style={{ fontSize: 9, fontWeight: 700, color: "#B4791F", background: "#FBF1DE", padding: "1px 5px", borderRadius: 10, flexShrink: 0 }}>no task co.</span>
+                                  )}
+                                  {isAdmin && !isStoreUser && (!m.department || m.department === "") && m.is_active !== false && (
+                                    <span style={{ fontSize: 9, fontWeight: 700, color: "#B4791F", background: "#FBF1DE", padding: "1px 5px", borderRadius: 10, flexShrink: 0 }}>no dept</span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 11, color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {isStoreUser
+                                    ? "Daily Sales only (/daily-sales)"
+                                    : `${m.role}${m.department ? ` · ${m.department}` : ""}`}
+                                </div>
+                              </div>
+                            );
+                          })()}
                           {/* Status dot */}
                           <div style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: m.is_active !== false ? COLOURS.GREEN : COLOURS.HAIRLINE }} />
                         </div>
