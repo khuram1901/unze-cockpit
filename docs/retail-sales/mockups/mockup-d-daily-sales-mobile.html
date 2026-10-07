@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>/daily-sales — Mobile Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#E8EDF2;color:#0F1720;font-size:13px;line-height:1.5;padding:32px 24px;min-height:100vh}
+
+/* Layout: 4 phones side by side */
+.phones{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+.phone-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.phone-label{font-size:12px;font-weight:600;color:#64748B;text-align:center}
+
+/* Phone shell */
+.phone{width:360px;background:#fff;border-radius:32px;overflow:hidden;border:1px solid #DDE1E7;box-shadow:0 8px 32px rgba(15,23,32,.15)}
+.phone-status-bar{background:#0F1720;color:rgba(255,255,255,.8);font-size:11px;padding:10px 20px;display:flex;justify-content:space-between}
+.phone-body{overflow-y:auto;max-height:700px}
+
+/* App chrome */
+.app-header{background:#0F1720;padding:12px 18px 16px;position:sticky;top:0;z-index:10}
+.app-header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.store-badge{font-size:11px;font-weight:600;color:rgba(255,255,255,.55);letter-spacing:.04em}
+.app-title{font-size:16px;font-weight:700;color:#fff;letter-spacing:-.3px}
+.header-date{font-size:12px;color:rgba(255,255,255,.55)}
+.logout-btn{font-size:11px;color:rgba(255,255,255,.4);cursor:pointer;padding:4px 0}
+
+/* Form */
+.form-body{padding:16px}
+.section-head{font-size:10px;font-weight:700;color:#64748B;letter-spacing:.07em;text-transform:uppercase;padding:4px 0 8px;border-bottom:1px solid #EEF0F3;margin-bottom:12px}
+.field{margin-bottom:12px}
+.field-label{font-size:11px;font-weight:600;color:#64748B;margin-bottom:4px;display:flex;justify-content:space-between}
+.field-label span{color:#B3261E;font-size:10px}
+.field-input{width:100%;padding:9px 12px;border:1.5px solid #EEF0F3;border-radius:8px;font-size:14px;font-family:inherit;color:#0F1720;background:#fff;outline:none;font-variant-numeric:tabular-nums}
+.field-input:focus{border-color:#0F1720}
+.field-input.readonly{background:#F8F9FB;color:#3B5EA6;font-weight:600;border-color:#EEF0F3;cursor:not-allowed}
+.field-input.error{border-color:#B3261E;background:#FFF5F5}
+.field-error{font-size:11px;color:#B3261E;margin-top:3px}
+.field-hint{font-size:11px;color:#94A3B8;margin-top:3px}
+.field-input.textarea{resize:none;height:72px;font-size:13px;line-height:1.4}
+.calc-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.calc-badge{font-size:9px;font-weight:700;color:#3B5EA6;background:#EEF5FF;padding:2px 6px;border-radius:4px;margin-bottom:4px;display:inline-block}
+.submit-btn{width:100%;padding:14px;border-radius:10px;background:#0F1720;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;margin-top:4px;letter-spacing:-.2px}
+.submit-btn:disabled{background:#EEF0F3;color:#94A3B8;cursor:not-allowed}
+
+/* Modal overlay */
+.modal-overlay{position:relative;background:#fff}
+.modal-backdrop{position:absolute;inset:0;background:rgba(15,23,32,.6);z-index:20;display:flex;align-items:flex-end}
+.modal-sheet{background:#fff;border-radius:20px 20px 0 0;padding:20px 20px 28px;width:100%}
+.modal-handle{width:36px;height:4px;border-radius:2px;background:#EEF0F3;margin:0 auto 16px}
+.modal-title{font-size:15px;font-weight:700;margin-bottom:4px}
+.modal-subtitle{font-size:12px;color:#64748B;margin-bottom:18px}
+.summary-row{display:flex;justify-content:space-between;align-items:baseline;padding:9px 0;border-bottom:1px solid #EEF0F3}
+.summary-row:last-of-type{border-bottom:none}
+.summary-label{font-size:12px;color:#64748B}
+.summary-value{font-size:14px;font-weight:700;color:#0F1720;font-variant-numeric:tabular-nums}
+.summary-value.green{color:#0F7B5F}
+.summary-value.amber{color:#B4791F}
+.summary-divider{height:1px;background:#EEF0F3;margin:12px 0}
+.modal-actions{display:flex;gap:10px;margin-top:18px}
+.modal-btn{flex:1;padding:12px;border-radius:10px;font-size:13px;font-weight:600;border:none;cursor:pointer}
+.modal-btn.secondary{background:#F4F6F9;color:#0F1720}
+.modal-btn.primary{background:#0F7B5F;color:#fff}
+
+/* Success screen */
+.success-body{padding:32px 20px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.success-icon{width:64px;height:64px;border-radius:50%;background:#E8F5F1;display:flex;align-items:center;justify-content:center;margin-bottom:18px;font-size:28px}
+.success-title{font-size:17px;font-weight:700;margin-bottom:6px}
+.success-sub{font-size:13px;color:#64748B;margin-bottom:24px}
+.success-card{background:#F4F6F9;border-radius:10px;padding:14px 18px;width:100%;margin-bottom:6px;text-align:left}
+.success-stat{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0}
+.success-stat:not(:last-child){border-bottom:1px solid #EEF0F3}
+.success-stat-label{font-size:12px;color:#64748B}
+.success-stat-value{font-size:13px;font-weight:700}
+.another-btn{width:100%;padding:13px;border-radius:10px;background:#0F1720;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;margin-top:14px}
+.home-link{font-size:12px;color:#64748B;margin-top:12px;cursor:pointer}
+
+/* Error variants */
+.error-banner{background:#FFF5F5;border:1px solid #FDECEA;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start}
+.error-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.error-banner-title{font-size:12px;font-weight:700;color:#B3261E;margin-bottom:2px}
+.error-banner-body{font-size:12px;color:#0F1720}
+</style>
+</head>
+<body>
+
+<div style="text-align:center;margin-bottom:24px">
+  <div style="font-size:18px;font-weight:700;color:#0F1720">/daily-sales — Mobile Screens</div>
+  <div style="font-size:12px;color:#64748B;margin-top:4px">Screen 1: Entry form &nbsp;·&nbsp; Screen 2: Confirmation popup &nbsp;·&nbsp; Screen 3: Success &nbsp;·&nbsp; Screen 4: Error states</div>
+</div>
+
+<div class="phones">
+
+  <!-- ══════════════════════════════════════════════
+       SCREEN 1: Daily Sales Entry Form
+       ══════════════════════════════════════════════ -->
+  <div class="phone-wrap">
+    <div class="phone-label">Screen 1 — Entry Form</div>
+    <div class="phone">
+      <div class="phone-status-bar"><span>09:41</span><span>●●●</span></div>
+      <div class="phone-body">
+        <div class="app-header">
+          <div class="app-header-top">
+            <div class="store-badge">DHA PHASE 6 · IFPL</div>
+            <div class="logout-btn">Sign out</div>
+          </div>
+          <div class="app-title">Daily Sales Entry</div>
+          <div class="header-date">Wednesday, 07 October 2026</div>
+        </div>
+
+        <div class="form-body">
+
+          <!-- Cash section -->
+          <div class="section-head">Cash Movement</div>
+
+          <div class="field">
+            <div class="field-label">Cash Sale <span>required</span></div>
+            <input class="field-input" type="text" value="84,500" inputmode="numeric">
+          </div>
+          <div class="calc-row">
+            <div class="field">
+              <div class="field-label">Campaign Float</div>
+              <input class="field-input" type="text" value="5,000" inputmode="numeric">
+            </div>
+            <div class="field">
+              <div class="field-label">Expenses</div>
+              <input class="field-input" type="text" value="3,200" inputmode="numeric">
+            </div>
+          </div>
+          <div class="calc-row">
+            <div class="field">
+              <div class="field-label">Other Income</div>
+              <input class="field-input" type="text" value="" inputmode="numeric" placeholder="0">
+            </div>
+            <div class="field">
+              <div class="field-label">Deposit</div>
+              <input class="field-input" type="text" value="80,000" inputmode="numeric">
+            </div>
+          </div>
+
+          <!-- Card section -->
+          <div class="section-head" style="margin-top:8px">Card Sales</div>
+          <div class="calc-row">
+            <div class="field">
+              <div class="field-label">Allied Bank CC</div>
+              <input class="field-input" type="text" value="22,000" inputmode="numeric">
+            </div>
+            <div class="field">
+              <div class="field-label">HBL CC</div>
+              <input class="field-input" type="text" value="14,000" inputmode="numeric">
+            </div>
+          </div>
+
+          <!-- Other sales -->
+          <div class="section-head" style="margin-top:8px">Other Sales</div>
+          <div class="calc-row">
+            <div class="field">
+              <div class="field-label">Gift Karte</div>
+              <input class="field-input" type="text" value="" inputmode="numeric" placeholder="0">
+            </div>
+            <div class="field">
+              <div class="field-label">Gift Vouchers</div>
+              <input class="field-input" type="text" value="" inputmode="numeric" placeholder="0">
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">Credit Notes Issued</div>
+            <input class="field-input" type="text" value="" inputmode="numeric" placeholder="0">
+          </div>
+
+          <!-- Calculated (read-only) -->
+          <div class="section-head" style="margin-top:8px">Calculated Totals</div>
+          <div class="calc-row">
+            <div class="field">
+              <div class="field-label"><span class="calc-badge">AUTO</span></div>
+              <div class="field-label" style="margin-bottom:4px">Total Card Sale</div>
+              <input class="field-input readonly" type="text" value="36,000" readonly>
+            </div>
+            <div class="field">
+              <div class="field-label"><span class="calc-badge">AUTO</span></div>
+              <div class="field-label" style="margin-bottom:4px">Total Sale</div>
+              <input class="field-input readonly" type="text" value="1,20,500" readonly>
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label"><span class="calc-badge">AUTO</span></div>
+            <div class="field-label" style="margin-bottom:4px">Net Cash Movement</div>
+            <input class="field-input readonly" type="text" value="6,300" readonly>
+            <div class="field-hint">Opening ₨1,25,000 + Net Cash ₨6,300 = Closing ₨1,31,300</div>
+          </div>
+
+          <!-- Remarks -->
+          <div class="section-head" style="margin-top:8px">Remarks</div>
+          <div class="field">
+            <textarea class="field-input textarea" placeholder="Optional notes for this day's trading…">Good Saturday, higher footfall expected.</textarea>
+          </div>
+
+          <button class="submit-btn">Review &amp; Submit →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       SCREEN 2: Confirmation Popup (bottom sheet)
+       ══════════════════════════════════════════════ -->
+  <div class="phone-wrap">
+    <div class="phone-label">Screen 2 — Confirm &amp; Submit</div>
+    <div class="phone">
+      <div class="phone-status-bar"><span>09:44</span><span>●●●</span></div>
+      <div class="phone-body">
+        <!-- Blurred form behind the modal -->
+        <div class="modal-overlay">
+          <div style="padding:16px;filter:blur(1.5px);opacity:.35;pointer-events:none">
+            <div style="background:#0F1720;padding:12px 18px 16px">
+              <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,.4)">DHA PHASE 6 · IFPL</div>
+              <div style="font-size:16px;font-weight:700;color:#fff">Daily Sales Entry</div>
+              <div style="font-size:12px;color:rgba(255,255,255,.4)">Wednesday, 07 October 2026</div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#EEF0F3;border-radius:8px;height:240px;margin-bottom:10px"></div>
+            </div>
+          </div>
+          <!-- The modal sheet -->
+          <div class="modal-backdrop">
+            <div class="modal-sheet">
+              <div class="modal-handle"></div>
+              <div class="modal-title">Confirm Submission</div>
+              <div class="modal-subtitle">07/10/2026 &nbsp;·&nbsp; DHA Phase 6</div>
+
+              <div class="summary-row">
+                <div class="summary-label">Cash Sale</div>
+                <div class="summary-value">₨ 84,500</div>
+              </div>
+              <div class="summary-row">
+                <div class="summary-label">Allied CC + HBL CC</div>
+                <div class="summary-value">₨ 36,000</div>
+              </div>
+              <div class="summary-row">
+                <div class="summary-label">Other Sales (Gift Karte, Vouchers)</div>
+                <div class="summary-value">—</div>
+              </div>
+              <div class="summary-row">
+                <div class="summary-label">Expenses</div>
+                <div class="summary-value amber">₨ 3,200</div>
+              </div>
+              <div class="summary-row">
+                <div class="summary-label">Deposit</div>
+                <div class="summary-value">₨ 80,000</div>
+              </div>
+
+              <div class="summary-divider"></div>
+
+              <div class="summary-row" style="padding:6px 0">
+                <div class="summary-label" style="font-weight:600">Total Sale</div>
+                <div class="summary-value" style="font-size:16px">₨ 1,20,500</div>
+              </div>
+              <div class="summary-row" style="padding:6px 0">
+                <div class="summary-label" style="font-weight:600">Net Cash Movement</div>
+                <div class="summary-value green" style="font-size:16px">₨ 6,300</div>
+              </div>
+              <div class="summary-row" style="padding:6px 0;border-bottom:none">
+                <div class="summary-label" style="font-weight:600">Closing Balance</div>
+                <div class="summary-value" style="font-size:16px">₨ 1,31,300</div>
+              </div>
+
+              <div class="modal-actions">
+                <button class="modal-btn secondary">← Edit</button>
+                <button class="modal-btn primary">Submit ✓</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       SCREEN 3: Success
+       ══════════════════════════════════════════════ -->
+  <div class="phone-wrap">
+    <div class="phone-label">Screen 3 — Success</div>
+    <div class="phone">
+      <div class="phone-status-bar"><span>09:45</span><span>●●●</span></div>
+      <div class="phone-body">
+        <div class="app-header">
+          <div class="app-header-top">
+            <div class="store-badge">DHA PHASE 6 · IFPL</div>
+          </div>
+          <div class="app-title">Daily Sales Entry</div>
+          <div class="header-date">Wednesday, 07 October 2026</div>
+        </div>
+
+        <div class="success-body">
+          <div class="success-icon">✓</div>
+          <div class="success-title">Submitted</div>
+          <div class="success-sub">07/10/2026 — DHA Phase 6<br>Entry recorded successfully.</div>
+
+          <div class="success-card">
+            <div class="success-stat">
+              <div class="success-stat-label">Total Sale</div>
+              <div class="success-stat-value">₨ 1,20,500</div>
+            </div>
+            <div class="success-stat">
+              <div class="success-stat-label">Total Card Sale</div>
+              <div class="success-stat-value">₨ 36,000</div>
+            </div>
+            <div class="success-stat">
+              <div class="success-stat-label">Net Cash Movement</div>
+              <div class="success-stat-value" style="color:#0F7B5F">₨ 6,300</div>
+            </div>
+            <div class="success-stat">
+              <div class="success-stat-label">Closing Balance</div>
+              <div class="success-stat-value">₨ 1,31,300</div>
+            </div>
+          </div>
+
+          <div style="font-size:11px;color:#94A3B8;margin-top:8px;margin-bottom:4px">Next entry due: 08/10/2026 (tomorrow)</div>
+
+          <button class="another-btn">Submit Another Day</button>
+          <div class="home-link">← Back to home</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       SCREEN 4: Error States
+       ══════════════════════════════════════════════ -->
+  <div class="phone-wrap">
+    <div class="phone-label">Screen 4 — Error States</div>
+    <div class="phone">
+      <div class="phone-status-bar"><span>09:47</span><span>●●●</span></div>
+      <div class="phone-body">
+        <div class="app-header">
+          <div class="app-header-top">
+            <div class="store-badge">DHA PHASE 6 · IFPL</div>
+          </div>
+          <div class="app-title">Daily Sales Entry</div>
+          <div class="header-date">Wednesday, 07 October 2026</div>
+        </div>
+
+        <div class="form-body">
+          <div style="font-size:11px;font-weight:600;color:#64748B;margin-bottom:12px">Error banners — shown in place of the form or as inline alerts:</div>
+
+          <!-- Error 1: Future date -->
+          <div class="error-banner">
+            <div class="error-icon">📅</div>
+            <div>
+              <div class="error-banner-title">Future date not allowed</div>
+              <div class="error-banner-body">You cannot submit sales for a future date. Today is 07/10/2026.</div>
+            </div>
+          </div>
+
+          <!-- Error 2: Too far in the past -->
+          <div class="error-banner">
+            <div class="error-icon">⏰</div>
+            <div>
+              <div class="error-banner-title">Entry too old</div>
+              <div class="error-banner-body">Sales entries can only be submitted up to 7 days in the past. Contact your HOD to unlock an older date.</div>
+            </div>
+          </div>
+
+          <!-- Error 3: Before manual entry start -->
+          <div class="error-banner">
+            <div class="error-icon">🚫</div>
+            <div>
+              <div class="error-banner-title">Date not available</div>
+              <div class="error-banner-body">01/09/2026 is before this store's manual entry start date. Contact Admin.</div>
+            </div>
+          </div>
+
+          <!-- Error 4: No opening balance -->
+          <div class="error-banner">
+            <div class="error-icon">⚠️</div>
+            <div>
+              <div class="error-banner-title">Opening balance not set</div>
+              <div class="error-banner-body">No opening balance for DHA Phase 6 in October 2026. Your entry will be saved without a closing balance — ask your HOD to set it.</div>
+            </div>
+          </div>
+
+          <!-- Error 5: Month locked -->
+          <div class="error-banner">
+            <div class="error-icon">🔒</div>
+            <div>
+              <div class="error-banner-title">Month is locked</div>
+              <div class="error-banner-body">September 2026 has been locked for DHA Phase 6. Contact Admin to unlock.</div>
+            </div>
+          </div>
+
+          <!-- Error 6: Duplicate date -->
+          <div class="error-banner">
+            <div class="error-icon">📋</div>
+            <div>
+              <div class="error-banner-title">Entry already exists</div>
+              <div class="error-banner-body">A sales entry for 06/10/2026 already exists. Edit the existing entry instead.</div>
+            </div>
+          </div>
+
+          <!-- Error 7: Field-level validation -->
+          <div style="margin-top:4px;margin-bottom:8px;font-size:11px;font-weight:600;color:#64748B">Field-level validation:</div>
+          <div class="field">
+            <div class="field-label">Cash Sale <span>required</span></div>
+            <input class="field-input error" type="text" value="">
+            <div class="field-error">Cash Sale is required and must be a number ≥ 0</div>
+          </div>
+          <div class="field">
+            <div class="field-label">Deposit</div>
+            <input class="field-input error" type="text" value="-5,000">
+            <div class="field-error">Value cannot be negative</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

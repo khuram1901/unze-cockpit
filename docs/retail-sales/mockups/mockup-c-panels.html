@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Retail Sales — Panels Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#F4F6F9;color:#0F1720;font-size:13px;line-height:1.5}
+h2{font-size:14px;font-weight:600;margin-bottom:4px}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:24px}
+/* Panel card */
+.panel{background:#fff;border:1px solid #EEF0F3;border-radius:12px;overflow:hidden}
+.panel-header{padding:16px 20px 12px;border-bottom:1px solid #EEF0F3;display:flex;align-items:flex-start;justify-content:space-between}
+.panel-title{font-size:14px;font-weight:700;color:#0F1720}
+.panel-subtitle{font-size:11px;color:#64748B;margin-top:2px}
+.panel-body{padding:20px}
+.btn{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;white-space:nowrap}
+.btn-outline{background:#fff;border:1px solid #EEF0F3;color:#0F1720}
+.btn-primary{background:#0F1720;color:#fff}
+.btn-green{background:#0F7B5F;color:#fff}
+.btn-amber{background:#B4791F;color:#fff}
+.btn-red{background:#B3261E;color:#fff;padding:6px 14px}
+/* ═══ Opening Balances Panel ═══════════════════════════════ */
+.ob-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.ob-toolbar input{padding:6px 12px;border:1px solid #EEF0F3;border-radius:8px;font-size:12px;font-family:inherit;color:#0F1720;width:200px}
+.ob-table{width:100%;border-collapse:collapse;font-size:12px}
+.ob-table th{background:#F8F9FB;padding:7px 12px;font-size:11px;font-weight:600;color:#64748B;text-align:left;border-bottom:1px solid #EEF0F3}
+.ob-table th:not(:first-child){text-align:right}
+.ob-table td{padding:8px 12px;border-bottom:1px solid #EEF0F3;vertical-align:middle;font-variant-numeric:tabular-nums}
+.ob-table td:not(:first-child){text-align:right}
+.ob-table tr:last-child td{border-bottom:none}
+.ob-table tr:hover td{background:#FAFBFC}
+.store-name{font-weight:500}
+.store-code{font-size:10px;color:#64748B;margin-top:1px}
+.balance-value{font-weight:600;color:#0F1720}
+.balance-nil{color:#B3261E;font-weight:500;font-style:italic}
+.date-set{font-size:11px;color:#64748B}
+.inline-edit{padding:4px 8px;border:1px solid #EEF0F3;border-radius:6px;font-size:12px;font-family:inherit;width:110px;text-align:right}
+.save-btn{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:#0F7B5F;color:#fff;border:none;cursor:pointer;margin-left:4px}
+/* Alert strip */
+.alert-strip{background:#FFF8F0;border:1px solid #FEE9C6;border-radius:8px;padding:10px 14px;font-size:12px;color:#B4791F;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+/* ═══ Excel Import Panel ════════════════════════════════════ */
+.import-steps{display:flex;align-items:center;gap:0;margin-bottom:20px}
+.step{display:flex;align-items:center;gap:6px}
+.step-num{width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.step.done .step-num{background:#0F7B5F;color:#fff}
+.step.active .step-num{background:#0F1720;color:#fff}
+.step.pending .step-num{background:#EEF0F3;color:#64748B}
+.step-label{font-size:11px;font-weight:600}
+.step.done .step-label{color:#0F7B5F}
+.step.active .step-label{color:#0F1720}
+.step.pending .step-label{color:#64748B}
+.step-connector{width:24px;height:1px;background:#EEF0F3;margin:0 4px}
+.step-connector.done{background:#0F7B5F}
+/* File info */
+.file-info{background:#F4F6F9;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.file-icon{width:32px;height:32px;background:#0F7B5F;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0}
+.file-name{font-weight:600;font-size:12px}
+.file-meta{font-size:11px;color:#64748B}
+/* Preview table */
+.preview-wrap{overflow-x:auto;margin-bottom:14px}
+.preview-table{width:100%;border-collapse:collapse;font-size:11px}
+.preview-table th{background:#F8F9FB;padding:6px 10px;font-size:10px;font-weight:600;color:#64748B;text-align:right;border-bottom:1px solid #EEF0F3;white-space:nowrap}
+.preview-table th:first-child{text-align:left;padding-left:12px}
+.preview-table td{padding:6px 10px;border-bottom:1px solid #EEF0F3;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.preview-table td:first-child{text-align:left;padding-left:12px;font-weight:500}
+.preview-table tr:last-child td{border-bottom:none}
+/* Row states in preview */
+tr.pr-ok td{color:#0F1720}
+tr.pr-conflict{background:#FFF8F0}
+tr.pr-conflict td{color:#B4791F}
+tr.pr-conflict td:first-child::after{content:'  ⚠ Exists';font-size:9px;font-weight:700;color:#B4791F;margin-left:6px;background:#FEE9C6;padding:1px 5px;border-radius:4px}
+tr.pr-new td:first-child::after{content:'  + New';font-size:9px;font-weight:700;color:#0F7B5F;margin-left:6px;background:#C8EAE2;padding:1px 5px;border-radius:4px}
+/* Import options */
+.import-options{background:#F8F9FB;border-radius:8px;padding:12px 14px;margin-bottom:16px}
+.import-options-title{font-size:11px;font-weight:600;color:#64748B;margin-bottom:8px}
+.radio-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;font-size:12px}
+.radio-row:last-child{margin-bottom:0}
+.radio-row input{margin-top:2px}
+.radio-desc{font-size:11px;color:#64748B;margin-left:20px;margin-top:2px}
+/* Action footer */
+.panel-footer{padding:14px 20px;border-top:1px solid #EEF0F3;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.import-summary{font-size:12px;color:#64748B}
+.import-summary strong{color:#0F1720}
+</style>
+</head>
+<body>
+
+<div style="padding:24px;padding-bottom:0">
+  <div style="font-size:11px;color:#64748B;margin-bottom:4px">Imperial P&amp;L / Retail Sales</div>
+  <div style="font-size:18px;font-weight:700;color:#0F1720;margin-bottom:2px">Side Panels Mockup</div>
+  <div style="font-size:12px;color:#64748B;margin-bottom:20px">Left: Opening Balances panel &nbsp;·&nbsp; Right: Excel Import panel (Step 2 — Preview)</div>
+</div>
+
+<div class="layout">
+
+  <!-- ════════════════════════════════════════════════════
+       PANEL A: Opening Balances
+       ════════════════════════════════════════════════════ -->
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Opening Balances</div>
+        <div class="panel-subtitle">Set the opening cash balance for each store (carry-forward from last month)</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+        <div style="font-size:11px;color:#64748B">Month:</div>
+        <select style="padding:5px 10px;border:1px solid #EEF0F3;border-radius:8px;font-size:12px;font-family:inherit">
+          <option>October 2026</option>
+          <option>September 2026</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel-body">
+      <!-- Warning: some stores have no balance set -->
+      <div class="alert-strip">
+        ⚠ <strong>3 stores</strong> have no opening balance for October 2026. Daily-sales entries for these stores will show balance as nil until set.
+      </div>
+
+      <div class="ob-toolbar">
+        <input type="text" placeholder="Search stores…" value="">
+        <button class="btn btn-green" style="font-size:12px">Import from Excel</button>
+      </div>
+
+      <table class="ob-table">
+        <thead>
+          <tr>
+            <th>Store</th>
+            <th>Opening Balance (₨)</th>
+            <th>Set On</th>
+            <th style="text-align:center">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="store-name">DHA Phase 6</div><div class="store-code">DHA-6</div></td>
+            <td><input class="inline-edit" value="1,25,000"></td>
+            <td class="date-set">01/10/2026</td>
+            <td style="text-align:center"><button class="save-btn">Save</button></td>
+          </tr>
+          <tr>
+            <td><div class="store-name">Packages Mall</div><div class="store-code">PKG</div></td>
+            <td><span class="balance-value">2,40,000</span></td>
+            <td class="date-set">01/10/2026</td>
+            <td style="text-align:center"><button class="btn btn-outline" style="font-size:11px;padding:3px 10px">Edit</button></td>
+          </tr>
+          <tr>
+            <td><div class="store-name">Gulberg III</div><div class="store-code">GLB</div></td>
+            <td><span class="balance-nil">Not set</span></td>
+            <td class="date-set">—</td>
+            <td style="text-align:center"><button class="btn btn-outline" style="font-size:11px;padding:3px 10px;border-color:#B4791F;color:#B4791F">Set now</button></td>
+          </tr>
+          <tr>
+            <td><div class="store-name">Bahria Town</div><div class="store-code">BAH</div></td>
+            <td><span class="balance-value">88,500</span></td>
+            <td class="date-set">02/10/2026</td>
+            <td style="text-align:center"><button class="btn btn-outline" style="font-size:11px;padding:3px 10px">Edit</button></td>
+          </tr>
+          <tr>
+            <td><div class="store-name">Johar Town</div><div class="store-code">JHR</div></td>
+            <td><span class="balance-nil">Not set</span></td>
+            <td class="date-set">—</td>
+            <td style="text-align:center"><button class="btn btn-outline" style="font-size:11px;padding:3px 10px;border-color:#B4791F;color:#B4791F">Set now</button></td>
+          </tr>
+          <tr>
+            <td><div class="store-name">Cavalry Ground</div><div class="store-code">CAV</div></td>
+            <td><span class="balance-value">1,04,200</span></td>
+            <td class="date-set">01/10/2026</td>
+            <td style="text-align:center"><button class="btn btn-outline" style="font-size:11px;padding:3px 10px">Edit</button></td>
+          </tr>
+          <tr>
+            <td><div class="store-name">Emporium Mall</div><div class="store-code">EMP</div></td>
+            <td><span class="balance-nil">Not set</span></td>
+            <td class="date-set">—</td>
+            <td style="text-align:center"><button class="btn btn-outline" style="font-size:11px;padding:3px 10px;border-color:#B4791F;color:#B4791F">Set now</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel-footer">
+      <div class="import-summary">Showing 7 of 33 stores &nbsp;·&nbsp; <strong>30 set</strong>, <span style="color:#B4791F">3 missing</span></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline">Cancel</button>
+        <button class="btn btn-green">Save All Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       PANEL B: Excel Import — Step 2: Preview & Confirm
+       ════════════════════════════════════════════════════ -->
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Import Daily Sales</div>
+        <div class="panel-subtitle">Review and confirm the entries from your Excel file before importing</div>
+      </div>
+    </div>
+
+    <div class="panel-body">
+
+      <!-- Step indicator -->
+      <div class="import-steps">
+        <div class="step done">
+          <div class="step-num">✓</div>
+          <div class="step-label">Upload</div>
+        </div>
+        <div class="step-connector done"></div>
+        <div class="step active">
+          <div class="step-num">2</div>
+          <div class="step-label">Preview</div>
+        </div>
+        <div class="step-connector"></div>
+        <div class="step pending">
+          <div class="step-num">3</div>
+          <div class="step-label">Confirm</div>
+        </div>
+      </div>
+
+      <!-- Uploaded file info -->
+      <div class="file-info">
+        <div class="file-icon">XLS</div>
+        <div>
+          <div class="file-name">DHA_Phase6_September_2026.xlsx</div>
+          <div class="file-meta">Uploaded just now &nbsp;·&nbsp; 24 KB &nbsp;·&nbsp; 30 rows detected</div>
+        </div>
+        <button class="btn btn-outline" style="margin-left:auto;font-size:11px">Change file</button>
+      </div>
+
+      <!-- Preview table (truncated to 5 rows) -->
+      <div style="font-size:11px;font-weight:600;color:#64748B;margin-bottom:8px">
+        Preview — 30 rows &nbsp;·&nbsp; <span style="color:#0F7B5F">28 new</span> &nbsp;·&nbsp; <span style="color:#B4791F">2 conflicts (entry already exists)</span>
+      </div>
+      <div class="preview-wrap">
+        <table class="preview-table">
+          <thead>
+            <tr>
+              <th style="text-align:left">Date</th>
+              <th>Cash Sale</th>
+              <th>Float</th>
+              <th>Expenses</th>
+              <th>Allied CC</th>
+              <th>HBL CC</th>
+              <th>Gift Karte</th>
+              <th>Vouchers</th>
+              <th>Cr Notes</th>
+              <th>Other Inc</th>
+              <th>Deposit</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="pr-new">
+              <td>01/09/2026</td>
+              <td>84,500</td><td>5,000</td><td>3,200</td>
+              <td>22,000</td><td>14,000</td><td>—</td><td>—</td><td>—</td><td>—</td><td>80,000</td>
+              <td style="color:#64748B;font-style:italic">Good Saturday</td>
+            </tr>
+            <tr class="pr-new">
+              <td>02/09/2026</td>
+              <td>71,000</td><td>5,000</td><td>2,400</td>
+              <td>18,500</td><td>9,200</td><td>5,000</td><td>—</td><td>2,000</td><td>—</td><td>65,000</td>
+              <td style="color:#64748B;font-style:italic">Voucher redemption</td>
+            </tr>
+            <tr class="pr-conflict">
+              <td>03/09/2026</td>
+              <td>55,200</td><td>—</td><td>1,800</td>
+              <td>11,000</td><td>7,500</td><td>—</td><td>3,000</td><td>—</td><td>—</td><td>50,000</td>
+              <td style="color:#64748B;font-style:italic">—</td>
+            </tr>
+            <tr class="pr-new">
+              <td>04/09/2026</td>
+              <td>62,400</td><td>—</td><td>4,100</td>
+              <td>15,200</td><td>8,800</td><td>—</td><td>—</td><td>—</td><td>1,500</td><td>58,000</td>
+              <td style="color:#64748B;font-style:italic">—</td>
+            </tr>
+            <tr class="pr-conflict">
+              <td>06/09/2026</td>
+              <td>90,100</td><td>5,000</td><td>3,500</td>
+              <td>26,200</td><td>17,400</td><td>—</td><td>—</td><td>—</td><td>—</td><td>85,000</td>
+              <td style="color:#64748B;font-style:italic">Weekend peak</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:11px;color:#64748B;margin-bottom:14px">Showing 5 of 30 rows. Conflicts must be resolved below before import.</div>
+
+      <!-- Import options for conflicts -->
+      <div class="import-options">
+        <div class="import-options-title">For 2 conflicting dates:</div>
+        <div class="radio-row">
+          <input type="radio" name="conflict" id="c1" checked>
+          <label for="c1" style="font-size:12px;font-weight:500">Skip conflicting dates — import only new rows</label>
+          <div class="radio-desc">Existing entries for 03/09 and 06/09 will remain unchanged.</div>
+        </div>
+        <div class="radio-row">
+          <input type="radio" name="conflict" id="c2">
+          <label for="c2" style="font-size:12px;font-weight:500">Replace conflicting dates</label>
+          <div class="radio-desc">Existing entries will be soft-deleted and replaced with the imported values.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="panel-footer">
+      <div class="import-summary">
+        <strong>28 new</strong> entries will be created &nbsp;·&nbsp; 2 conflicts skipped
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline">Back</button>
+        <button class="btn btn-outline" style="color:#B3261E;border-color:#FDECEA">Cancel</button>
+        <button class="btn btn-green">Confirm Import</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
