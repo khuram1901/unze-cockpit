@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { STORE_USER_RE } from "../lib/useRouteGuard";
 import { formatDateUK } from "../lib/dateUtils";
+import { formatPKR } from "../lib/pkrFormatter";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -101,11 +102,6 @@ function num(s: string): number {
   return isNaN(n) ? 0 : n;
 }
 
-/** Format a PKR amount, or "—" for null. */
-function pkr(n: number | null | undefined): string {
-  if (n == null) return "—";
-  return "₨ " + n.toLocaleString("en-PK");
-}
 
 /** Today as YYYY-MM-DD in local time. */
 function todayIso(): string {
@@ -392,9 +388,9 @@ export default function DailySalesPage() {
         width: "100%", maxWidth: 380, border: "1px solid #EEF0F3",
       }}>
         {([
-          ["Total Sale",        pkr(data.total_sale),        "#0F1720"],
-          ["Net Cash Movement", pkr(data.net_cash_movement), "#0F7B5F"],
-          ["Closing Balance",   pkr(data.closing_balance),   "#0F1720"],
+          ["Total Sale",        formatPKR(data.total_sale),        "#0F1720"],
+          ["Net Cash Movement", formatPKR(data.net_cash_movement), "#0F7B5F"],
+          ["Closing Balance",   formatPKR(data.closing_balance),   "#0F1720"],
         ] as [string, string, string][]).map(([lbl, val, color], i, arr) => (
           <div key={lbl} style={{
             display: "flex", justifyContent: "space-between", alignItems: "baseline",
@@ -607,7 +603,7 @@ export default function DailySalesPage() {
             value={totalsLoading ? "…" : totals.net_cash_movement.toLocaleString("en-PK")} />
           {totals.opening_balance != null && (
             <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
-              Opening {pkr(totals.opening_balance)} + Net Cash {pkr(totals.net_cash_movement)} = Closing {pkr(totals.closing_balance)}
+              Opening {formatPKR(totals.opening_balance)} + Net Cash {formatPKR(totals.net_cash_movement)} = Closing {formatPKR(totals.closing_balance)}
             </div>
           )}
         </div>
@@ -657,12 +653,12 @@ export default function DailySalesPage() {
 
             {/* Line-item summary */}
             {([
-              ["Cash Sale",              pkr(num(fields.cash_sale)),                                       null],
-              ["Allied CC + HBL CC",     pkr(num(fields.allied_bank_cc_sale) + num(fields.hbl_cc_sale)),  null],
-              ["Gift Karte + Vouchers",  pkr(num(fields.gift_karte) + num(fields.gift_vouchers)),         null],
-              ["Campaign Float",         pkr(num(fields.campaign_float_cash)),                            null],
-              ["Expenses",               pkr(num(fields.expenses)),                                       "#B4791F"],
-              ["Deposit",                pkr(num(fields.deposit)),                                        null],
+              ["Cash Sale",              formatPKR(num(fields.cash_sale)),                                       null],
+              ["Allied CC + HBL CC",     formatPKR(num(fields.allied_bank_cc_sale) + num(fields.hbl_cc_sale)),  null],
+              ["Gift Karte + Vouchers",  formatPKR(num(fields.gift_karte) + num(fields.gift_vouchers)),         null],
+              ["Campaign Float",         formatPKR(num(fields.campaign_float_cash)),                            null],
+              ["Expenses",               formatPKR(num(fields.expenses)),                                       "#B4791F"],
+              ["Deposit",                formatPKR(num(fields.deposit)),                                        null],
             ] as [string, string, string | null][]).map(([lbl, val, color]) => (
               <div key={lbl} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "baseline",
@@ -678,9 +674,9 @@ export default function DailySalesPage() {
 
             {/* Calculated totals */}
             {([
-              ["Total Sale",        pkr(totals.total_sale),        "#0F1720", 16],
-              ["Net Cash Movement", pkr(totals.net_cash_movement), "#0F7B5F", 16],
-              ["Closing Balance",   pkr(totals.closing_balance),   "#0F1720", 16],
+              ["Total Sale",        formatPKR(totals.total_sale),        "#0F1720", 16],
+              ["Net Cash Movement", formatPKR(totals.net_cash_movement), "#0F7B5F", 16],
+              ["Closing Balance",   formatPKR(totals.closing_balance),   "#0F1720", 16],
             ] as [string, string, string, number][]).map(([lbl, val, color, sz]) => (
               <div key={lbl} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "baseline",

@@ -10,7 +10,9 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { sendNotificationEmail } from "../../../lib/send-email";
 import { rateLimitByIP, rateLimitResponse } from "../../../lib/rate-limit";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://unze-cockpit.vercel.app";
+// Production domain is pulse.unze.co.uk — must match NEXT_PUBLIC_APP_URL in Vercel env vars
+// and the allowed redirect URLs in Supabase Auth → URL Configuration.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pulse.unze.co.uk";
 
 export async function POST(request: NextRequest) {
   const rl = rateLimitByIP(request, 3, 600000);
@@ -30,6 +32,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (!member) {
+      // Always return success to avoid email enumeration
       return Response.json({ success: true });
     }
 
@@ -42,36 +45,39 @@ export async function POST(request: NextRequest) {
       email_confirm: true,
     });
 
-    // Generate a recovery link via Supabase Admin
+    // Generate a recovery link via Supabase Admin API.
+    // redirectTo must be in Supabase Auth → URL Configuration → Redirect URLs.
+    const redirectTo = `${APP_URL}/reset-password`;
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email: normalised,
-      options: {
-        redirectTo: `${APP_URL}/reset-password`,
-      },
+      options: { redirectTo },
     });
 
     if (linkError) {
-      console.error("generateLink failed:", linkError.message);
+      console.error("[reset-password] generateLink failed:", linkError.message, { email: normalised, redirectTo });
     }
 
-    // Build the verification URL
+    // Build the full verification URL Supabase expects.
+    // The user clicks this → Supabase verifies token → redirects to /reset-password#access_token=...
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const token = linkData?.properties?.hashed_token;
 
     if (!token || !supabaseUrl) {
-      console.error("Reset link generation failed — no token.", {
+      console.error("[reset-password] Reset link generation failed — missing token or Supabase URL.", {
         hasToken: !!token,
         hasSupabaseUrl: !!supabaseUrl,
+        appUrl: APP_URL,
         linkError: linkError?.message,
       });
+      // Fall through: send email pointing to forgot-password so user can try again
     }
 
     const resetLink = token && supabaseUrl
-      ? `${supabaseUrl}/auth/v1/verify?token=${token}&type=recovery&redirect_to=${encodeURIComponent(`${APP_URL}/reset-password`)}`
+      ? `${supabaseUrl}/auth/v1/verify?token=${token}&type=recovery&redirect_to=${encodeURIComponent(redirectTo)}`
       : `${APP_URL}/forgot-password`;
 
-    await sendNotificationEmail({
+    const emailResult = await sendNotificationEmail({
       to: normalised,
       subject: "Password Reset - Unze Group Dashboard",
       heading: "Reset Your Password",
@@ -89,10 +95,15 @@ export async function POST(request: NextRequest) {
       recipientName: memberName,
     });
 
+    if (!emailResult.success && !emailResult.skipped) {
+      console.error("[reset-password] Email send failed:", emailResult.error, { to: normalised });
+    }
+
+    // Always return success — do not reveal whether the email exists or the send failed
     return Response.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Password reset error:", message);
+    console.error("[reset-password] Unexpected error:", message);
     return Response.json({ success: true });
   }
 }

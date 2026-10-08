@@ -20,6 +20,7 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import OpeningBalancesPanel from "./OpeningBalancesPanel";
 import ExcelImportPanel from "./ExcelImportPanel";
+import { formatPKR } from "../lib/pkrFormatter";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -63,10 +64,6 @@ function today(): { year: number; month: number } {
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
-function pkr(n: number | null | undefined): string {
-  if (n == null) return "—";
-  return n.toLocaleString("en-PK");
-}
 
 async function getToken(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -373,21 +370,21 @@ export default function RetailSalesTab({ companyId }: { companyId: string }) {
                         {formatDateUK(r.sales_date)}
                         {isLocked && <span style={{ fontSize: 9, fontWeight: 600, background: "#E8E8EB", color: "#64748B", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>🔒</span>}
                       </td>
-                      <td style={tdStyle}>{pkr(r.cash_sale)}</td>
-                      <td style={tdStyle}>{pkr(r.campaign_float_cash)}</td>
-                      <td style={tdStyle}>{pkr(r.expenses)}</td>
-                      <td style={tdStyle}>{pkr(r.other_income)}</td>
-                      <td style={tdStyle}>{pkr(r.deposit)}</td>
-                      <td style={tdStyle}>{pkr(r.allied_bank_cc_sale)}</td>
-                      <td style={tdStyle}>{pkr(r.hbl_cc_sale)}</td>
-                      <td style={tdStyle}>{pkr(r.gift_karte)}</td>
-                      <td style={tdStyle}>{pkr(r.gift_vouchers)}</td>
-                      <td style={tdStyle}>{pkr(r.credit_notes_issue)}</td>
-                      <td style={tdCalc}>{pkr(r.total_credit_card_sale)}</td>
-                      <td style={tdCalc}>{pkr(r.total_sale)}</td>
-                      <td style={tdCalc}>{pkr(r.net_cash_movement)}</td>
-                      <td style={tdBal}>{pkr(r.opening_balance)}</td>
-                      <td style={tdBal}>{pkr(r.closing_balance)}</td>
+                      <td style={tdStyle}>{formatPKR(r.cash_sale)}</td>
+                      <td style={tdStyle}>{formatPKR(r.campaign_float_cash)}</td>
+                      <td style={tdStyle}>{formatPKR(r.expenses)}</td>
+                      <td style={tdStyle}>{formatPKR(r.other_income)}</td>
+                      <td style={tdStyle}>{formatPKR(r.deposit)}</td>
+                      <td style={tdStyle}>{formatPKR(r.allied_bank_cc_sale)}</td>
+                      <td style={tdStyle}>{formatPKR(r.hbl_cc_sale)}</td>
+                      <td style={tdStyle}>{formatPKR(r.gift_karte)}</td>
+                      <td style={tdStyle}>{formatPKR(r.gift_vouchers)}</td>
+                      <td style={tdStyle}>{formatPKR(r.credit_notes_issue)}</td>
+                      <td style={tdCalc}>{formatPKR(r.total_credit_card_sale)}</td>
+                      <td style={tdCalc}>{formatPKR(r.total_sale)}</td>
+                      <td style={tdCalc}>{formatPKR(r.net_cash_movement)}</td>
+                      <td style={tdBal}>{formatPKR(r.opening_balance)}</td>
+                      <td style={tdBal}>{formatPKR(r.closing_balance)}</td>
                       <td style={{ ...tdStyle, textAlign: "left", color: "#64748B", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis" }}>
                         {r.remarks || "—"}
                       </td>
@@ -422,26 +419,26 @@ export default function RetailSalesTab({ companyId }: { companyId: string }) {
                 <tfoot>
                   <tr style={{ borderTop: "2px solid #EEF0F3" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 700, color: "#0F1720", background: "#F8F9FB", textAlign: "left", fontSize: 12 }}>Totals</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.cash_sale, 0))}</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.campaign_float_cash, 0))}</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.expenses, 0))}</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.other_income, 0))}</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.deposit, 0))}</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.allied_bank_cc_sale, 0))}</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.hbl_cc_sale, 0))}</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.gift_karte, 0))}</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.gift_vouchers, 0))}</td>
-                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.credit_notes_issue, 0))}</td>
-                    <td style={{ ...calcCell, background: "#E8F0FF", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.total_credit_card_sale, 0))}</td>
-                    <td style={{ ...calcCell, background: "#E8F0FF", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.total_sale, 0))}</td>
-                    <td style={{ ...calcCell, background: "#E8F0FF", fontWeight: 700 }}>{pkr(rows.reduce((s,r) => s + r.net_cash_movement, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.cash_sale, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.campaign_float_cash, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.expenses, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.other_income, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.deposit, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.allied_bank_cc_sale, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.hbl_cc_sale, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.gift_karte, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.gift_vouchers, 0))}</td>
+                    <td style={{ ...cell, background: "#F8F9FB", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.credit_notes_issue, 0))}</td>
+                    <td style={{ ...calcCell, background: "#E8F0FF", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.total_credit_card_sale, 0))}</td>
+                    <td style={{ ...calcCell, background: "#E8F0FF", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.total_sale, 0))}</td>
+                    <td style={{ ...calcCell, background: "#E8F0FF", fontWeight: 700 }}>{formatPKR(rows.reduce((s,r) => s + r.net_cash_movement, 0))}</td>
                     <td style={{ ...balCell, background: "#E5F7F2", fontWeight: 700 }}>
                       {/* Opening = first row's opening_balance */}
-                      {pkr(rows.find(r => r.opening_balance != null)?.opening_balance ?? null)}
+                      {formatPKR(rows.find(r => r.opening_balance != null)?.opening_balance ?? null)}
                     </td>
                     <td style={{ ...balCell, background: "#E5F7F2", fontWeight: 700 }}>
                       {/* Closing = last row's closing_balance */}
-                      {pkr([...rows].reverse().find(r => r.closing_balance != null)?.closing_balance ?? null)}
+                      {formatPKR([...rows].reverse().find(r => r.closing_balance != null)?.closing_balance ?? null)}
                     </td>
                     <td colSpan={3} style={{ background: "#F8F9FB" }} />
                   </tr>
