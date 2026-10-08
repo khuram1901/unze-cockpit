@@ -142,6 +142,10 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   // else in the app.
   { key: "guarantees.financials", label: "Financial Figures (amounts, limits, margins)", page: "Bank Facilities", tip: "Guarantee amounts, cash margin, bank charges, facility limits & utilisation — all PKR figures. Defaults to Finance managers/Admin/CEO only; toggle to grant or deny it for a specific person." },
 
+  // ── Retail Sales (app/finance/imperial/page.tsx → /daily-sales) ─────
+  { key: "imperial.retail_sales",     label: "Retail Sales",                                         page: "Retail Sales", tip: "Grants access to the Retail Sales tab on the Imperial finance page (daily-sales data entry for HODs and Finance Managers)" },
+  { key: "imperial.retail_sales_hod", label: "Retail Sales – HOD (delete & reopen month)",           page: "Retail Sales", tip: "Extends Retail Sales access with the ability to delete a submitted month and reopen it for re-entry (HOD-level only)" },
+
   // ── Finance panel cards, one row per company (app/home/page.tsx: CompanyFinancePanel) ──
   { key: "finance.cash_in_hand", label: "Cash in Hand", page: "Finance Panels", perCompany: true },
   { key: "finance.pdc_outstanding", label: "PDC Outstanding", page: "Finance Panels", perCompany: true },
