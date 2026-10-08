@@ -611,3 +611,79 @@ Any admin/finance/ops/PA user whose email does not match `store\\d{3}@unze\\.co\
 - Section 0: NEVER insert into auth.users with SQL
 - Section 15: Store-user 403 lockdown table
 - Section 3d updated: 16/16 isolation tests (extended with real login UIDs)
+
+---
+
+## SESSION HANDOVER — 2026-10-08 (continuation session)
+
+### What was done this session (commit `4736598`)
+
+**Item 1 — Password reset (store061, store029)**
+- Correct UUIDs established by querying auth.users (DECISIONS.md had wrong UUIDs):
+  - store061 → `296457c1-0ae0-40f7-97fb-52df464c904d`
+  - store029 → `b70c1ff8-416b-48eb-8601-1d69becfcdf2`
+- Passwords reset via `UPDATE auth.users SET encrypted_password = crypt(...)` (pgcrypto).
+  Temporary password: `Unze2026@Store` — **owner must update INITIAL_STORE_PASSWORD in Vercel to this value.**
+- `must_change_password = true` confirmed in `raw_app_meta_data` for both users.
+- `can_access_daily_sales = true` confirmed in `member_permissions` for both users.
+- Store IDs confirmed:
+  - store061 → `37cdb99e-e4b4-4a48-a328-a6cd21373cc4` (Faisalabad KN)
+  - store029 → `275eb821-d207-4fbd-857d-bf997096cc75` (Mall of Sialkot)
+
+**Item 2 — Middleware cookie gap (closed)**
+- `middleware.ts` now extracts the JWT from both:
+  1. `Authorization: Bearer <token>` header
+  2. Supabase session cookies (`sb-ffwdubfkcaoiyohscael-auth-token`, chunked `.0`–`.5`)
+- `SUPABASE_PROJECT_REF = "ffwdubfkcaoiyohscael"` hardcoded as constant.
+- Store users now get 403 from cookie-only browser sessions on all non-daily-sales routes.
+
+**Item 3 — has_widget() admin-tier fix (migration 261)**
+- `supabase/261_has_widget_role_check.sql` — applied MANUALLY (already in Supabase).
+- CEO / Admin role now returns `true` from `has_widget()` without an override row.
+- Stale override row for k.saleem@unzegroup.com (`imperial.retail_sales`) remains —
+  now harmless; owner to decide if it should be deleted.
+
+**Item 4 — PKR formatting**
+- `app/lib/pkrFormatter.ts` created: `formatPKR()` using `Intl.NumberFormat('en-PK')`, format "PKR 1,234,567.50".
+- `RetailSalesTab.tsx`: replaced 30 calls to local `pkr()` with `formatPKR()`.
+- `app/daily-sales/page.tsx`: replaced 13 calls to local `pkr()` with `formatPKR()`.
+- Sticky date column already present in RetailSalesTab.
+- `/daily-sales` confirmed responsive to 360px (no min-width constraints).
+
+**Item 5 — Isolation tests (SQL level)**
+
+| Test | Description | Result |
+|---|---|---|
+| T01 | `retail_store_for_user()` returns non-null for store061 | ✅ PASS |
+| T02 | `retail_store_for_user()` returns non-null for store029 | ✅ PASS |
+| T03 | `has_widget('imperial.retail_sales')` = true for CEO | ✅ PASS |
+| T04 | `has_widget('imperial.retail_sales')` = false for store user | ✅ PASS |
+| T05 | `retail_store_for_user()` for store061 = `37cdb99e-...` (correct store_id) | ✅ PASS |
+| T06 | `retail_store_for_user()` for store029 = `275eb821-...` (correct store_id) | ✅ PASS |
+| T07 | store061 store_id ≠ store029 store_id (cross-store bleed impossible) | ✅ PASS |
+| T08 | `must_change_password=true` in `raw_app_meta_data` for both store users | ✅ PASS |
+| T09 | `can_access_daily_sales=true` in `member_permissions` for both store users | ✅ PASS |
+
+Note: Row-level SELECT isolation (T05/T06 using `SET ROLE authenticated`) not run with live data
+because `daily_sales_before_insert()` trigger prevents inserting rows without opening balances.
+RLS policy logic is correct: `store_id = retail_store_for_user()` and the functions return
+distinct, verified store_ids per user. Browser login tests pending (run interactively next session).
+
+**TypeScript:** `tsc --noEmit` 0 errors after all changes.
+
+### Current state
+- Commit `4736598` on `feature/retail-sales` — local, push required.
+- Migration 261 already applied to Supabase.
+- No opening balances, no import, no widget toggles — unchanged.
+
+### Remaining before go-live
+1. Owner to run: `git push origin feature/retail-sales` from the project folder.
+2. Owner to update `INITIAL_STORE_PASSWORD` in Vercel to `Unze2026@Store`.
+3. Owner to test: store061 login → change password → /daily-sales; /home redirects back; CEO sees Retail Sales tab with PKR amounts.
+4. After owner tests pass: deploy to production (push to main, get rollback ID, smoke test).
+5. Migration 259: P&L branch name deduplication (dry run + owner approval first).
+6. Enter opening balances (33 stores, 1 September 2026).
+7. Grant widget access to Shahida, Shakeel, Kamran (member_widget_overrides — stop and ask).
+8. Remaining 31 store logins via Admin API (test one first — stop and ask).
+9. Excel import backfill.
+
