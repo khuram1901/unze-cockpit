@@ -147,8 +147,14 @@ export default function DailySalesPage() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.email) { router.replace("/login"); return; }
 
+    // Forced password change: redirect before anything else loads
+    if (session.user.app_metadata?.must_change_password === true) {
+      router.replace("/change-password");
+      return;
+    }
+
     const email = session.user.email;
-    const isStoreUser = STORE_USER_RE.test(email);
+    const isStoreUser = STORE_USER_RE.test(email) || session.user.app_metadata?.store_user === true;
     const isAdmin = /k\.saleem@unzegroup\.com|kamran@unze\.co\.uk/i.test(email);
     if (!isStoreUser && !isAdmin) { router.replace("/welcome"); return; }
 

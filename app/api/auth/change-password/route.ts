@@ -59,6 +59,17 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: error.message }, { status: 500 });
     }
 
+    // Clear must_change_password flag if set — this unblocks the account after
+    // a forced first-login password change. We merge into existing app_metadata
+    // so other flags (e.g. store_user) are preserved.
+    const { data: userData } = await serviceClient.auth.admin.getUserById(authUserId);
+    const existingMeta = userData?.user?.app_metadata ?? {};
+    if (existingMeta.must_change_password) {
+      await serviceClient.auth.admin.updateUserById(authUserId, {
+        app_metadata: { ...existingMeta, must_change_password: false },
+      });
+    }
+
     return Response.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

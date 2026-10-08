@@ -12,7 +12,18 @@ export default function RootPage() {
     async function check() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Determine routing via the DB flag, not email pattern.
+        // Fast path: store users are identified by app_metadata flag.
+        // This avoids a DB lookup for accounts that aren't in the members table.
+        const appMeta = user.app_metadata ?? {};
+        if (appMeta.store_user === true) {
+          // Redirect to change-password if not yet set; otherwise to daily-sales
+          router.replace(
+            appMeta.must_change_password === true ? "/change-password" : "/daily-sales"
+          );
+          return;
+        }
+
+        // Standard path: determine routing via the DB flag.
         // Look up member_permissions.can_access_daily_sales through the
         // members table (joined by email). Only redirect to /daily-sales
         // when the flag is explicitly true; everyone else goes to /welcome.

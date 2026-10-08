@@ -2,11 +2,17 @@
  * POST /api/daily-sales/submit
  *
  * Store-user daily sales entry submission.
- * Uses the caller's JWT client so Postgres RLS applies — store users
- * can only INSERT/UPDATE rows where store_id matches their assigned store.
+ *
+ * Store identity is derived SERVER-SIDE from retail_store_for_user() RPC.
+ * The client must still send store_id in the body — if it differs from the
+ * server-derived value the request is rejected with 403. This prevents a
+ * compromised client from writing to a different store's records.
+ *
+ * After deriving and verifying store_id, the upsert uses the caller's JWT
+ * client so Postgres RLS also enforces store ownership as a second layer.
  *
  * Body: {
- *   store_id: string,
+ *   store_id: string,              ← must match retail_store_for_user()
  *   sales_date: string (YYYY-MM-DD),
  *   cash_sale: number,
  *   campaign_float_cash?: number,
@@ -68,15 +74,43 @@ export async function POST(request: NextRequest) {
   }
 
   const authHeader = request.headers.get("authorization") ?? "";
-  // User client — RLS enforces store ownership
+
+  // Resolve store server-side — use the caller's JWT so auth.email() is set
   const uc = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { global: { headers: { Authorization: authHeader } } }
   );
 
+  const { data: derivedStoreId, error: rpcError } = await uc.rpc("retail_store_for_user");
+
+  if (rpcError) {
+    console.error("[daily-sales/submit] retail_store_for_user RPC error:", rpcError);
+    return Response.json({ error: rpcError.message }, { status: 500 });
+  }
+
+  if (!derivedStoreId) {
+    return Response.json(
+      { error: "No store assignment found for this account." },
+      { status: 403 }
+    );
+  }
+
+  // Reject if client-sent store_id differs from server-derived value
+  if (body.store_id !== derivedStoreId) {
+    console.warn(
+      "[daily-sales/submit] store_id mismatch: client sent %s, server derived %s for user %s",
+      body.store_id, derivedStoreId, auth.email
+    );
+    return Response.json(
+      { error: "Forbidden: store_id does not match your assigned store." },
+      { status: 403 }
+    );
+  }
+
+  // Use the server-derived store_id — never the raw client value
   const row = {
-    store_id:             body.store_id,
+    store_id:             derivedStoreId,
     sales_date:           body.sales_date,
     cash_sale:            body.cash_sale,
     campaign_float_cash:  body.campaign_float_cash  ?? 0,
