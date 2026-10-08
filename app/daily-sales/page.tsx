@@ -320,7 +320,7 @@ export default function DailySalesPage() {
   }
 
   // ── Live totals via preview ─────────────────────────────────────────────────
-  const refreshTotals = useCallback(async (f: FormFields, storeId: string, date: string) => {
+  const refreshTotals = useCallback(async (f: FormFields, storeId: string | null, date: string) => {
     setTotalsLoading(true);
     try {
       const fields = {
@@ -361,11 +361,11 @@ export default function DailySalesPage() {
     setFields(next);
     setFieldErrors((e) => ({ ...e, [key]: undefined }));
 
-    if (store.id && !monthLocked) {
+    if (!monthLocked) {
       if (previewTimer.current) clearTimeout(previewTimer.current);
       previewTimer.current = setTimeout(
-        () => void refreshTotals(next, store.id!, selectedDate),
-        600
+        () => void refreshTotals(next, store.id ?? null, selectedDate),
+        300
       );
     }
   }

@@ -12,6 +12,7 @@
 import { useCallback, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
+import { formatPKR } from "../lib/pkrFormatter";
 
 interface Store {
   id: string;
@@ -65,8 +66,7 @@ async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> 
 }
 
 function pkr(n: number | null | undefined): string {
-  if (n == null) return "—";
-  return n.toLocaleString("en-PK");
+  return formatPKR(n);
 }
 
 /** Parse a minimal XLSX/CSV-like file into row objects. */

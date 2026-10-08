@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
+import { formatPKR } from "../lib/pkrFormatter";
 
 interface StoreBalance {
   id: string;
@@ -167,7 +168,7 @@ export default function OpeningBalancesPanel({ year, month, onClose, onSaved }: 
                   {hasBalance && !isEditing && (
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1720" }}>
-                        ₨ {s.balance!.amount.toLocaleString("en-PK")}
+                        {formatPKR(s.balance!.amount)}
                       </div>
                       <div style={{ fontSize: 10, color: "#64748B" }}>{formatDateUK(s.balance!.opening_date)}</div>
                     </div>

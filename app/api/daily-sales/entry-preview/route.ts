@@ -38,15 +38,17 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
-  let body: { store_id: string; sales_date: string; fields: Record<string, number> };
+  let body: { store_id?: string | null; sales_date: string; fields: Record<string, number> };
   try {
     body = await request.json() as typeof body;
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.store_id || !body.sales_date || !body.fields) {
-    return Response.json({ error: "store_id, sales_date and fields required" }, { status: 400 });
+  // store_id is optional — CEO/Admin with no store can still see computed totals;
+  // opening/closing balance will return null from the RPC (no store row to find).
+  if (!body.sales_date || !body.fields) {
+    return Response.json({ error: "sales_date and fields required" }, { status: 400 });
   }
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(body.sales_date)) {
@@ -62,7 +64,7 @@ export async function POST(request: NextRequest) {
 
   // For store users, derive and override store_id server-side
   const isStoreUserByEmail = auth.email ? STORE_USER_RE.test(auth.email) : false;
-  let storeId = body.store_id;
+  let storeId: string | null = body.store_id ?? null;
 
   if (isStoreUserByEmail) {
     const { data: derivedStoreId, error: rpcErr } = await uc.rpc("retail_store_for_user");

@@ -48,11 +48,13 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
     );
   }
 
-  // Retail Sales tab is only visible to users who have the imperial.retail_sales
-  // widget enabled (explicit override row required — default is false).
+  // Retail Sales tab: CEO/Admin always see it by role (mirrors has_widget DB logic).
+  // Other users need an explicit imperial.retail_sales widget override row.
   // The tab is only available on the imperial company page.
+  const isAdminOrCEO = ctx?.role === "Admin" || ctx?.role === "CEO";
   const canSeeRetailTab =
-    company === "imperial" && !!ctx && widgetVisible(ctx, "imperial.retail_sales", false);
+    company === "imperial" && !!ctx &&
+    (isAdminOrCEO || widgetVisible(ctx, "imperial.retail_sales", false));
 
   // Tab bar is only rendered when there are 2 tabs to show (Finance Overview +
   // Retail Sales).  A plain finance user sees the Finance Overview content
