@@ -192,6 +192,27 @@ When we finish:
 
 Thanks for working with me on this.
 
+## Retail Sales project
+
+**At the start of every session on the Retail Sales feature, read `docs/retail-sales/DECISIONS.md` before touching any code — read the SESSION HANDOVER section first, then the rest of the document.**
+
+This file records every approved decision: store mapping, formulas, access rules, widget keys, migration status, and open items. It is the single source of truth for this feature.
+
+### Permanent rules (non-negotiable)
+- NEVER insert into or update `auth.users` with SQL. Use `supabase.auth.admin.createUser` / `updateUserById` only.
+- Never push to main or deploy without owner approval. Always record the rollback ID.
+- Never create logins or widget override rows without approval. Tests run only inside `BEGIN … ROLLBACK`.
+- Never commit `package-lock.json` or `public/sw.js`. Never write passwords anywhere.
+- All calculations live in Supabase (generated columns + the `daily_sales_computed` view). The app only displays them.
+- Formulas: Total CC = Allied + HBL. Total Sale = Cash + Total CC + Gift Karte + Gift Vouchers − Credit Notes. Closing = Previous Closing + Cash + Campaign Float + Other Income − Expenses − Deposit. A missing opening balance shows blank, never 0.
+- Each store email sees only its own store (enforced in DB, server derives store). Store users can reach `/daily-sales` only.
+- `/finance/imperial` access = existing finance access OR `has_widget('imperial.retail_sales')`. Other companies' finance pages are unchanged.
+- 7-day backdating for stores, no future dates. Month locks 23:59 PKT on day 10 of the following month. HOD (`imperial.retail_sales_hod`) soft-deletes with a reason and reopens months. Everything is audited.
+- Attachments compressed (WebP, under 300 KB target, 1 MB limit).
+- Verify against git and the live DB before claiming anything is done. Print files with `git show <hash>:path`.
+
+---
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
