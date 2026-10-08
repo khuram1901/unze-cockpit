@@ -39,9 +39,10 @@ export async function GET(request: NextRequest) {
     // so the PA (and anyone else Admin/Executive) is unaffected.
     const { data: admins } = await supabase
       .from("members")
-      .select("email, first_name, last_name, name, role, notify_email, phone_e164, notify_whatsapp")
+      .select("email, first_name, last_name, name, role, notify_email, notif_daily_digest, phone_e164, notify_whatsapp")
       .in("role", ["Admin", "Executive"])
-      .eq("notify_email", true);
+      .eq("notify_email", true)
+      .eq("notif_daily_digest", true);
 
     if (!admins || admins.length === 0) {
       return Response.json({ ok: true, message: "No admin/executive with notifications enabled", sent: 0 });

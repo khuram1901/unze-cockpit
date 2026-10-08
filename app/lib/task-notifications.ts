@@ -19,7 +19,7 @@ export async function notifyTaskAssigned(
 ): Promise<{ skipped?: string } | void> {
   const { data: member } = await supabase
     .from("members")
-    .select("first_name, last_name, name, employee_code, notify_email, notify_whatsapp, phone_e164")
+    .select("first_name, last_name, name, employee_code, notify_email, notif_task_assigned, notify_whatsapp, phone_e164")
     .eq("email", recipientEmail)
     .maybeSingle();
 
@@ -39,8 +39,9 @@ export async function notifyTaskAssigned(
   // Only Khuram receives WhatsApp — via the weekly digest cron — not on every assignment.
   // To re-enable individual pushes, restore the sendWhatsAppDigestTemplate call here.
 
-  // Email — only if the member has email notifications enabled.
+  // Email — both the master toggle AND the granular "task assigned" category must be on.
   if (!member?.notify_email) return { skipped: "email notifications disabled" };
+  if (!member?.notif_task_assigned) return { skipped: "task assigned notifications disabled" };
 
   const result = await sendNotificationEmail({
     to: recipientEmail,
@@ -96,11 +97,12 @@ export async function notifyTaskSubmittedToManager(
 ): Promise<{ skipped?: string } | void> {
   const { data: manager } = await supabase
     .from("members")
-    .select("first_name, last_name, name, notify_email, notify_whatsapp, phone_e164")
+    .select("first_name, last_name, name, notify_email, notif_meetings, notify_whatsapp, phone_e164")
     .eq("email", managerEmail)
     .maybeSingle();
 
   if (!manager?.notify_email) return { skipped: "email notifications disabled" };
+  if (!manager?.notif_meetings) return { skipped: "submission/sign-off notifications disabled" };
 
   const managerName = `${manager.first_name || ""} ${manager.last_name || ""}`.trim() || manager.name || managerEmail;
 
@@ -142,11 +144,12 @@ export async function notifyEscalationTask(
 ): Promise<{ skipped?: string } | void> {
   const { data: member } = await supabase
     .from("members")
-    .select("first_name, last_name, name, notify_email, notify_whatsapp, phone_e164")
+    .select("first_name, last_name, name, notify_email, notif_escalations, notify_whatsapp, phone_e164")
     .eq("email", recipientEmail)
     .maybeSingle();
 
   if (!member?.notify_email) return { skipped: "email notifications disabled" };
+  if (!member?.notif_escalations) return { skipped: "escalation notifications disabled" };
 
   const memberName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || recipientEmail;
 
@@ -189,11 +192,12 @@ export async function notifySubtaskAssigned(
 ): Promise<{ skipped?: string } | void> {
   const { data: member } = await supabase
     .from("members")
-    .select("first_name, last_name, name, employee_code, notify_email, phone_e164")
+    .select("first_name, last_name, name, employee_code, notify_email, notif_task_assigned, phone_e164")
     .eq("email", recipientEmail)
     .maybeSingle();
 
   if (!member?.notify_email) return { skipped: "email notifications disabled" };
+  if (!member?.notif_task_assigned) return { skipped: "task assigned notifications disabled" };
 
   const memberName = member
     ? (`${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || recipientEmail)
@@ -265,11 +269,12 @@ export async function notifySubtaskSubmitted(
 ): Promise<void> {
   const { data: member } = await supabase
     .from("members")
-    .select("first_name, last_name, name, notify_email")
+    .select("first_name, last_name, name, notify_email, notif_task_assigned")
     .eq("email", assignerEmail)
     .maybeSingle();
 
   if (!member?.notify_email) return;
+  if (!member?.notif_task_assigned) return;
 
   const assignerName = member
     ? (`${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || assignerEmail)
@@ -324,11 +329,12 @@ export async function notifySubtaskApproved(
 ): Promise<void> {
   const { data: member } = await supabase
     .from("members")
-    .select("first_name, last_name, name, notify_email")
+    .select("first_name, last_name, name, notify_email, notif_task_assigned")
     .eq("email", assigneeEmail)
     .maybeSingle();
 
   if (!member?.notify_email) return;
+  if (!member?.notif_task_assigned) return;
 
   const assigneeName = member
     ? (`${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || assigneeEmail)
