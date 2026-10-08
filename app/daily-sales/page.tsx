@@ -3,19 +3,23 @@
 /**
  * /daily-sales — Mobile-first daily sales entry form for store users.
  *
- * Four screens implemented as a state machine:
+ * Three screens:
  *   "loading"  — auth check + store lookup
- *   "form"     — entry form with live calculated totals
+ *   "form"     — date picker + entry form with live calculated totals
+ *                (if the chosen date already has an entry, fields pre-fill
+ *                 for editing and an "Editing" banner is shown)
  *   "confirm"  — bottom-sheet review before final submit
- *   "success"  — post-submit confirmation
- *   "already"  — today already submitted
+ *   "success"  — post-submit confirmation (with "Submit Another Day" button)
  *
- * Hidden from nav. Store users are sent here after login.
- * Admins are also allowed (for testing) but see a no-store banner.
+ * Date defaults to today in Asia/Karachi (PKT, UTC+5).
+ * 7-day backdating is allowed; future dates are blocked.
+ * Months locked after 23:59 PKT on day 10 of the following month show a
+ * locked-month message and a disabled form.
  *
- * Calculated totals (total_credit_card_sale, total_sale,
- * net_cash_movement, closing_balance) come from Postgres via a
- * lightweight preview call — never computed in JS.
+ * Calculated totals come from Postgres via daily_entry_preview RPC —
+ * never computed in JS.
+ *
+ * All amounts displayed as "PKR 1,234,567.50" via formatPKR().
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,10 +28,11 @@ import { supabase } from "../lib/supabase";
 import { STORE_USER_RE } from "../lib/useRouteGuard";
 import { formatDateUK } from "../lib/dateUtils";
 import { formatPKR } from "../lib/pkrFormatter";
+import DateInput from "../lib/DateInput";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Screen = "loading" | "form" | "confirm" | "success" | "already";
+type Screen = "loading" | "form" | "confirm" | "success";
 
 interface FormFields {
   cash_sale: string;
@@ -51,10 +56,25 @@ interface Totals {
   closing_balance: number | null;
 }
 
-interface SubmittedSummary {
+interface DailySalesRow {
+  id: string;
+  store_id: string;
   sales_date: string;
+  cash_sale: number;
+  campaign_float_cash: number;
+  expenses: number;
+  other_income: number;
+  deposit: number;
+  allied_bank_cc_sale: number;
+  hbl_cc_sale: number;
+  gift_karte: number;
+  gift_vouchers: number;
+  credit_notes_issue: number;
+  remarks: string | null;
+  total_credit_card_sale: number;
   total_sale: number;
   net_cash_movement: number;
+  opening_balance: number | null;
   closing_balance: number | null;
 }
 
@@ -96,24 +116,65 @@ async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> 
   });
 }
 
+/** Today's date as YYYY-MM-DD in Asia/Karachi (PKT, UTC+5). */
+function todayPkt(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
+}
+
+/**
+ * Subtract n calendar days from a YYYY-MM-DD string.
+ * Uses Date arithmetic to handle month/year boundaries correctly.
+ */
+function subDays(isoDate: string, n: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - n);
+  return (
+    `${dt.getFullYear()}-` +
+    `${String(dt.getMonth() + 1).padStart(2, "0")}-` +
+    `${String(dt.getDate()).padStart(2, "0")}`
+  );
+}
+
+/**
+ * Format YYYY-MM-DD as "Wednesday, 07 October 2026".
+ * Parsed as a local date (not UTC) to avoid off-by-one.
+ */
+function longDateForIso(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString("en-GB", {
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+  });
+}
+
+/**
+ * Returns true if the MONTH containing isoDate is locked.
+ * Rule: month M/Y locks after day 10 of month M+1
+ * (i.e. today strictly AFTER the 10th of the next month).
+ */
+function isMonthLocked(isoDate: string, today: string): boolean {
+  const year  = parseInt(isoDate.slice(0, 4), 10);
+  const month = parseInt(isoDate.slice(5, 7), 10); // 1-based
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear  = month === 12 ? year + 1 : year;
+  const lockDay   = `${nextYear}-${String(nextMonth).padStart(2, "0")}-10`;
+  return today > lockDay;
+}
+
 /** Parse a numeric input string; returns 0 for blank / NaN. */
 function num(s: string): number {
   const n = parseFloat(s.replace(/,/g, ""));
   return isNaN(n) ? 0 : n;
 }
 
-
-/** Today as YYYY-MM-DD in local time. */
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/** Long display date, e.g. "Wednesday, 07 October 2026" */
-function longDate(): string {
-  return new Date().toLocaleDateString("en-GB", {
-    weekday: "long", day: "2-digit", month: "long", year: "numeric",
-  });
+/**
+ * Convert a stored number to a form field string.
+ * Zero shows as "" (displays the "0" placeholder) to avoid cluttering
+ * the form with zeros for fields the user left empty.
+ */
+function numToField(n: number): string {
+  return n === 0 ? "" : String(n);
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -121,15 +182,21 @@ function longDate(): string {
 export default function DailySalesPage() {
   const router = useRouter();
 
+  const today = todayPkt();
+
   const [screen, setScreen]               = useState<Screen>("loading");
   const [store, setStore]                 = useState<StoreInfo>({ id: null, name: null, fm_code: null });
+  const [selectedDate, setSelectedDate]   = useState<string>(today);
+  const [isEditMode, setIsEditMode]       = useState(false);
+  const [monthLocked, setMonthLocked]     = useState(false);
+  const [dateChecking, setDateChecking]   = useState(false);
   const [fields, setFields]               = useState<FormFields>(EMPTY_FIELDS);
   const [totals, setTotals]               = useState<Totals>(ZERO_TOTALS);
   const [totalsLoading, setTotalsLoading] = useState(false);
   const [fieldErrors, setFieldErrors]     = useState<Partial<Record<keyof FormFields, string>>>({});
   const [submitError, setSubmitError]     = useState<string | null>(null);
   const [submitting, setSubmitting]       = useState(false);
-  const [submitted, setSubmitted]         = useState<SubmittedSummary | null>(null);
+  const [submitted, setSubmitted]         = useState<DailySalesRow | null>(null);
 
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -143,7 +210,6 @@ export default function DailySalesPage() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.email) { router.replace("/login"); return; }
 
-    // Forced password change: redirect before anything else loads
     if (session.user.app_metadata?.must_change_password === true) {
       router.replace("/change-password");
       return;
@@ -154,7 +220,6 @@ export default function DailySalesPage() {
     const isAdmin = /k\.saleem@unzegroup\.com|kamran@unze\.co\.uk/i.test(email);
     if (!isStoreUser && !isAdmin) { router.replace("/welcome"); return; }
 
-    // Fetch store assignment
     const storeRes = await apiFetch("/api/daily-sales/my-store");
     let storeInfo: StoreInfo = { id: null, name: null, fm_code: null };
     if (storeRes.ok) {
@@ -162,38 +227,103 @@ export default function DailySalesPage() {
       setStore(storeInfo);
     }
 
-    // If no store (admin without store), skip today-check and go to form
-    if (!storeInfo.id) {
-      setScreen("form");
-      return;
-    }
+    const t = todayPkt();
+    setSelectedDate(t);
 
-    // Check if today already has an entry
-    const today = todayIso();
-    const year  = today.slice(0, 4);
-    const month = today.slice(5, 7);
-    const rowsRes = await apiFetch(
-      `/api/daily-sales/rows?store_id=${storeInfo.id}&year=${year}&month=${month}`
-    );
-    if (rowsRes.ok) {
-      const jr = await rowsRes.json() as { rows: SubmittedSummary[] };
-      const todayRow = jr.rows?.find((r) => r.sales_date === today);
-      if (todayRow) {
-        setSubmitted(todayRow);
-        setScreen("already");
-        return;
-      }
+    if (storeInfo.id) {
+      // Check today for an existing entry; sets edit mode and fields if found
+      await checkDate(t, storeInfo.id);
     }
 
     setScreen("form");
   }
 
+  // ── Check selected date ──────────────────────────────────────────────────────
+  /**
+   * Called whenever the selected date changes (including on boot).
+   * 1. Checks if the month is locked → shows locked message.
+   * 2. Fetches the month's rows to see if the date already has an entry.
+   * 3. If it does: pre-fills fields for editing.
+   * 4. If it doesn't: clears the form.
+   */
+  async function checkDate(iso: string, storeId: string) {
+    const t = todayPkt();
+
+    // Month lock check (frontend estimate — server enforces authoritatively)
+    if (isMonthLocked(iso, t)) {
+      setMonthLocked(true);
+      setIsEditMode(false);
+      setFields(EMPTY_FIELDS);
+      setTotals(ZERO_TOTALS);
+      return;
+    }
+    setMonthLocked(false);
+
+    const year  = iso.slice(0, 4);
+    const month = iso.slice(5, 7);
+    const rowsRes = await apiFetch(
+      `/api/daily-sales/rows?store_id=${storeId}&year=${year}&month=${month}`
+    );
+    if (!rowsRes.ok) return;
+
+    const jr = await rowsRes.json() as { rows: DailySalesRow[] };
+    const existing = jr.rows?.find((r) => r.sales_date === iso);
+
+    if (existing) {
+      // Pre-fill form for editing
+      setIsEditMode(true);
+      const filled: FormFields = {
+        cash_sale:            numToField(existing.cash_sale),
+        campaign_float_cash:  numToField(existing.campaign_float_cash),
+        expenses:             numToField(existing.expenses),
+        other_income:         numToField(existing.other_income),
+        deposit:              numToField(existing.deposit),
+        allied_bank_cc_sale:  numToField(existing.allied_bank_cc_sale),
+        hbl_cc_sale:          numToField(existing.hbl_cc_sale),
+        gift_karte:           numToField(existing.gift_karte),
+        gift_vouchers:        numToField(existing.gift_vouchers),
+        credit_notes_issue:   numToField(existing.credit_notes_issue),
+        remarks:              existing.remarks ?? "",
+      };
+      setFields(filled);
+      // Totals come directly from the saved row (no need for preview call)
+      setTotals({
+        total_credit_card_sale: existing.total_credit_card_sale,
+        total_sale:             existing.total_sale,
+        net_cash_movement:      existing.net_cash_movement,
+        opening_balance:        existing.opening_balance,
+        closing_balance:        existing.closing_balance,
+      });
+    } else {
+      setIsEditMode(false);
+      setFields(EMPTY_FIELDS);
+      setTotals(ZERO_TOTALS);
+    }
+  }
+
+  // ── Date change ─────────────────────────────────────────────────────────────
+  async function handleDateChange(e: { target: { value: string } }) {
+    const iso = e.target.value;
+    if (!iso) return;
+    setSelectedDate(iso);
+    setFieldErrors({});
+    setSubmitError(null);
+
+    if (store.id) {
+      setDateChecking(true);
+      try {
+        await checkDate(iso, store.id);
+      } finally {
+        setDateChecking(false);
+      }
+    }
+  }
+
   // ── Live totals via preview ─────────────────────────────────────────────────
-  const refreshTotals = useCallback(async (f: FormFields, storeId: string) => {
+  const refreshTotals = useCallback(async (f: FormFields, storeId: string, date: string) => {
     setTotalsLoading(true);
     try {
-      const row = {
-        sales_date:           todayIso(),
+      const fields = {
         cash_sale:            num(f.cash_sale),
         campaign_float_cash:  num(f.campaign_float_cash),
         expenses:             num(f.expenses),
@@ -204,22 +334,20 @@ export default function DailySalesPage() {
         gift_karte:           num(f.gift_karte),
         gift_vouchers:        num(f.gift_vouchers),
         credit_notes_issue:   num(f.credit_notes_issue),
-        remarks:              f.remarks || null,
       };
-      const res = await apiFetch("/api/daily-sales/import-preview", {
+      const res = await apiFetch("/api/daily-sales/entry-preview", {
         method: "POST",
-        body: JSON.stringify({ store_id: storeId, rows: [row] }),
+        body: JSON.stringify({ store_id: storeId, sales_date: date, fields }),
       });
       if (res.ok) {
-        const j = await res.json() as { preview?: (Totals & { sales_date: string })[] };
-        if (j.preview?.[0]) {
-          const p = j.preview[0];
+        const j = await res.json() as { totals?: Totals };
+        if (j.totals) {
           setTotals({
-            total_credit_card_sale: p.total_credit_card_sale ?? 0,
-            total_sale:             p.total_sale             ?? 0,
-            net_cash_movement:      p.net_cash_movement      ?? 0,
-            opening_balance:        p.opening_balance        ?? null,
-            closing_balance:        p.closing_balance        ?? null,
+            total_credit_card_sale: j.totals.total_credit_card_sale ?? 0,
+            total_sale:             j.totals.total_sale             ?? 0,
+            net_cash_movement:      j.totals.net_cash_movement      ?? 0,
+            opening_balance:        j.totals.opening_balance        ?? null,
+            closing_balance:        j.totals.closing_balance        ?? null,
           });
         }
       }
@@ -233,9 +361,12 @@ export default function DailySalesPage() {
     setFields(next);
     setFieldErrors((e) => ({ ...e, [key]: undefined }));
 
-    if (store.id) {
+    if (store.id && !monthLocked) {
       if (previewTimer.current) clearTimeout(previewTimer.current);
-      previewTimer.current = setTimeout(() => void refreshTotals(next, store.id!), 600);
+      previewTimer.current = setTimeout(
+        () => void refreshTotals(next, store.id!, selectedDate),
+        600
+      );
     }
   }
 
@@ -257,7 +388,7 @@ export default function DailySalesPage() {
     try {
       const body = {
         store_id:             store.id,
-        sales_date:           todayIso(),
+        sales_date:           selectedDate,
         cash_sale:            num(fields.cash_sale),
         campaign_float_cash:  num(fields.campaign_float_cash),
         expenses:             num(fields.expenses),
@@ -282,16 +413,15 @@ export default function DailySalesPage() {
         return;
       }
 
-      // Fetch the saved row so we can show exact figures on the success screen
-      const today = body.sales_date;
-      const year  = today.slice(0, 4);
-      const month = today.slice(5, 7);
+      // Fetch the saved row to show exact server-computed figures on success screen
+      const year  = selectedDate.slice(0, 4);
+      const month = selectedDate.slice(5, 7);
       const rowsRes = await apiFetch(
         `/api/daily-sales/rows?store_id=${store.id}&year=${year}&month=${month}`
       );
       if (rowsRes.ok) {
-        const jr = await rowsRes.json() as { rows: SubmittedSummary[] };
-        const saved = jr.rows?.find((r) => r.sales_date === today);
+        const jr = await rowsRes.json() as { rows: DailySalesRow[] };
+        const saved = jr.rows?.find((r) => r.sales_date === selectedDate);
         if (saved) setSubmitted(saved);
       }
 
@@ -303,11 +433,18 @@ export default function DailySalesPage() {
 
   // ── Reset (submit another day) ──────────────────────────────────────────────
   function resetForm() {
+    const t = todayPkt();
+    setSelectedDate(t);
     setFields(EMPTY_FIELDS);
     setTotals(ZERO_TOTALS);
     setSubmitError(null);
     setSubmitted(null);
+    setIsEditMode(false);
+    setMonthLocked(false);
     setScreen("form");
+    if (store.id) {
+      void checkDate(t, store.id);
+    }
   }
 
   // ── Sign out ────────────────────────────────────────────────────────────────
@@ -342,7 +479,9 @@ export default function DailySalesPage() {
   };
 
   const fieldWrap: React.CSSProperties = { marginBottom: 14 };
-  const twoCol: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
+  const twoCol: React.CSSProperties = {
+    display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
+  };
   const autoBadge: React.CSSProperties = {
     display: "inline-block", fontSize: 9, fontWeight: 800, color: "#3B5EA6",
     background: "#EDF2FF", padding: "2px 5px", borderRadius: 3, marginBottom: 4,
@@ -351,6 +490,11 @@ export default function DailySalesPage() {
 
   // ── Shared header ──────────────────────────────────────────────────────────
   function Header() {
+    const storeLine = [
+      store.name ? store.name.toUpperCase() : null,
+      store.fm_code ? store.fm_code : null,
+    ].filter(Boolean).join(" · ") || "UNZE";
+
     return (
       <div style={{
         background: "#0F1720", padding: "14px 18px 16px",
@@ -358,7 +502,7 @@ export default function DailySalesPage() {
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.5)", letterSpacing: ".05em" }}>
-            {store.name ? store.name.toUpperCase() : "UNZE"} · IFPL
+            {storeLine}
           </span>
           <button
             onClick={() => void signOut()}
@@ -374,14 +518,14 @@ export default function DailySalesPage() {
           Daily Sales Entry
         </div>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,.45)", marginTop: 2 }}>
-          {longDate()}
+          {longDateForIso(selectedDate)}
         </div>
       </div>
     );
   }
 
-  // ── Summary card (reused on both already + success screens) ──────────────
-  function SummaryCard({ data }: { data: SubmittedSummary }) {
+  // ── Summary card (success screen) ──────────────────────────────────────────
+  function SummaryCard({ data }: { data: DailySalesRow }) {
     return (
       <div style={{
         background: "#fff", borderRadius: 12, padding: "14px 20px",
@@ -417,32 +561,6 @@ export default function DailySalesPage() {
     );
   }
 
-  // ── SCREEN: Already submitted today ───────────────────────────────────────
-  if (screen === "already") {
-    return (
-      <main style={{ minHeight: "100dvh", background: "#F4F6F9", fontFamily: "system-ui, sans-serif" }}>
-        <Header />
-        <div style={{ padding: "36px 20px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-          <div style={{
-            width: 60, height: 60, borderRadius: "50%", background: "#E8F5F1",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 26, color: "#0F7B5F", marginBottom: 16,
-          }}>✓</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#0F1720", marginBottom: 6 }}>
-            Already Submitted
-          </div>
-          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 24 }}>
-            Today&apos;s entry for {formatDateUK(todayIso())} has already been submitted.
-          </div>
-          {submitted && <SummaryCard data={submitted} />}
-          <p style={{ fontSize: 12, color: "#94A3B8", marginTop: 20, maxWidth: 320 }}>
-            Contact your area manager if you need to amend this entry.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
   // ── SCREEN: Success ────────────────────────────────────────────────────────
   if (screen === "success") {
     return (
@@ -454,9 +572,11 @@ export default function DailySalesPage() {
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 26, color: "#0F7B5F", marginBottom: 16,
           }}>✓</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#0F1720", marginBottom: 6 }}>Submitted</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#0F1720", marginBottom: 6 }}>
+            {isEditMode ? "Updated" : "Submitted"}
+          </div>
           <div style={{ fontSize: 13, color: "#64748B", marginBottom: 24 }}>
-            {formatDateUK(todayIso())} · saved successfully
+            {formatDateUK(selectedDate)} · saved successfully
           </div>
           {submitted && <SummaryCard data={submitted} />}
           <button
@@ -474,6 +594,10 @@ export default function DailySalesPage() {
     );
   }
 
+  // ── Date bounds for DateInput ──────────────────────────────────────────────
+  const minDate = subDays(today, 7);
+  const maxDate = today;
+
   // ── SCREEN: Form + Confirm sheet ──────────────────────────────────────────
   return (
     <main style={{ minHeight: "100dvh", background: "#F4F6F9", fontFamily: "system-ui, sans-serif" }}>
@@ -487,6 +611,19 @@ export default function DailySalesPage() {
           borderRadius: 10, fontSize: 12, color: "#B4791F",
         }}>
           You are signed in as an admin. No store is assigned to this account.
+        </div>
+      )}
+
+      {/* Edit-mode banner */}
+      {isEditMode && !monthLocked && (
+        <div style={{
+          margin: "12px 16px 0", padding: "11px 14px",
+          background: "#EDF2FF", border: "1px solid #BFCFFF",
+          borderRadius: 10, fontSize: 12, color: "#3B5EA6", fontWeight: 600,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <span>✎</span>
+          <span>Editing existing entry for {formatDateUK(selectedDate)}</span>
         </div>
       )}
 
@@ -508,127 +645,175 @@ export default function DailySalesPage() {
       {/* Form body */}
       <div style={{ padding: "0 16px 40px" }}>
 
-        {/* Cash Movement */}
-        <div style={sectionHeaderStyle}>Cash Movement</div>
-
+        {/* Date picker */}
+        <div style={sectionHeaderStyle}>Date</div>
         <div style={fieldWrap}>
-          <label style={labelStyle}>
-            Cash Sale <span style={{ color: "#B3261E" }}>*</span>
-          </label>
-          <input
-            style={inputStyle(fieldErrors.cash_sale)}
-            type="text" inputMode="decimal"
-            value={fields.cash_sale} placeholder="0"
-            onChange={(e) => handleFieldChange("cash_sale", e.target.value)}
-          />
-          {fieldErrors.cash_sale && (
-            <div style={{ fontSize: 11, color: "#B3261E", marginTop: 3 }}>{fieldErrors.cash_sale}</div>
+          <label style={labelStyle} htmlFor="sales-date">Sales Date</label>
+          {dateChecking ? (
+            <div style={{
+              ...inputStyle(),
+              color: "#94A3B8", fontSize: 13,
+            }}>
+              Checking…
+            </div>
+          ) : (
+            <DateInput
+              id="sales-date"
+              value={selectedDate}
+              onChange={handleDateChange}
+              min={minDate}
+              max={maxDate}
+              required
+              style={inputStyle()}
+            />
           )}
         </div>
 
-        <div style={twoCol}>
-          {([ ["campaign_float_cash", "Campaign Float"], ["expenses", "Expenses"] ] as const).map(([k, lbl]) => (
-            <div key={k} style={fieldWrap}>
-              <label style={labelStyle}>{lbl}</label>
-              <input style={inputStyle()} type="text" inputMode="decimal"
-                value={fields[k]} placeholder="0"
-                onChange={(e) => handleFieldChange(k, e.target.value)} />
+        {/* Locked month message */}
+        {monthLocked ? (
+          <div style={{
+            padding: "24px 16px", textAlign: "center",
+            background: "#FFF9E6", border: "1px solid #F3D97E",
+            borderRadius: 12, marginTop: 4,
+          }}>
+            <div style={{ fontSize: 22, marginBottom: 10 }}>🔒</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#B4791F", marginBottom: 6 }}>
+              This month is locked
             </div>
-          ))}
-        </div>
-
-        <div style={twoCol}>
-          {([ ["other_income", "Other Income"], ["deposit", "Deposit"] ] as const).map(([k, lbl]) => (
-            <div key={k} style={fieldWrap}>
-              <label style={labelStyle}>{lbl}</label>
-              <input style={inputStyle()} type="text" inputMode="decimal"
-                value={fields[k]} placeholder="0"
-                onChange={(e) => handleFieldChange(k, e.target.value)} />
+            <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.6 }}>
+              The month for {formatDateUK(selectedDate)} has been locked for reporting.
+              <br />Contact your area manager to reopen it.
             </div>
-          ))}
-        </div>
-
-        {/* Card Sales */}
-        <div style={sectionHeaderStyle}>Card Sales</div>
-        <div style={twoCol}>
-          {([ ["allied_bank_cc_sale", "Allied Bank CC"], ["hbl_cc_sale", "HBL CC"] ] as const).map(([k, lbl]) => (
-            <div key={k} style={fieldWrap}>
-              <label style={labelStyle}>{lbl}</label>
-              <input style={inputStyle()} type="text" inputMode="decimal"
-                value={fields[k]} placeholder="0"
-                onChange={(e) => handleFieldChange(k, e.target.value)} />
-            </div>
-          ))}
-        </div>
-
-        {/* Other Sales */}
-        <div style={sectionHeaderStyle}>Other Sales</div>
-        <div style={twoCol}>
-          {([ ["gift_karte", "Gift Karte"], ["gift_vouchers", "Gift Vouchers"] ] as const).map(([k, lbl]) => (
-            <div key={k} style={fieldWrap}>
-              <label style={labelStyle}>{lbl}</label>
-              <input style={inputStyle()} type="text" inputMode="decimal"
-                value={fields[k]} placeholder="0"
-                onChange={(e) => handleFieldChange(k, e.target.value)} />
-            </div>
-          ))}
-        </div>
-        <div style={fieldWrap}>
-          <label style={labelStyle}>Credit Notes Issued</label>
-          <input style={inputStyle()} type="text" inputMode="decimal"
-            value={fields.credit_notes_issue} placeholder="0"
-            onChange={(e) => handleFieldChange("credit_notes_issue", e.target.value)} />
-        </div>
-
-        {/* Calculated Totals */}
-        <div style={sectionHeaderStyle}>Calculated Totals</div>
-        <div style={twoCol}>
-          <div style={fieldWrap}>
-            <span style={autoBadge}>AUTO</span>
-            <label style={labelStyle}>Total Card Sale</label>
-            <input style={inputStyle(undefined, true)} readOnly type="text"
-              value={totalsLoading ? "…" : totals.total_credit_card_sale.toLocaleString("en-PK")} />
           </div>
-          <div style={fieldWrap}>
-            <span style={autoBadge}>AUTO</span>
-            <label style={labelStyle}>Total Sale</label>
-            <input style={inputStyle(undefined, true)} readOnly type="text"
-              value={totalsLoading ? "…" : totals.total_sale.toLocaleString("en-PK")} />
-          </div>
-        </div>
-        <div style={fieldWrap}>
-          <span style={autoBadge}>AUTO</span>
-          <label style={labelStyle}>Net Cash Movement</label>
-          <input style={inputStyle(undefined, true)} readOnly type="text"
-            value={totalsLoading ? "…" : totals.net_cash_movement.toLocaleString("en-PK")} />
-          {totals.opening_balance != null && (
-            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
-              Opening {formatPKR(totals.opening_balance)} + Net Cash {formatPKR(totals.net_cash_movement)} = Closing {formatPKR(totals.closing_balance)}
+        ) : (
+          <>
+            {/* Cash Movement */}
+            <div style={sectionHeaderStyle}>Cash Movement</div>
+
+            <div style={fieldWrap}>
+              <label style={labelStyle} htmlFor="cash_sale">
+                Cash Sale <span style={{ color: "#B3261E" }}>*</span>
+              </label>
+              <input
+                id="cash_sale"
+                style={inputStyle(fieldErrors.cash_sale)}
+                type="text" inputMode="decimal"
+                value={fields.cash_sale} placeholder="0"
+                onChange={(e) => handleFieldChange("cash_sale", e.target.value)}
+              />
+              {fieldErrors.cash_sale && (
+                <div style={{ fontSize: 11, color: "#B3261E", marginTop: 3 }}>{fieldErrors.cash_sale}</div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Remarks */}
-        <div style={sectionHeaderStyle}>Remarks</div>
-        <div style={fieldWrap}>
-          <textarea
-            style={{ ...inputStyle(), height: 76, resize: "none", fontSize: 14, lineHeight: "1.45" }}
-            value={fields.remarks}
-            placeholder="Optional notes for today's trading…"
-            onChange={(e) => handleFieldChange("remarks", e.target.value)}
-          />
-        </div>
+            <div style={twoCol}>
+              {([ ["campaign_float_cash", "Campaign Float"], ["expenses", "Expenses"] ] as const).map(([k, lbl]) => (
+                <div key={k} style={fieldWrap}>
+                  <label style={labelStyle}>{lbl}</label>
+                  <input style={inputStyle()} type="text" inputMode="decimal"
+                    value={fields[k]} placeholder="0"
+                    onChange={(e) => handleFieldChange(k, e.target.value)} />
+                </div>
+              ))}
+            </div>
 
-        <button
-          onClick={() => { if (validate()) setScreen("confirm"); }}
-          style={{
-            width: "100%", padding: 15, borderRadius: 12, background: "#0F1720",
-            color: "#fff", fontSize: 15, fontWeight: 800, border: "none",
-            cursor: "pointer", fontFamily: "inherit", marginTop: 4,
-          }}
-        >
-          Review &amp; Submit →
-        </button>
+            <div style={twoCol}>
+              {([ ["other_income", "Other Income"], ["deposit", "Deposit"] ] as const).map(([k, lbl]) => (
+                <div key={k} style={fieldWrap}>
+                  <label style={labelStyle}>{lbl}</label>
+                  <input style={inputStyle()} type="text" inputMode="decimal"
+                    value={fields[k]} placeholder="0"
+                    onChange={(e) => handleFieldChange(k, e.target.value)} />
+                </div>
+              ))}
+            </div>
+
+            {/* Card Sales */}
+            <div style={sectionHeaderStyle}>Card Sales</div>
+            <div style={twoCol}>
+              {([ ["allied_bank_cc_sale", "Allied Bank CC"], ["hbl_cc_sale", "HBL CC"] ] as const).map(([k, lbl]) => (
+                <div key={k} style={fieldWrap}>
+                  <label style={labelStyle}>{lbl}</label>
+                  <input style={inputStyle()} type="text" inputMode="decimal"
+                    value={fields[k]} placeholder="0"
+                    onChange={(e) => handleFieldChange(k, e.target.value)} />
+                </div>
+              ))}
+            </div>
+
+            {/* Other Sales */}
+            <div style={sectionHeaderStyle}>Other Sales</div>
+            <div style={twoCol}>
+              {([ ["gift_karte", "Gift Karte"], ["gift_vouchers", "Gift Vouchers"] ] as const).map(([k, lbl]) => (
+                <div key={k} style={fieldWrap}>
+                  <label style={labelStyle}>{lbl}</label>
+                  <input style={inputStyle()} type="text" inputMode="decimal"
+                    value={fields[k]} placeholder="0"
+                    onChange={(e) => handleFieldChange(k, e.target.value)} />
+                </div>
+              ))}
+            </div>
+            <div style={fieldWrap}>
+              <label style={labelStyle}>Credit Notes Issued</label>
+              <input style={inputStyle()} type="text" inputMode="decimal"
+                value={fields.credit_notes_issue} placeholder="0"
+                onChange={(e) => handleFieldChange("credit_notes_issue", e.target.value)} />
+            </div>
+
+            {/* Calculated Totals */}
+            <div style={sectionHeaderStyle}>Calculated Totals</div>
+            <div style={twoCol}>
+              <div style={fieldWrap}>
+                <span style={autoBadge}>AUTO</span>
+                <label style={labelStyle}>Total Card Sale</label>
+                <input style={inputStyle(undefined, true)} readOnly type="text"
+                  value={totalsLoading ? "…" : formatPKR(totals.total_credit_card_sale)} />
+              </div>
+              <div style={fieldWrap}>
+                <span style={autoBadge}>AUTO</span>
+                <label style={labelStyle}>Total Sale</label>
+                <input style={inputStyle(undefined, true)} readOnly type="text"
+                  value={totalsLoading ? "…" : formatPKR(totals.total_sale)} />
+              </div>
+            </div>
+            <div style={fieldWrap}>
+              <span style={autoBadge}>AUTO</span>
+              <label style={labelStyle}>Net Cash Movement</label>
+              <input style={inputStyle(undefined, true)} readOnly type="text"
+                value={totalsLoading ? "…" : formatPKR(totals.net_cash_movement)} />
+              {totals.opening_balance != null && (
+                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4, lineHeight: 1.5 }}>
+                  Opening {formatPKR(totals.opening_balance)} + Net {formatPKR(totals.net_cash_movement)} = Closing {formatPKR(totals.closing_balance)}
+                </div>
+              )}
+            </div>
+
+            {/* Remarks */}
+            <div style={sectionHeaderStyle}>Remarks</div>
+            <div style={fieldWrap}>
+              <textarea
+                style={{ ...inputStyle(), height: 76, resize: "none", fontSize: 14, lineHeight: "1.45" }}
+                value={fields.remarks}
+                placeholder="Optional notes for today's trading…"
+                onChange={(e) => handleFieldChange("remarks", e.target.value)}
+              />
+            </div>
+
+            <button
+              onClick={() => { if (validate()) setScreen("confirm"); }}
+              disabled={!store.id}
+              style={{
+                width: "100%", padding: 15, borderRadius: 12, background: "#0F1720",
+                color: "#fff", fontSize: 15, fontWeight: 800, border: "none",
+                cursor: store.id ? "pointer" : "not-allowed",
+                fontFamily: "inherit", marginTop: 4,
+                opacity: store.id ? 1 : 0.5,
+              }}
+            >
+              {isEditMode ? "Review & Update →" : "Review & Submit →"}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Confirmation bottom sheet */}
@@ -646,9 +831,11 @@ export default function DailySalesPage() {
               <div style={{ width: 36, height: 4, borderRadius: 2, background: "#EEF0F3" }} />
             </div>
 
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1720" }}>Confirm Submission</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1720" }}>
+              {isEditMode ? "Confirm Update" : "Confirm Submission"}
+            </div>
             <div style={{ fontSize: 12, color: "#64748B", marginBottom: 18, marginTop: 2 }}>
-              {formatDateUK(todayIso())} · {store.name ?? "Store"}
+              {formatDateUK(selectedDate)} · {store.name ?? "Store"}
             </div>
 
             {/* Line-item summary */}
@@ -719,7 +906,7 @@ export default function DailySalesPage() {
                   opacity: submitting ? 0.7 : 1,
                 }}
               >
-                {submitting ? "Submitting…" : "Submit ✓"}
+                {submitting ? "Saving…" : isEditMode ? "Update ✓" : "Submit ✓"}
               </button>
             </div>
           </div>
