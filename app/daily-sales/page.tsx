@@ -20,6 +20,7 @@
  * never computed in JS.
  *
  * All amounts displayed as "PKR 1,234,567.50" via formatPKR().
+ * Input fields show comma-separated values (e.g. "1,234,567") as typed.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -162,19 +163,38 @@ function isMonthLocked(isoDate: string, today: string): boolean {
   return today > lockDay;
 }
 
-/** Parse a numeric input string; returns 0 for blank / NaN. */
+/** Parse a numeric input string; returns 0 for blank / NaN. Strips commas. */
 function num(s: string): number {
   const n = parseFloat(s.replace(/,/g, ""));
   return isNaN(n) ? 0 : n;
 }
 
 /**
- * Convert a stored number to a form field string.
+ * Format a numeric string with comma thousand-separators as the user types.
+ * Supports optional leading minus (for campaign_float_cash) and decimals.
+ * Examples: "1234567" → "1,234,567"   "1234.5" → "1,234.5"
+ */
+function formatWithCommas(v: string): string {
+  if (!v) return "";
+  const negative = v.startsWith("-");
+  // Strip everything except digits and decimal point
+  const stripped = v.replace(/[^0-9.]/g, "");
+  if (!stripped) return negative ? "-" : "";
+  const parts = stripped.split(".");
+  // Only format the integer portion
+  const intFormatted = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const result = parts.length > 1 ? intFormatted + "." + parts[1] : intFormatted;
+  return (negative ? "-" : "") + result;
+}
+
+/**
+ * Convert a stored number to a form field string with comma formatting.
  * Zero shows as "" (displays the "0" placeholder) to avoid cluttering
  * the form with zeros for fields the user left empty.
  */
 function numToField(n: number): string {
-  return n === 0 ? "" : String(n);
+  if (n === 0) return "";
+  return formatWithCommas(String(n));
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -356,8 +376,10 @@ export default function DailySalesPage() {
     }
   }, []);
 
+  // Apply comma formatting for numeric fields; remarks passes through unchanged.
   function handleFieldChange(key: keyof FormFields, value: string) {
-    const next = { ...fields, [key]: value };
+    const formatted = key === "remarks" ? value : formatWithCommas(value);
+    const next = { ...fields, [key]: formatted };
     setFields(next);
     setFieldErrors((e) => ({ ...e, [key]: undefined }));
 
@@ -552,45 +574,47 @@ export default function DailySalesPage() {
   // ── SCREEN: Loading ────────────────────────────────────────────────────────
   if (screen === "loading") {
     return (
-      <main style={{
+      <div style={{
         minHeight: "100dvh", display: "flex", alignItems: "center",
         justifyContent: "center", background: "#F4F6F9", fontFamily: "system-ui, sans-serif",
       }}>
         <span style={{ fontSize: 14, color: "#64748B" }}>Loading…</span>
-      </main>
+      </div>
     );
   }
 
   // ── SCREEN: Success ────────────────────────────────────────────────────────
   if (screen === "success") {
     return (
-      <main style={{ minHeight: "100dvh", background: "#F4F6F9", fontFamily: "system-ui, sans-serif" }}>
-        <Header />
-        <div style={{ padding: "36px 20px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-          <div style={{
-            width: 60, height: 60, borderRadius: "50%", background: "#E8F5F1",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 26, color: "#0F7B5F", marginBottom: 16,
-          }}>✓</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#0F1720", marginBottom: 6 }}>
-            {isEditMode ? "Updated" : "Submitted"}
+      <div style={{ minHeight: "100dvh", background: "#F4F6F9", fontFamily: "system-ui, sans-serif" }}>
+        <main style={{ maxWidth: 480, margin: "0 auto" }}>
+          <Header />
+          <div style={{ padding: "36px 20px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+            <div style={{
+              width: 60, height: 60, borderRadius: "50%", background: "#E8F5F1",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 26, color: "#0F7B5F", marginBottom: 16,
+            }}>✓</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#0F1720", marginBottom: 6 }}>
+              {isEditMode ? "Updated" : "Submitted"}
+            </div>
+            <div style={{ fontSize: 13, color: "#64748B", marginBottom: 24 }}>
+              {formatDateUK(selectedDate)} · saved successfully
+            </div>
+            {submitted && <SummaryCard data={submitted} />}
+            <button
+              onClick={resetForm}
+              style={{
+                width: "100%", maxWidth: 380, padding: 14, borderRadius: 10,
+                background: "#0F1720", color: "#fff", fontSize: 14, fontWeight: 700,
+                border: "none", cursor: "pointer", fontFamily: "inherit", marginTop: 16,
+              }}
+            >
+              Submit Another Day
+            </button>
           </div>
-          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 24 }}>
-            {formatDateUK(selectedDate)} · saved successfully
-          </div>
-          {submitted && <SummaryCard data={submitted} />}
-          <button
-            onClick={resetForm}
-            style={{
-              width: "100%", maxWidth: 380, padding: 14, borderRadius: 10,
-              background: "#0F1720", color: "#fff", fontSize: 14, fontWeight: 700,
-              border: "none", cursor: "pointer", fontFamily: "inherit", marginTop: 16,
-            }}
-          >
-            Submit Another Day
-          </button>
-        </div>
-      </main>
+        </main>
+      </div>
     );
   }
 
@@ -600,223 +624,225 @@ export default function DailySalesPage() {
 
   // ── SCREEN: Form + Confirm sheet ──────────────────────────────────────────
   return (
-    <main style={{ minHeight: "100dvh", background: "#F4F6F9", fontFamily: "system-ui, sans-serif" }}>
-      <Header />
+    <div style={{ minHeight: "100dvh", background: "#F4F6F9", fontFamily: "system-ui, sans-serif" }}>
+      <main style={{ maxWidth: 480, margin: "0 auto" }}>
+        <Header />
 
-      {/* Admin no-store banner */}
-      {!store.id && (
-        <div style={{
-          margin: "12px 16px 0", padding: "12px 14px",
-          background: "#FFF9E6", border: "1px solid #F3D97E",
-          borderRadius: 10, fontSize: 12, color: "#B4791F",
-        }}>
-          You are signed in as an admin. No store is assigned to this account.
-        </div>
-      )}
-
-      {/* Edit-mode banner */}
-      {isEditMode && !monthLocked && (
-        <div style={{
-          margin: "12px 16px 0", padding: "11px 14px",
-          background: "#EDF2FF", border: "1px solid #BFCFFF",
-          borderRadius: 10, fontSize: 12, color: "#3B5EA6", fontWeight: 600,
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <span>✎</span>
-          <span>Editing existing entry for {formatDateUK(selectedDate)}</span>
-        </div>
-      )}
-
-      {/* Error banner */}
-      {submitError && (
-        <div style={{
-          margin: "12px 16px 0", padding: "12px 14px",
-          background: "#FFF5F5", border: "1px solid #FDECEA",
-          borderRadius: 10, display: "flex", gap: 10, alignItems: "flex-start",
-        }}>
-          <span style={{ fontSize: 15, lineHeight: 1.2, flexShrink: 0 }}>⚠</span>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#B3261E", marginBottom: 2 }}>Submission Error</div>
-            <div style={{ fontSize: 12, color: "#0F1720" }}>{submitError}</div>
+        {/* Admin no-store banner */}
+        {!store.id && (
+          <div style={{
+            margin: "12px 16px 0", padding: "12px 14px",
+            background: "#FFF9E6", border: "1px solid #F3D97E",
+            borderRadius: 10, fontSize: 12, color: "#B4791F",
+          }}>
+            You are signed in as an admin. No store is assigned to this account.
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Form body */}
-      <div style={{ padding: "0 16px 40px" }}>
+        {/* Edit-mode banner */}
+        {isEditMode && !monthLocked && (
+          <div style={{
+            margin: "12px 16px 0", padding: "11px 14px",
+            background: "#EDF2FF", border: "1px solid #BFCFFF",
+            borderRadius: 10, fontSize: 12, color: "#3B5EA6", fontWeight: 600,
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <span>✎</span>
+            <span>Editing existing entry for {formatDateUK(selectedDate)}</span>
+          </div>
+        )}
 
-        {/* Date picker */}
-        <div style={sectionHeaderStyle}>Date</div>
-        <div style={fieldWrap}>
-          <label style={labelStyle} htmlFor="sales-date">Sales Date</label>
-          {dateChecking ? (
+        {/* Error banner */}
+        {submitError && (
+          <div style={{
+            margin: "12px 16px 0", padding: "12px 14px",
+            background: "#FFF5F5", border: "1px solid #FDECEA",
+            borderRadius: 10, display: "flex", gap: 10, alignItems: "flex-start",
+          }}>
+            <span style={{ fontSize: 15, lineHeight: 1.2, flexShrink: 0 }}>⚠</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#B3261E", marginBottom: 2 }}>Submission Error</div>
+              <div style={{ fontSize: 12, color: "#0F1720" }}>{submitError}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Form body */}
+        <div style={{ padding: "0 16px 40px" }}>
+
+          {/* Date picker */}
+          <div style={sectionHeaderStyle}>Date</div>
+          <div style={fieldWrap}>
+            <label style={labelStyle} htmlFor="sales-date">Sales Date</label>
+            {dateChecking ? (
+              <div style={{
+                ...inputStyle(),
+                color: "#94A3B8", fontSize: 13,
+              }}>
+                Checking…
+              </div>
+            ) : (
+              <DateInput
+                id="sales-date"
+                value={selectedDate}
+                onChange={handleDateChange}
+                min={minDate}
+                max={maxDate}
+                required
+                style={inputStyle()}
+              />
+            )}
+          </div>
+
+          {/* Locked month message */}
+          {monthLocked ? (
             <div style={{
-              ...inputStyle(),
-              color: "#94A3B8", fontSize: 13,
+              padding: "24px 16px", textAlign: "center",
+              background: "#FFF9E6", border: "1px solid #F3D97E",
+              borderRadius: 12, marginTop: 4,
             }}>
-              Checking…
+              <div style={{ fontSize: 22, marginBottom: 10 }}>🔒</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#B4791F", marginBottom: 6 }}>
+                This month is locked
+              </div>
+              <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.6 }}>
+                The month for {formatDateUK(selectedDate)} has been locked for reporting.
+                <br />Contact your area manager to reopen it.
+              </div>
             </div>
           ) : (
-            <DateInput
-              id="sales-date"
-              value={selectedDate}
-              onChange={handleDateChange}
-              min={minDate}
-              max={maxDate}
-              required
-              style={inputStyle()}
-            />
+            <>
+              {/* Cash Movement */}
+              <div style={sectionHeaderStyle}>Cash Movement</div>
+
+              <div style={fieldWrap}>
+                <label style={labelStyle} htmlFor="cash_sale">
+                  Cash Sale <span style={{ color: "#B3261E" }}>*</span>
+                </label>
+                <input
+                  id="cash_sale"
+                  style={inputStyle(fieldErrors.cash_sale)}
+                  type="text" inputMode="decimal"
+                  value={fields.cash_sale} placeholder="0"
+                  onChange={(e) => handleFieldChange("cash_sale", e.target.value)}
+                />
+                {fieldErrors.cash_sale && (
+                  <div style={{ fontSize: 11, color: "#B3261E", marginTop: 3 }}>{fieldErrors.cash_sale}</div>
+                )}
+              </div>
+
+              <div style={twoCol}>
+                {([ ["campaign_float_cash", "Campaign Float"], ["expenses", "Expenses"] ] as const).map(([k, lbl]) => (
+                  <div key={k} style={fieldWrap}>
+                    <label style={labelStyle}>{lbl}</label>
+                    <input style={inputStyle()} type="text" inputMode="decimal"
+                      value={fields[k]} placeholder="0"
+                      onChange={(e) => handleFieldChange(k, e.target.value)} />
+                  </div>
+                ))}
+              </div>
+
+              <div style={twoCol}>
+                {([ ["other_income", "Other Income"], ["deposit", "Deposit"] ] as const).map(([k, lbl]) => (
+                  <div key={k} style={fieldWrap}>
+                    <label style={labelStyle}>{lbl}</label>
+                    <input style={inputStyle()} type="text" inputMode="decimal"
+                      value={fields[k]} placeholder="0"
+                      onChange={(e) => handleFieldChange(k, e.target.value)} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Card Sales */}
+              <div style={sectionHeaderStyle}>Card Sales</div>
+              <div style={twoCol}>
+                {([ ["allied_bank_cc_sale", "Allied Bank CC"], ["hbl_cc_sale", "HBL CC"] ] as const).map(([k, lbl]) => (
+                  <div key={k} style={fieldWrap}>
+                    <label style={labelStyle}>{lbl}</label>
+                    <input style={inputStyle()} type="text" inputMode="decimal"
+                      value={fields[k]} placeholder="0"
+                      onChange={(e) => handleFieldChange(k, e.target.value)} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Other Sales */}
+              <div style={sectionHeaderStyle}>Other Sales</div>
+              <div style={twoCol}>
+                {([ ["gift_karte", "Gift Karte"], ["gift_vouchers", "Gift Vouchers"] ] as const).map(([k, lbl]) => (
+                  <div key={k} style={fieldWrap}>
+                    <label style={labelStyle}>{lbl}</label>
+                    <input style={inputStyle()} type="text" inputMode="decimal"
+                      value={fields[k]} placeholder="0"
+                      onChange={(e) => handleFieldChange(k, e.target.value)} />
+                  </div>
+                ))}
+              </div>
+              <div style={fieldWrap}>
+                <label style={labelStyle}>Credit Notes Issued</label>
+                <input style={inputStyle()} type="text" inputMode="decimal"
+                  value={fields.credit_notes_issue} placeholder="0"
+                  onChange={(e) => handleFieldChange("credit_notes_issue", e.target.value)} />
+              </div>
+
+              {/* Calculated Totals */}
+              <div style={sectionHeaderStyle}>Calculated Totals</div>
+              <div style={twoCol}>
+                <div style={fieldWrap}>
+                  <span style={autoBadge}>AUTO</span>
+                  <label style={labelStyle}>Total Card Sale</label>
+                  <input style={inputStyle(undefined, true)} readOnly type="text"
+                    value={totalsLoading ? "…" : formatPKR(totals.total_credit_card_sale)} />
+                </div>
+                <div style={fieldWrap}>
+                  <span style={autoBadge}>AUTO</span>
+                  <label style={labelStyle}>Total Sale</label>
+                  <input style={inputStyle(undefined, true)} readOnly type="text"
+                    value={totalsLoading ? "…" : formatPKR(totals.total_sale)} />
+                </div>
+              </div>
+              <div style={fieldWrap}>
+                <span style={autoBadge}>AUTO</span>
+                <label style={labelStyle}>Net Cash Movement</label>
+                <input style={inputStyle(undefined, true)} readOnly type="text"
+                  value={totalsLoading ? "…" : formatPKR(totals.net_cash_movement)} />
+                {totals.opening_balance != null && (
+                  <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4, lineHeight: 1.5 }}>
+                    Opening {formatPKR(totals.opening_balance)} + Net {formatPKR(totals.net_cash_movement)} = Closing {formatPKR(totals.closing_balance)}
+                  </div>
+                )}
+              </div>
+
+              {/* Remarks */}
+              <div style={sectionHeaderStyle}>Remarks</div>
+              <div style={fieldWrap}>
+                <textarea
+                  style={{ ...inputStyle(), height: 76, resize: "none", fontSize: 14, lineHeight: "1.45" }}
+                  value={fields.remarks}
+                  placeholder="Optional notes for today's trading…"
+                  onChange={(e) => handleFieldChange("remarks", e.target.value)}
+                />
+              </div>
+
+              <button
+                onClick={() => { if (validate()) setScreen("confirm"); }}
+                disabled={!store.id}
+                style={{
+                  width: "100%", padding: 15, borderRadius: 12, background: "#0F1720",
+                  color: "#fff", fontSize: 15, fontWeight: 800, border: "none",
+                  cursor: store.id ? "pointer" : "not-allowed",
+                  fontFamily: "inherit", marginTop: 4,
+                  opacity: store.id ? 1 : 0.5,
+                }}
+              >
+                {isEditMode ? "Review & Update →" : "Review & Submit →"}
+              </button>
+            </>
           )}
         </div>
+      </main>
 
-        {/* Locked month message */}
-        {monthLocked ? (
-          <div style={{
-            padding: "24px 16px", textAlign: "center",
-            background: "#FFF9E6", border: "1px solid #F3D97E",
-            borderRadius: 12, marginTop: 4,
-          }}>
-            <div style={{ fontSize: 22, marginBottom: 10 }}>🔒</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#B4791F", marginBottom: 6 }}>
-              This month is locked
-            </div>
-            <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.6 }}>
-              The month for {formatDateUK(selectedDate)} has been locked for reporting.
-              <br />Contact your area manager to reopen it.
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Cash Movement */}
-            <div style={sectionHeaderStyle}>Cash Movement</div>
-
-            <div style={fieldWrap}>
-              <label style={labelStyle} htmlFor="cash_sale">
-                Cash Sale <span style={{ color: "#B3261E" }}>*</span>
-              </label>
-              <input
-                id="cash_sale"
-                style={inputStyle(fieldErrors.cash_sale)}
-                type="text" inputMode="decimal"
-                value={fields.cash_sale} placeholder="0"
-                onChange={(e) => handleFieldChange("cash_sale", e.target.value)}
-              />
-              {fieldErrors.cash_sale && (
-                <div style={{ fontSize: 11, color: "#B3261E", marginTop: 3 }}>{fieldErrors.cash_sale}</div>
-              )}
-            </div>
-
-            <div style={twoCol}>
-              {([ ["campaign_float_cash", "Campaign Float"], ["expenses", "Expenses"] ] as const).map(([k, lbl]) => (
-                <div key={k} style={fieldWrap}>
-                  <label style={labelStyle}>{lbl}</label>
-                  <input style={inputStyle()} type="text" inputMode="decimal"
-                    value={fields[k]} placeholder="0"
-                    onChange={(e) => handleFieldChange(k, e.target.value)} />
-                </div>
-              ))}
-            </div>
-
-            <div style={twoCol}>
-              {([ ["other_income", "Other Income"], ["deposit", "Deposit"] ] as const).map(([k, lbl]) => (
-                <div key={k} style={fieldWrap}>
-                  <label style={labelStyle}>{lbl}</label>
-                  <input style={inputStyle()} type="text" inputMode="decimal"
-                    value={fields[k]} placeholder="0"
-                    onChange={(e) => handleFieldChange(k, e.target.value)} />
-                </div>
-              ))}
-            </div>
-
-            {/* Card Sales */}
-            <div style={sectionHeaderStyle}>Card Sales</div>
-            <div style={twoCol}>
-              {([ ["allied_bank_cc_sale", "Allied Bank CC"], ["hbl_cc_sale", "HBL CC"] ] as const).map(([k, lbl]) => (
-                <div key={k} style={fieldWrap}>
-                  <label style={labelStyle}>{lbl}</label>
-                  <input style={inputStyle()} type="text" inputMode="decimal"
-                    value={fields[k]} placeholder="0"
-                    onChange={(e) => handleFieldChange(k, e.target.value)} />
-                </div>
-              ))}
-            </div>
-
-            {/* Other Sales */}
-            <div style={sectionHeaderStyle}>Other Sales</div>
-            <div style={twoCol}>
-              {([ ["gift_karte", "Gift Karte"], ["gift_vouchers", "Gift Vouchers"] ] as const).map(([k, lbl]) => (
-                <div key={k} style={fieldWrap}>
-                  <label style={labelStyle}>{lbl}</label>
-                  <input style={inputStyle()} type="text" inputMode="decimal"
-                    value={fields[k]} placeholder="0"
-                    onChange={(e) => handleFieldChange(k, e.target.value)} />
-                </div>
-              ))}
-            </div>
-            <div style={fieldWrap}>
-              <label style={labelStyle}>Credit Notes Issued</label>
-              <input style={inputStyle()} type="text" inputMode="decimal"
-                value={fields.credit_notes_issue} placeholder="0"
-                onChange={(e) => handleFieldChange("credit_notes_issue", e.target.value)} />
-            </div>
-
-            {/* Calculated Totals */}
-            <div style={sectionHeaderStyle}>Calculated Totals</div>
-            <div style={twoCol}>
-              <div style={fieldWrap}>
-                <span style={autoBadge}>AUTO</span>
-                <label style={labelStyle}>Total Card Sale</label>
-                <input style={inputStyle(undefined, true)} readOnly type="text"
-                  value={totalsLoading ? "…" : formatPKR(totals.total_credit_card_sale)} />
-              </div>
-              <div style={fieldWrap}>
-                <span style={autoBadge}>AUTO</span>
-                <label style={labelStyle}>Total Sale</label>
-                <input style={inputStyle(undefined, true)} readOnly type="text"
-                  value={totalsLoading ? "…" : formatPKR(totals.total_sale)} />
-              </div>
-            </div>
-            <div style={fieldWrap}>
-              <span style={autoBadge}>AUTO</span>
-              <label style={labelStyle}>Net Cash Movement</label>
-              <input style={inputStyle(undefined, true)} readOnly type="text"
-                value={totalsLoading ? "…" : formatPKR(totals.net_cash_movement)} />
-              {totals.opening_balance != null && (
-                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4, lineHeight: 1.5 }}>
-                  Opening {formatPKR(totals.opening_balance)} + Net {formatPKR(totals.net_cash_movement)} = Closing {formatPKR(totals.closing_balance)}
-                </div>
-              )}
-            </div>
-
-            {/* Remarks */}
-            <div style={sectionHeaderStyle}>Remarks</div>
-            <div style={fieldWrap}>
-              <textarea
-                style={{ ...inputStyle(), height: 76, resize: "none", fontSize: 14, lineHeight: "1.45" }}
-                value={fields.remarks}
-                placeholder="Optional notes for today's trading…"
-                onChange={(e) => handleFieldChange("remarks", e.target.value)}
-              />
-            </div>
-
-            <button
-              onClick={() => { if (validate()) setScreen("confirm"); }}
-              disabled={!store.id}
-              style={{
-                width: "100%", padding: 15, borderRadius: 12, background: "#0F1720",
-                color: "#fff", fontSize: 15, fontWeight: 800, border: "none",
-                cursor: store.id ? "pointer" : "not-allowed",
-                fontFamily: "inherit", marginTop: 4,
-                opacity: store.id ? 1 : 0.5,
-              }}
-            >
-              {isEditMode ? "Review & Update →" : "Review & Submit →"}
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Confirmation bottom sheet */}
+      {/* Confirmation bottom sheet — full-screen overlay, outside narrow main */}
       {screen === "confirm" && (
         <div style={{
           position: "fixed", inset: 0, background: "rgba(15,23,32,.65)", zIndex: 50,
@@ -912,6 +938,6 @@ export default function DailySalesPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
