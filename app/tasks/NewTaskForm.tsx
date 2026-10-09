@@ -79,6 +79,18 @@ const kickerStyle: React.CSSProperties = {
   display: "block",
 };
 
+// Returns the current Pakistan Standard Time as HH:MM.
+// Used to auto-stamp due_time when a task is created.
+function getPKTTime(): string {
+  return new Date().toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Karachi",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+
 export default function NewTaskForm({
   onCreated,
   prefillDescription = "",
@@ -157,7 +169,7 @@ export default function NewTaskForm({
   const [priority, setPriority] = useState(prefillPriority || "Normal");
   const [status, setStatus] = useState("Not Started");
   const [dueDate, setDueDate] = useState(prefillDueDate || "");
-  const [dueTime, setDueTime] = useState(""); // optional HH:MM — combined with due_date for escalation
+  const [dueTime, setDueTime] = useState(() => getPKTTime()); // auto-set to current PKT time at creation
   // Multi-owner: Khuram wants the same task assignable to more than one
   // person, each seeing it as their own — not just a heads-up. First
   // person ticked stays the "primary" owner for every existing report/
@@ -284,7 +296,7 @@ export default function NewTaskForm({
       toast.show("Due date is required — every task must have a deadline.", "error");
       return;
     }
-    // dueTime is optional — the API defaults to 17:00 when omitted.
+    // dueTime is auto-set to PKT creation time; also stamped server-side by trigger.
     if (!companyTouched || !companyId) {
       toast.show("Please choose a Company.", "error");
       return;
@@ -319,7 +331,7 @@ export default function NewTaskForm({
         priority,
         status,
         dueDate,
-        dueTime: dueTime || null,
+        dueTime: dueTime || getPKTTime(),
         assignedTo,
         assignedToEmail,
         assignedToMemberId: primaryMember.id,
@@ -687,7 +699,7 @@ export default function NewTaskForm({
           </label>
 
           <label>
-            <span style={kickerStyle}>Due time <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional — defaults to 17:00)</span></span>
+            <span style={kickerStyle}>Due time <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(auto-set to assignment time — PKT)</span></span>
             <input
               type="time"
               style={{ ...inputStyle, marginTop: "4px" }}
