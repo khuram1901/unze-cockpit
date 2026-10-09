@@ -16,6 +16,8 @@ import { createClient } from "@supabase/supabase-js";
 import { requireAuth } from "../../../lib/api-auth";
 import { createServiceClient } from "../../../lib/supabase-server";
 
+const ADMIN_EMAILS = /k\.saleem@unzegroup\.com|kamran@unze\.co\.uk/i;
+
 function userClient(authHeader: string) {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,24 +41,27 @@ export async function GET(request: NextRequest) {
   // Service client: list all stores, then join opening balances
   const db = createServiceClient();
 
-  // Check widget via service client + members lookup
-  const { data: member } = await db
-    .from("members")
-    .select("id")
-    .eq("email", auth.email)
-    .maybeSingle();
+  // Admin/CEO bypass — always allowed (widget_overrides rows were deleted in migration 258)
+  if (!ADMIN_EMAILS.test(auth.email ?? "")) {
+    // Non-admin: check widget via members + member_widget_overrides
+    const { data: member } = await db
+      .from("members")
+      .select("id")
+      .eq("email", auth.email)
+      .maybeSingle();
 
-  if (!member) return Response.json({ error: "Forbidden" }, { status: 403 });
+    if (!member) return Response.json({ error: "Forbidden" }, { status: 403 });
 
-  const { data: widgetRow } = await db
-    .from("member_widget_overrides")
-    .select("visible")
-    .eq("member_id", member.id)
-    .eq("widget_key", "imperial.retail_sales")
-    .maybeSingle();
+    const { data: widgetRow } = await db
+      .from("member_widget_overrides")
+      .select("visible")
+      .eq("member_id", member.id)
+      .eq("widget_key", "imperial.retail_sales")
+      .maybeSingle();
 
-  if (!widgetRow?.visible) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+    if (!widgetRow?.visible) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
