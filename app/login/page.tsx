@@ -99,7 +99,7 @@ function LoginPageInner() {
     setLoading(true);
     setMessage("");
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setLoading(false);
@@ -115,6 +115,16 @@ function LoginPageInner() {
         localStorage.removeItem("unze:keep-signed-in");
       }
     } catch { /* private mode */ }
+
+    // Store users (store###@unze.co.uk) are not in the members table --
+    // detect them early and send them directly to the daily-sales page.
+    const isStoreUser =
+      signInData?.user?.app_metadata?.store_user === true ||
+      /^store\d{3}@/i.test(email);
+    if (isStoreUser) {
+      router.push("/daily-sales");
+      return;
+    }
 
     // Session is persisted via Supabase's own localStorage mechanism.
     // Supabase JS v2 re-reads from storage on every getSession() call, so
