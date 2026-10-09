@@ -71,7 +71,7 @@ function EscalationMap() {
   const mapStyle: React.CSSProperties = {
     background: "var(--surface, #f8fafc)",
     border: "1px solid var(--border, #e2e8f0)",
-    borderRadius: RADII.card,
+    borderRadius: RADII.CARD,
     padding: "20px 24px",
     marginBottom: 24,
   };
@@ -125,7 +125,7 @@ function KpiTile({ label, count, colour, bg }: { label: string; count: number; c
     <div style={{
       background: bg,
       border: `1px solid ${colour}30`,
-      borderRadius: RADII.card,
+      borderRadius: RADII.CARD,
       padding: "16px 20px",
       flex: 1,
       minWidth: 120,
@@ -293,7 +293,7 @@ function EscalationsPageClient() {
           padding: 48, textAlign: "center",
           background: "var(--surface, #f8fafc)",
           border: "1px solid var(--border, #e2e8f0)",
-          borderRadius: RADII.card,
+          borderRadius: RADII.CARD,
           color: "var(--text-secondary, #64748b)",
         }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
@@ -301,7 +301,7 @@ function EscalationsPageClient() {
           <div style={{ fontSize: 13, marginTop: 4 }}>Everything in your chain is within its grace window.</div>
         </div>
       ) : (
-        <div style={{ overflowX: "auto", borderRadius: RADII.card, border: "1px solid var(--border, #e2e8f0)" }}>
+        <div style={{ overflowX: "auto", borderRadius: RADII.CARD, border: "1px solid var(--border, #e2e8f0)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--bg, #fff)" }}>
             <thead>
               <tr>
