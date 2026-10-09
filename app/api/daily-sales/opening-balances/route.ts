@@ -1,7 +1,7 @@
 /**
  * GET  /api/daily-sales/opening-balances?year=2026&month=10
  *   Returns all stores + their opening balance for the requested month.
- *   Requires has_widget('imperial.retail_sales').
+ *   Requires has_widget('imperial.retail_sales') OR member role Admin/CEO.
  *
  * POST /api/daily-sales/opening-balances
  *   Body: { store_id, amount, opening_date, notes? }
@@ -41,26 +41,33 @@ export async function GET(request: NextRequest) {
   // Service client: list all stores, then join opening balances
   const db = createServiceClient();
 
-  // Admin/CEO bypass — always allowed (widget_overrides rows were deleted in migration 258)
+  // Access check: hardcoded CEO/admin emails bypass widget check for resilience;
+  // members with role Admin or CEO also bypass (fixes: any admin email not in the
+  // hardcoded list would otherwise get 403 and see an empty store dropdown).
   if (!ADMIN_EMAILS.test(auth.email ?? "")) {
-    // Non-admin: check widget via members + member_widget_overrides
+    // Look up member — fetch role as well for Admin/CEO bypass
     const { data: member } = await db
       .from("members")
-      .select("id")
+      .select("id, role")
       .eq("email", auth.email)
       .maybeSingle();
 
     if (!member) return Response.json({ error: "Forbidden" }, { status: 403 });
 
-    const { data: widgetRow } = await db
-      .from("member_widget_overrides")
-      .select("visible")
-      .eq("member_id", member.id)
-      .eq("widget_key", "imperial.retail_sales")
-      .maybeSingle();
+    // Admin or CEO members skip the widget check
+    const isAdminRole = member.role === "Admin" || member.role === "CEO";
 
-    if (!widgetRow?.visible) {
-      return Response.json({ error: "Forbidden" }, { status: 403 });
+    if (!isAdminRole) {
+      const { data: widgetRow } = await db
+        .from("member_widget_overrides")
+        .select("visible")
+        .eq("member_id", member.id)
+        .eq("widget_key", "imperial.retail_sales")
+        .maybeSingle();
+
+      if (!widgetRow?.visible) {
+        return Response.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
   }
 
