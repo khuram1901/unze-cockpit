@@ -160,9 +160,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Monthly/Quarterly were removed as separate tabs — folded into the
   // periodFilter dropdown below instead, per Khuram.
   const [timeView, setTimeView] = useState<"list" | "board" | "tree" | "timeline" | "team" | "recurring">("list");
-  const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "exception" | "submitted">(
-    filterFromUrl === "overdue" || filterFromUrl === "waiting" || filterFromUrl === "exception" || filterFromUrl === "submitted" ? filterFromUrl : "all"
+  const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "exception" | "submitted" | "escalated">(
+    filterFromUrl === "overdue" || filterFromUrl === "waiting" || filterFromUrl === "exception" || filterFromUrl === "submitted" || filterFromUrl === "escalated" ? filterFromUrl : "all"
   );
+  // Escalated task IDs — populated via RPC when the escalated filter is active.
+  const [escalatedIds, setEscalatedIds] = useState<Set<string>>(new Set());
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [companies, setCompanies] = useState<CompanyLite[]>([]);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
@@ -288,7 +290,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     if (error) {
       setErrorMsg(error.message);
     } else {
-      // Set email and tasks together so the Mine filter never renders
+      // Load escalated task IDs when the escalated filter is active (from URL deep-link).
+  useEffect(() => {
+    if (filter !== "escalated") return;
+    supabase.rpc("get_my_escalated_tasks").then(({ data }) => {
+      if (data) setEscalatedIds(new Set((data as { task_id: string }[]).map((r) => r.task_id)));
+    });
+  }, [filter]);
+
+  // Set email and tasks together so the Mine filter never renders
       // with tasks loaded but myEmail still null (which shows an empty list).
       setMyEmail(email);
       setTasks(data || []);
@@ -731,6 +741,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     ? scopedTasks
     : scopedTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const overdueTasks = allOpen.filter(isOverdue);
+  const escalatedTasks = allOpen.filter((t) => escalatedIds.has(t.id));
   const waitingReply = allOpen.filter((t) => t.status === "Waiting Reply");
   const exceptionTasks = allOpen.filter((t) => !!t.explanation_required);
   const completedAll = scopedTasks.filter((t) => t.status === "Completed");
@@ -864,7 +875,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // same per-department filter (all/overdue/waiting pill) the JSX below
   // applies per node — so "Select all" ticks exactly what's on screen.
   const treeVisibleIds = deptNodes.flatMap((d) => {
-    const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+    const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : filter === "escalated" ? d.tasks.filter((t) => escalatedIds.has(t.id)) : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
     return deptFiltered.map((t) => t.id);
   });
 
@@ -889,6 +900,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   else if (filter === "waiting") filteredTasks = waitingReply;
   else if (filter === "exception") filteredTasks = exceptionTasks;
   else if (filter === "submitted") filteredTasks = allOpen.filter((t) => t.status === "Submitted");
+  else if (filter === "escalated") filteredTasks = escalatedTasks;
 
   // ── List view (default landing view) flat filter ──
   // List view normally groups myTasksSource into due-date buckets
@@ -908,6 +920,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     : filter === "overdue" ? myTasksSource.filter(isOverdue)
     : filter === "waiting" ? myTasksSource.filter((t) => t.status === "Waiting Reply")
     : filter === "exception" ? myTasksSource.filter((t) => !!t.explanation_required)
+    : filter === "escalated" ? scopedTasks.filter((t) => escalatedIds.has(t.id))
     : myTasksSource.filter((t) => t.status === "Submitted");
 
   // Pill counts shown next to "Overdue"/"Waiting"/"Needs explanation" must
@@ -1648,6 +1661,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
           {/* Row 2: filter pills + scope toggle (wraps on mobile) */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+            {filter === "escalated" && (
+              <button onClick={() => setFilter("all")} style={{
+                backgroundColor: COLOURS.RED, color: "white",
+                border: `1px solid ${COLOURS.RED}`,
+                borderRadius: RADII.PILL, padding: isMobile ? "7px 10px" : "6px 12px", fontSize: isMobile ? "12px" : "13px", fontWeight: 600, cursor: "pointer",
+              }}>
+                ⚠ Escalated ({escalatedIds.size}) ×
+              </button>
+            )}
             {(["all", "overdue", "waiting", "exception"] as const).map((f) => (
               <button key={f} onClick={() => { setFilter(f); setPaFilter(false); }} style={{
                 backgroundColor: filter === f ? COLOURS.NAVY : COLOURS.CARD,
@@ -1886,7 +1908,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks to show.</div>
           ) : deptNodes.map((d) => {
             const isDeptCollapsed = !expandedDepts.has(d.dept);
-            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : filter === "escalated" ? d.tasks.filter((t) => escalatedIds.has(t.id)) : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
             if (deptFiltered.length === 0 && filter !== "all") return null;
 
             const personGroups = new Map<string, Task[]>();

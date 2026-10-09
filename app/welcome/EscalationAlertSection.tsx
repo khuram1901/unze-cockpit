@@ -113,51 +113,57 @@ export default function EscalationAlertSection() {
         </div>
       </div>
 
-      {/* Task rows — show up to 5 */}
+      {/* Task rows — show up to 5, each row links to that task */}
       <div style={{ background: CARD_ALT }}>
         {tasks.slice(0, 5).map((t) => (
-          <div
+          <Link
             key={t.task_id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "8px 16px",
-              borderBottom: `1px solid ${HAIRLINE}`,
-              gap: "8px",
-            }}
+            href={`/tasks?task=${t.task_id}`}
+            style={{ textDecoration: "none", display: "block" }}
           >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                color: NAVY,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}>
-                {t.description}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 16px",
+                borderBottom: `1px solid ${HAIRLINE}`,
+                gap: "8px",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  color: NAVY,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}>
+                  {t.description}
+                </div>
+                <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px" }}>
+                  {t.assigned_to} · {t.department ?? "—"}
+                </div>
               </div>
-              <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px" }}>
-                {t.assigned_to} · {t.department ?? "—"}
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                <span style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: t.escalation_level === 3 ? AMBER : RED,
+                  background: t.escalation_level === 3 ? AMBER_SOFT : RED_SOFT,
+                  borderRadius: "99px",
+                  padding: "2px 7px",
+                }}>
+                  L{t.escalation_level}
+                </span>
+                <span style={{ fontSize: "11px", color: RED, fontWeight: 600 }}>
+                  {Math.round(t.hours_overdue)}h overdue
+                </span>
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-              <span style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                color: t.escalation_level === 3 ? AMBER : RED,
-                background: t.escalation_level === 3 ? AMBER_SOFT : RED_SOFT,
-                borderRadius: "99px",
-                padding: "2px 7px",
-              }}>
-                L{t.escalation_level}
-              </span>
-              <span style={{ fontSize: "11px", color: RED, fontWeight: 600 }}>
-                {Math.round(t.hours_overdue)}h overdue
-              </span>
-            </div>
-          </div>
+          </Link>
         ))}
         {tasks.length > 5 && (
           <div style={{ padding: "8px 16px", fontSize: "12px", color: SLATE }}>
@@ -166,7 +172,7 @@ export default function EscalationAlertSection() {
         )}
       </div>
 
-      {/* Footer */}
+      {/* Footer — links to /tasks?filter=escalated to show only escalated tasks */}
       <div style={{
         padding: "8px 16px",
         background: RED_SOFT,
@@ -174,10 +180,10 @@ export default function EscalationAlertSection() {
         textAlign: "right",
       }}>
         <Link
-          href="/tasks"
+          href="/tasks?filter=escalated"
           style={{ fontSize: "12px", fontWeight: 700, color: RED, textDecoration: "none" }}
         >
-          View all tasks →
+          View all escalated tasks →
         </Link>
       </div>
     </div>

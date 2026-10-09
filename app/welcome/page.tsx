@@ -847,9 +847,9 @@ function CeoStatStrip({ data }: { data: WelcomeData }) {
         </div>
       </div>
 
-      {/* Escalations KPI — clickable, links to /tasks */}
+      {/* Escalations KPI — clickable, links to /tasks?filter=escalated */}
       <Link
-        href="/tasks"
+        href="/tasks?filter=escalated"
         style={{ ...(showFlowHCM ? BLOCK_SEP : {}), textDecoration: "none" }}
       >
         <div style={LABEL_STYLE}>Escalations</div>
