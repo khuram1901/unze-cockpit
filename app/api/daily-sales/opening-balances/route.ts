@@ -65,6 +65,9 @@ export async function GET(request: NextRequest) {
   }
 
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+  const nextMonthStart = month === 12
+    ? `${year + 1}-01-01`
+    : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
   const { data: stores, error: storesErr } = await db
     .from("stores")
@@ -76,8 +79,9 @@ export async function GET(request: NextRequest) {
 
   const { data: balances, error: balErr } = await db
     .from("store_opening_balances")
-    .select("store_id, amount, opening_date, notes, created_at")
-    .eq("month_start", monthStart);
+    .select("store_id, amount, opening_date, notes, set_at")
+    .gte("opening_date", monthStart)
+    .lt("opening_date", nextMonthStart);
 
   if (balErr) return Response.json({ error: balErr.message }, { status: 500 });
 
