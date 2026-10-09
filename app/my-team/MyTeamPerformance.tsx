@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { authFetch } from "../lib/supabase";
+import { authFetch, supabase } from "../lib/supabase";
 import { COLOURS, RADII, SectionTitle, SkeletonRows } from "../lib/SharedUI";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -156,6 +156,7 @@ export default function MyTeamPerformance() {
   const [data, setData]       = useState<TeamData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const [escalationCount, setEscalationCount] = useState<number | null>(null);
 
   const load = useCallback(async (d: number) => {
     setLoading(true);
@@ -177,6 +178,11 @@ export default function MyTeamPerformance() {
   }, []);
 
   useEffect(() => { load(days); }, [days, load]);
+
+  useEffect(() => {
+    supabase.rpc("get_my_escalated_tasks")
+      .then(({ data }) => setEscalationCount((data ?? []).length));
+  }, []);
 
   const k  = data?.kpis;
   const b  = data?.task_breakdown;
@@ -238,6 +244,11 @@ export default function MyTeamPerformance() {
           color={(k?.overdue_count ?? 0) > 0 ? "#B3261E" : COLOURS.GREEN} />
         <KpiCard label="Stuck"        value={loading ? "…" : k?.stuck_count ?? "—"}
           color={(k?.stuck_count ?? 0) > 0 ? "#B4791F" : COLOURS.GREEN} />
+        <a href="/escalations" style={{ textDecoration: "none" }}>
+          <KpiCard label="Escalated" value={escalationCount === null ? "…" : escalationCount}
+            color={(escalationCount ?? 0) > 0 ? "#B3261E" : COLOURS.GREEN}
+            sub={(escalationCount ?? 0) > 0 ? "tap to review" : "all clear"} />
+        </a>
       </div>
 
       {/* Task breakdown tiles */}
