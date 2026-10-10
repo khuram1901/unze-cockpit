@@ -190,11 +190,11 @@ export default function MyTeamPerformance() {
   const effS: StatusKey = eff >= 65 ? "star" : eff >= 55 ? "on_track" : eff >= 30 ? "at_risk" : "needs_help";
 
   const breakdownTiles = b ? [
-    { label: "On time",   value: b.on_time,   color: "#0F7B5F" },
-    { label: "Submitted", value: b.submitted,  color: "#3B4CCA" },
-    { label: "Overdue",   value: b.overdue,    color: "#B3261E" },
-    { label: "Stuck",     value: b.stuck,      color: "#B4791F" },
-    { label: "Running",   value: b.running,    color: "#64748B" },
+    { label: "On time",   value: b.on_time,   color: "#0F7B5F", href: undefined },
+    { label: "Submitted", value: b.submitted,  color: "#3B4CCA", href: "/tasks?filter=submitted" },
+    { label: "Overdue",   value: b.overdue,    color: "#B3261E", href: "/tasks?filter=overdue" },
+    { label: "Stuck",     value: b.stuck,      color: "#B4791F", href: "/tasks?status=Stuck" },
+    { label: "Running",   value: b.running,    color: "#64748B", href: "/tasks?status=In Progress" },
   ] : [];
 
   return (
@@ -236,14 +236,22 @@ export default function MyTeamPerformance() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "10px", marginBottom: "16px" }}>
         <KpiCard label="Efficiency"  value={loading ? "…" : eff}
           color={STATUS_CONFIG[effS].color} sub={STATUS_CONFIG[effS].label} />
-        <KpiCard label="Total tasks"  value={loading ? "…" : k?.total_tasks ?? "—"}
-          sub={k?.self_gen_count ? `${k.self_gen_count} self-generated` : undefined} />
+        <a href="/tasks" style={{ textDecoration: "none" }}>
+          <KpiCard label="Total tasks"  value={loading ? "…" : k?.total_tasks ?? "—"}
+            sub={k?.self_gen_count ? `${k.self_gen_count} self-generated` : undefined} />
+        </a>
         <KpiCard label="On time"      value={loading ? "…" : k?.on_time_count ?? "—"}
           color="#0F7B5F" />
-        <KpiCard label="Overdue"      value={loading ? "…" : k?.overdue_count ?? "—"}
-          color={(k?.overdue_count ?? 0) > 0 ? "#B3261E" : COLOURS.GREEN} />
-        <KpiCard label="Stuck"        value={loading ? "…" : k?.stuck_count ?? "—"}
-          color={(k?.stuck_count ?? 0) > 0 ? "#B4791F" : COLOURS.GREEN} />
+        <a href="/tasks?filter=overdue" style={{ textDecoration: "none" }}>
+          <KpiCard label="Overdue"      value={loading ? "…" : k?.overdue_count ?? "—"}
+            color={(k?.overdue_count ?? 0) > 0 ? "#B3261E" : COLOURS.GREEN}
+            sub={(k?.overdue_count ?? 0) > 0 ? "tap to review" : undefined} />
+        </a>
+        <a href="/tasks?status=Stuck" style={{ textDecoration: "none" }}>
+          <KpiCard label="Stuck"        value={loading ? "…" : k?.stuck_count ?? "—"}
+            color={(k?.stuck_count ?? 0) > 0 ? "#B4791F" : COLOURS.GREEN}
+            sub={(k?.stuck_count ?? 0) > 0 ? "tap to review" : undefined} />
+        </a>
         <a href="/escalations" style={{ textDecoration: "none" }}>
           <KpiCard label="Escalated" value={escalationCount === null ? "…" : escalationCount}
             color={(escalationCount ?? 0) > 0 ? "#B3261E" : COLOURS.GREEN}
@@ -254,12 +262,17 @@ export default function MyTeamPerformance() {
       {/* Task breakdown tiles */}
       {!loading && b && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: "8px", marginBottom: "16px" }}>
-          {breakdownTiles.map(t => (
-            <div key={t.label} style={card({ padding: "12px 14px", textAlign: "center" })}>
-              <div style={{ fontSize: "22px", fontWeight: 700, color: t.color }}>{t.value}</div>
-              <div style={{ fontSize: "10px", color: COLOURS.SLATE, marginTop: "3px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t.label}</div>
-            </div>
-          ))}
+          {breakdownTiles.map(t => {
+            const inner = (
+              <div key={t.label} style={card({ padding: "12px 14px", textAlign: "center", cursor: t.href ? "pointer" : "default" })}>
+                <div style={{ fontSize: "22px", fontWeight: 700, color: t.color }}>{t.value}</div>
+                <div style={{ fontSize: "10px", color: COLOURS.SLATE, marginTop: "3px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t.label}</div>
+              </div>
+            );
+            return t.href
+              ? <a key={t.label} href={t.href} style={{ textDecoration: "none" }}>{inner}</a>
+              : inner;
+          })}
         </div>
       )}
 

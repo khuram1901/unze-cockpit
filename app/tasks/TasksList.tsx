@@ -147,6 +147,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // matching filter state below.
   const filterFromUrl = searchParams.get("filter");
   const scopeFromUrl = searchParams.get("scope");
+  const statusFromUrl = searchParams.get("status");
   const toast = useToast();
   const dlg = useConfirm();
 
@@ -196,7 +197,10 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Completed/Cancelled) — separate from the all/overdue/waiting quick
   // pills below, and the one way to see Completed/Cancelled tasks in the
   // main list/board/timeline views, which otherwise always hide them.
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const VALID_STATUSES = ["Not Started","In Progress","Waiting Reply","Stuck","Submitted","Completed"];
+  const [statusFilter, setStatusFilter] = useState<string>(
+    statusFromUrl && VALID_STATUSES.includes(statusFromUrl) ? statusFromUrl : "all"
+  );
   const [paFilter, setPaFilter] = useState(false);
   const [listSort, setListSort] = useState<{ col: "created_at" | "due_date" | "status" | "assigned_to"; dir: "asc" | "desc" }>({ col: "due_date", dir: "asc" });
   const [searchQuery, setSearchQuery] = useState("");
