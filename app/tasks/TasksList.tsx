@@ -290,15 +290,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     if (error) {
       setErrorMsg(error.message);
     } else {
-      // Load escalated task IDs when the escalated filter is active (from URL deep-link).
-  useEffect(() => {
-    if (filter !== "escalated") return;
-    supabase.rpc("get_my_escalated_tasks").then(({ data }) => {
-      if (data) setEscalatedIds(new Set((data as { task_id: string }[]).map((r) => r.task_id)));
-    });
-  }, [filter]);
-
-  // Set email and tasks together so the Mine filter never renders
+      // Set email and tasks together so the Mine filter never renders
       // with tasks loaded but myEmail still null (which shows an empty list).
       setMyEmail(email);
       setTasks(data || []);
@@ -367,6 +359,16 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       setEmailToCode(codeMap);
     });
   }, []);
+
+  // Load escalated task IDs when the escalated filter is active (e.g. from URL deep-link or KPI card).
+  // Must be a top-level useEffect — React's Rules of Hooks forbid calling hooks inside async functions.
+  useEffect(() => {
+    if (filter !== "escalated") return;
+    supabase.rpc("get_my_escalated_tasks").then(({ data }) => {
+      if (data) setEscalatedIds(new Set((data as { task_id: string }[]).map((r) => r.task_id)));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
   // Re-run the KPI RPC whenever the Company filter changes, so the KPI
   // tiles always match what the Company dropdown shows. (The monthly/
