@@ -295,15 +295,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     if (error) {
       setErrorMsg(error.message);
     } else {
-      // Load escalated task IDs when the escalated filter is active (from URL deep-link).
-  useEffect(() => {
-    if (filter !== "escalated") return;
-    supabase.rpc("get_my_escalated_tasks").then(({ data }) => {
-      if (data) setEscalatedIds(new Set((data as { task_id: string }[]).map((r) => r.task_id)));
-    });
-  }, [filter]);
-
-  // Set email and tasks together so the Mine filter never renders
+      // Set email and tasks together so the Mine filter never renders
       // with tasks loaded but myEmail still null (which shows an empty list).
       setMyEmail(email);
       setTasks(data || []);
