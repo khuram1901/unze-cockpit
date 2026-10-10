@@ -132,6 +132,7 @@ export default function QuickAddTask({
   const [dueDate,     setDueDate]     = useState("");
   const [showPicker,  setShowPicker]  = useState(false);
   const [saving,      setSaving]      = useState(false);
+  const [deptFilter,  setDeptFilter]  = useState("");
 
   // Voice state
   const [voicePhase,     setVoicePhase]     = useState<VoicePhase>("idle");
@@ -237,9 +238,16 @@ export default function QuickAddTask({
   }, []);
 
   // ── Derived ─────────────────────────────────────────────────────────────
-  const filtered: Member[] = search
-    ? members.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()))
-    : members.slice(0, 8);
+  // Unique sorted department list for the filter dropdown
+  const departments = Array.from(
+    new Set(members.map((m) => m.department).filter((d): d is string => !!d))
+  ).sort();
+
+  const filtered: Member[] = (() => {
+    let pool = deptFilter ? members.filter((m) => m.department === deptFilter) : members;
+    if (search) pool = pool.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()));
+    return search || deptFilter ? pool : pool.slice(0, 8);
+  })();
 
   // Resolve company: prefer task_default_company_id (migration 183),
   // fall back to business_unit short-code match, then finally match against
@@ -547,6 +555,26 @@ export default function QuickAddTask({
             />
 
             {/* 2 · Assignee */}
+            {/* Department filter — narrows the assignee list */}
+            {departments.length > 0 && (
+              <select
+                value={deptFilter}
+                onChange={(e) => { setDeptFilter(e.target.value); setSearch(""); setDropIdx(0); }}
+                style={{
+                  display: "block", width: "100%", padding: "7px 10px",
+                  border: `1px solid ${deptFilter ? COLOURS.NAVY + "55" : COLOURS.HAIRLINE}`,
+                  borderRadius: RADII.SM, fontSize: "13px",
+                  color: deptFilter ? COLOURS.NAVY : COLOURS.SLATE,
+                  backgroundColor: COLOURS.CARD, boxSizing: "border-box",
+                  outline: "none", fontFamily: "inherit", cursor: "pointer",
+                }}
+              >
+                <option value="">All departments</option>
+                {departments.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            )}
             <div ref={wrapperRef} style={{ position: "relative" }}>
               {selected ? (
                 <div style={{
