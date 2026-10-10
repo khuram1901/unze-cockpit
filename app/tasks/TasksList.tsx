@@ -148,6 +148,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const filterFromUrl = searchParams.get("filter");
   const scopeFromUrl = searchParams.get("scope");
   const statusFromUrl = searchParams.get("status");
+  const ownerFromUrl = searchParams.get("owner");
   const toast = useToast();
   const dlg = useConfirm();
 
@@ -179,7 +180,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">(scopeFromUrl === "everyone" ? "everyone" : "mine");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
-  const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [ownerFilter, setOwnerFilter] = useState<string>(ownerFromUrl ? ownerFromUrl.trim().replace(/\s+/g, " ") : "all");
   const [periodFilter, setPeriodFilter] = useState<"all" | "week" | "month" | "quarter">("all");
   // Filter panel used to be collapsed behind a "Filters" toggle button —
   // Khuram asked for that reverted, so the full dropdown row is always
