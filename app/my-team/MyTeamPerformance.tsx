@@ -332,18 +332,24 @@ export default function MyTeamPerformance() {
                     <td style={{ ...tdS, fontSize: "12px", color: COLOURS.SLATE }}>{e.department}</td>
                     {(() => {
                       const base = `/tasks?scope=everyone&owner=${encodeURIComponent(e.emp_name)}`;
-                      const lnk = (href: string, content: React.ReactNode, extra?: React.CSSProperties) => (
-                        <a href={href} style={{ textDecoration: "none", color: "inherit", display: "block", ...extra }}>
+                      const lnk = (href: string, content: React.ReactNode, tipText: string, extra?: React.CSSProperties) => (
+                        <a
+                          href={href}
+                          title={tipText}
+                          onMouseEnter={ev => { ev.currentTarget.style.textDecoration = "underline"; ev.currentTarget.style.opacity = "0.75"; }}
+                          onMouseLeave={ev => { ev.currentTarget.style.textDecoration = "none"; ev.currentTarget.style.opacity = "1"; }}
+                          style={{ textDecoration: "none", color: "inherit", display: "block", cursor: "pointer", ...extra }}
+                        >
                           {content}
                         </a>
                       );
                       return (
                         <>
-                          <td style={{ ...tdR, padding: 0 }}>{lnk(base, <span style={{ display: "block", padding: "10px 10px" }}>{e.total_tasks}</span>)}</td>
-                          <td style={{ ...tdR, padding: 0, color: "#0F7B5F" }}>{lnk(base, <span style={{ display: "block", padding: "10px 10px" }}>{e.on_time_count}</span>)}</td>
-                          <td style={{ ...tdR, padding: 0, color: "#3B4CCA" }}>{lnk(base, <span style={{ display: "block", padding: "10px 10px" }}>{e.self_gen_count}</span>)}</td>
-                          <td style={{ ...tdR, padding: 0 }}>{lnk(`${base}&filter=overdue`, <span style={{ display: "block", padding: "10px 10px", color: e.overdue_count > 0 ? "#B3261E" : COLOURS.SLATE, fontWeight: e.overdue_count > 0 ? 600 : 400 }}>{e.overdue_count}</span>)}</td>
-                          <td style={{ ...tdR, padding: 0 }}>{lnk(`${base}&status=Stuck`, <span style={{ display: "block", padding: "10px 10px", color: e.stuck_count > 0 ? "#B4791F" : COLOURS.SLATE }}>{e.stuck_count}</span>)}</td>
+                          <td style={{ ...tdR, padding: 0 }}>{lnk(base, <span style={{ display: "block", padding: "10px 10px" }}>{e.total_tasks}</span>, `View all tasks for ${e.emp_name}`)}</td>
+                          <td style={{ ...tdR, padding: 0, color: "#0F7B5F" }}>{lnk(`${base}&status=Completed`, <span style={{ display: "block", padding: "10px 10px" }}>{e.on_time_count}</span>, `View completed tasks for ${e.emp_name}`)}</td>
+                          <td style={{ ...tdR, padding: 0, color: "#3B4CCA" }}>{lnk(base, <span style={{ display: "block", padding: "10px 10px" }}>{e.self_gen_count}</span>, `View tasks for ${e.emp_name}`)}</td>
+                          <td style={{ ...tdR, padding: 0 }}>{lnk(`${base}&filter=overdue`, <span style={{ display: "block", padding: "10px 10px", color: e.overdue_count > 0 ? "#B3261E" : COLOURS.SLATE, fontWeight: e.overdue_count > 0 ? 600 : 400 }}>{e.overdue_count}</span>, `View overdue tasks for ${e.emp_name}`)}</td>
+                          <td style={{ ...tdR, padding: 0 }}>{lnk(`${base}&status=Stuck`, <span style={{ display: "block", padding: "10px 10px", color: e.stuck_count > 0 ? "#B4791F" : COLOURS.SLATE }}>{e.stuck_count}</span>, `View stuck tasks for ${e.emp_name}`)}</td>
                         </>
                       );
                     })()}
