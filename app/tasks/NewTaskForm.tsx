@@ -185,6 +185,7 @@ export default function NewTaskForm({
   const [subtasks, setSubtasks] = useState<SubtaskDraft[]>([]);
   const [subtaskInput, setSubtaskInput] = useState("");
   const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [assigneeDeptFilter, setAssigneeDeptFilter] = useState("");
 
   // Track which members were added via @mention so we can show them as pills
   // below the notes field. Adding via @mention also auto-ticks them in the
@@ -393,6 +394,7 @@ export default function NewTaskForm({
     setSubtaskInput("");
     setMentionedMemberIds([]);
     setAssigneeSearch("");
+    setAssigneeDeptFilter("");
 
     router.refresh();
     onCreated?.();
@@ -400,6 +402,11 @@ export default function NewTaskForm({
 
   const selectedMembers = assignedToIds.map((id) => members.find((m) => m.id === id)).filter((m): m is Member => !!m);
   const selectedOwner = departmentOwners.find((d) => d.department_name === project);
+
+  // Unique sorted list of departments from the loaded members — for the assignee dept filter
+  const assigneeDepartments = Array.from(
+    new Set(members.map((m) => m.department).filter((d): d is string => !!d))
+  ).sort();
 
   function toggleAssignee(id: string, checked: boolean) {
     setAssignedToIds((prev) => {
@@ -575,6 +582,24 @@ export default function NewTaskForm({
 
           <div>
             <span style={kickerStyle}>Assigned to — tick everyone this applies to; the first person ticked is the primary owner</span>
+            {/* Department filter — narrows the assignee list to one department */}
+            {assigneeDepartments.length > 0 && (
+              <select
+                value={assigneeDeptFilter}
+                onChange={(e) => { setAssigneeDeptFilter(e.target.value); setAssigneeSearch(""); }}
+                style={{
+                  ...inputStyle,
+                  marginTop: "6px",
+                  color: assigneeDeptFilter ? COLOURS.NAVY : COLOURS.SLATE,
+                  cursor: "pointer",
+                }}
+              >
+                <option value="">All departments</option>
+                {assigneeDepartments.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            )}
             <input
               type="text"
               placeholder="Search by name…"
@@ -588,18 +613,19 @@ export default function NewTaskForm({
               backgroundColor: COLOURS.CARD,
             }}>
               {(() => {
-                // Filter members by name search only (department filter removed — see comment inside)
+                // Filter members by department (if selected) and name search
                 const filtered = members.filter((m) => {
-                  // Filter only by name search — department is NOT used to filter assignees because
-                  // FlowHCM department names in members (e.g. "Retail Operations") differ from the
-                  // department_owners names (e.g. "Retail"), so filtering by dept silently excludes
-                  // most staff. The dept field on the task categorises the work, not who can do it.
+                  if (assigneeDeptFilter && m.department !== assigneeDeptFilter) return false;
                   return !assigneeSearch.trim() || m.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase());
                 });
                 if (filtered.length === 0) {
                   return (
                     <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>
-                      {assigneeSearch.trim() ? `No members match "${assigneeSearch}"` : "No members found."}
+                      {assigneeSearch.trim()
+                        ? `No members match "${assigneeSearch}"${assigneeDeptFilter ? ` in ${assigneeDeptFilter}` : ""}`
+                        : assigneeDeptFilter
+                          ? `No members in ${assigneeDeptFilter}`
+                          : "No members found."}
                     </span>
                   );
                 }
