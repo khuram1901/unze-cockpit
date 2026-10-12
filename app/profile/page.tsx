@@ -63,6 +63,7 @@ export default function ProfilePage() {
     notif_escalations: true,
     notif_meetings: true,
     notif_daily_digest: true,
+    notif_task_comment: true,
   });
   const [savingNotif, setSavingNotif] = useState(false);
 
@@ -96,7 +97,7 @@ export default function ProfilePage() {
     // Load member profile + notification preferences
     if (user?.email) {
       const { data: member } = await supabase.from("members")
-        .select("id, first_name, last_name, role, photo_url, notif_task_assigned, notif_task_overdue, notif_escalations, notif_meetings, notif_daily_digest")
+        .select("id, first_name, last_name, role, photo_url, notif_task_assigned, notif_task_overdue, notif_escalations, notif_meetings, notif_daily_digest, notif_task_comment")
         .eq("email", user.email).maybeSingle();
       if (member) {
         setMemberId(member.id);
@@ -117,6 +118,7 @@ export default function ProfilePage() {
           notif_escalations: member.notif_escalations ?? true,
           notif_meetings: member.notif_meetings ?? true,
           notif_daily_digest: member.notif_daily_digest ?? true,
+          notif_task_comment: member.notif_task_comment ?? true,
         });
       }
     }
@@ -865,6 +867,7 @@ export default function ProfilePage() {
                   { key: "notif_escalations" as const, label: "Escalations", desc: "KPI and receivable escalation alerts" },
                   { key: "notif_meetings" as const, label: "Meeting notifications", desc: "Meeting minutes and approvals" },
                   { key: "notif_daily_digest" as const, label: "Daily digest", desc: "Morning summary email" },
+                  { key: "notif_task_comment" as const, label: "Task comments", desc: "When someone comments on a task you're part of" },
                 ]).map((pref) => {
                   const isOn = notifPrefs[pref.key];
                   const otherOn = Object.entries(notifPrefs).filter(([k]) => k !== pref.key).some(([, v]) => v);

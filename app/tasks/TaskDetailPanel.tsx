@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
 import { COLOURS, RADII, FONT_MONO, useConfirm, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
@@ -233,16 +233,28 @@ export default function TaskDetailPanel({
     const { data: member } = email
       ? await supabase.from("members").select("name").eq("email", email).single()
       : { data: null };
+    const commenterName = member?.name || email || "Unknown";
     const { error } = await supabase.from("task_comments").insert({
       task_id: task.id,
       comment_text: text,
-      commented_by: member?.name || email || "Unknown",
+      commented_by: commenterName,
       commented_by_email: email || null,
     });
     setPostingComment(false);
     if (!error) {
       setNewComment("");
       loadComments();
+      // Fire-and-forget: notify task participants about the new comment.
+      // Errors here are non-fatal — the comment has already been saved.
+      authFetch(`/api/tasks/${task.id}/notify-comment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          commenterEmail: email || null,
+          commenterName,
+          commentText: text,
+        }),
+      }).catch(() => { /* non-fatal */ });
     }
   }
 
