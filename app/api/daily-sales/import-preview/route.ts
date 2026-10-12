@@ -85,10 +85,15 @@ export async function POST(request: NextRequest) {
   const result = data as RpcResult;
 
   // Create the import_batches record so daily_sales FK is satisfied on confirm.
-  // We do this after a successful preview (at least some valid rows).
+  // Must use service-role client here — import_batches has no INSERT RLS policy
+  // for authenticated users, so the anon-key+JWT client is silently blocked.
+  const sc = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
   const batchId = crypto.randomUUID();
   const yearMonth = `${body.year}-${String(body.month).padStart(2, "0")}-01`;
-  const { error: batchErr } = await uc
+  const { error: batchErr } = await sc
     .from("import_batches")
     .insert({
       id:          batchId,
@@ -101,13 +106,13 @@ export async function POST(request: NextRequest) {
     });
   if (batchErr) {
     console.error("import_batches insert failed:", batchErr.message);
-    // Non-fatal for preview — confirm will surface the FK error if it fails
+    return Response.json({ error: `Failed to create import batch: ${batchErr.message}` }, { status: 500 });
   }
 
   // Build the PreviewRow[] the client table expects.
   // Only valid rows appear in the preview; errors are shown separately.
   const preview = result.valid.map((v: RpcValid) => {
-    const row = body.rows[v.row - 1] as Record<string, unknown>; // row is 1-based
+    const row = filteredRows[v.row - 1] as Record<string, unknown>; // v.row is 1-based index into filteredRows sent to RPC
     return {
       sales_date:           String(row.sales_date   ?? ""),
       cash_sale:            Number(row.cash_sale    ?? 0),
