@@ -187,27 +187,25 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [summary, setSummary] = useState({ inserted: 0, updated: 0 });
   const [formulaErrors, setFormulaErrors] = useState<FormulaError[]>([]);
-  const [formulaWarningAcked, setFormulaWarningAcked] = useState(false);
+
   const fileRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(async (f: File) => {
     setFile(f);
     setParseError(null);
     setFormulaErrors([]);
-    setFormulaWarningAcked(false);
     setParsing(true);
     try {
       const rows = await parseExcel(f);
       setRawRows(rows);
 
-      // ── Client-side formula validation ──────────────────────────────────────
-      // Runs before sending to the server; detects Total CC / Total Sale /
-      // Net Cash columns in the Excel and checks them against components.
+      // ── Client-side formula validation (non-blocking) ─────────────────────────
+      // Detects Total CC / Total Sale / Net Cash columns and checks formulas.
+      // Non-blocking: shows warnings in preview step but does NOT stop the import.
       const fErrs = validateFormulas(rows);
       if (fErrs.length > 0) {
         setFormulaErrors(fErrs);
-        setParsing(false);
-        return; // block preview until user acknowledges
+        // Don't return — proceed to preview so user can review and confirm
       }
 
       // Call preview RPC — pass year/month so the API can validate dates are in range
@@ -230,28 +228,6 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
     }
   }, [storeId, selYear, selMonth]);
 
-  /** User acknowledged formula warnings — proceed to preview step anyway. */
-  const proceedDespiteWarnings = useCallback(async () => {
-    if (!rawRows.length) return;
-    setFormulaWarningAcked(true);
-    setFormulaErrors([]);
-    setParsing(true);
-    try {
-      const res = await apiFetch("/api/daily-sales/import-preview", {
-        method: "POST",
-        body: JSON.stringify({ store_id: storeId, year: selYear, month: selMonth, rows: rawRows }),
-      });
-      const json = await res.json() as { preview?: PreviewRow[]; batch_id?: string; error?: string };
-      if (!res.ok) { setParseError(json.error ?? "Preview failed"); return; }
-      setPreviewRows(json.preview ?? []);
-      setBatchId(json.batch_id ?? null);
-      setStep("preview");
-    } catch (e) {
-      setParseError(e instanceof Error ? e.message : "Preview failed");
-    } finally {
-      setParsing(false);
-    }
-  }, [rawRows, storeId, selYear, selMonth]);
 
   async function confirm() {
     if (!batchId) return;
@@ -429,49 +405,14 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
                 </div>
               )}
 
-              {/* ── Formula validation errors ── */}
-              {formulaErrors.length > 0 && !formulaWarningAcked && (
-                <div style={{ marginTop: 16, padding: "14px 16px", background: "#FFF8E6", border: "1px solid #F59E0B", borderRadius: 8 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "#B4791F", marginBottom: 8 }}>
-                    ⚠ Formula mismatch in {formulaErrors.length} row{formulaErrors.length !== 1 ? "s" : ""}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#92400E", marginBottom: 10 }}>
-                    The Excel file has total columns that don't match the component values. Please fix the file, or import anyway (the server will recalculate totals from the components).
-                  </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, marginBottom: 12 }}>
-                    <thead>
-                      <tr style={{ background: "#FEF3C7" }}>
-                        {["Row","Date","Column","Excel value","Expected"].map(h => (
-                          <th key={h} style={{ padding: "5px 8px", textAlign: h === "Row" ? "center" : "left", fontWeight: 600, color: "#92400E" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {formulaErrors.map((e, i) => (
-                        <tr key={i} style={{ borderBottom: "1px solid #FDE68A" }}>
-                          <td style={{ padding: "4px 8px", textAlign: "center", color: "#92400E" }}>{e.rowNum}</td>
-                          <td style={{ padding: "4px 8px", color: "#92400E" }}>{e.date || "—"}</td>
-                          <td style={{ padding: "4px 8px", fontWeight: 600, color: "#B45309" }}>{e.field}</td>
-                          <td style={{ padding: "4px 8px", color: "#B3261E" }}>{e.got.toLocaleString("en-PK")}</td>
-                          <td style={{ padding: "4px 8px", color: "#0F7B5F" }}>{e.expected.toLocaleString("en-PK")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button
-                      onClick={() => { setFormulaErrors([]); setFile(null); if (fileRef.current) fileRef.current.value = ""; }}
-                      style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "1px solid #F59E0B", background: "#fff", color: "#B45309", fontFamily: "inherit" }}
-                    >
-                      Fix file and re-upload
-                    </button>
-                    <button
-                      onClick={() => void proceedDespiteWarnings()}
-                      style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", background: "#B45309", color: "#fff", fontFamily: "inherit" }}
-                    >
-                      Import anyway (server recalculates)
-                    </button>
-                  </div>
+              {/* ── Formula validation notice (non-blocking) ── */}
+              {formulaErrors.length > 0 && (
+                <div style={{ marginTop: 16, padding: "10px 14px", background: "#FFF8E6", border: "1px solid #F59E0B", borderRadius: 8, fontSize: 12, color: "#B4791F", display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <span style={{ marginTop: 1 }}>⚠</span>
+                  <span>
+                    <strong>Formula difference detected in {formulaErrors.length} row{formulaErrors.length !== 1 ? "s" : ""}.</strong>{" "}
+                    The server will recalculate totals from the component columns — this will not block your import.
+                  </span>
                 </div>
               )}
 
