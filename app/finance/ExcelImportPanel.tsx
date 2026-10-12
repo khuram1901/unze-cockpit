@@ -90,6 +90,84 @@ async function parseExcel(file: File): Promise<Record<string, unknown>[]> {
 
 type Step = "upload" | "preview" | "done";
 
+// ── Formula validation ────────────────────────────────────────────────────────
+
+interface FormulaError {
+  rowNum: number;        // 1-based row number in the Excel
+  date: string;
+  field: "Total CC" | "Total Sale" | "Net Cash";
+  expected: number;
+  got: number;
+}
+
+/**
+ * Tries to find a column value by any of the given aliases (case-insensitive).
+ * Returns null if the column doesn't exist or has no numeric value.
+ */
+function colVal(row: Record<string, unknown>, aliases: string[]): number | null {
+  for (const key of Object.keys(row)) {
+    const k = key.trim().toLowerCase();
+    if (aliases.some((a) => a.toLowerCase() === k)) {
+      const v = row[key];
+      if (v != null && v !== "" && !isNaN(Number(v))) return Number(v);
+    }
+  }
+  return null;
+}
+
+function validateFormulas(rows: Record<string, unknown>[]): FormulaError[] {
+  const errs: FormulaError[] = [];
+
+  rows.forEach((row, idx) => {
+    const date = String(
+      row["Date"] ?? row["date"] ?? row["DATE"] ?? row["Sales Date"] ?? row["sales_date"] ?? ""
+    );
+    const rowNum = idx + 2; // +2 because row 1 is the header in Excel
+
+    const allied  = colVal(row, ["Allied CC","Allied Bank CC","Allied Bank CC Sale","Allied"]);
+    const hbl     = colVal(row, ["HBL CC","HBL","HBL CC Sale","HBL Card"]);
+    const totalCC = colVal(row, ["Total CC","Total CC Sale","Total Credit Card","Total Credit Card Sale","CC Total","Total Card"]);
+    const cash    = colVal(row, ["Cash Sale","Cash","Cash Sales"]);
+    const float_  = colVal(row, ["Float","Campaign Float","Float Cash","Campaign Float Cash"]);
+    const gk      = colVal(row, ["Gift Karte","Gift Card","Gift Karte Sale","GK"]);
+    const voucher = colVal(row, ["Gift Vouchers","Vouchers","GV","Gift Voucher"]);
+    const crNotes = colVal(row, ["Cr Notes","Credit Notes","CR Notes","Credit Note","CrNotes"]);
+    const totalSale = colVal(row, ["Total Sale","Total Sales","Grand Total"]);
+    const otherInc  = colVal(row, ["Other Income","Other Inc","Other","Other Incomes"]);
+    const expenses  = colVal(row, ["Expenses","Exp","Expense"]);
+    const deposit   = colVal(row, ["Deposit","Dep"]);
+    const netCash   = colVal(row, ["Net Cash","Net Cash Movement","Net Movement","Net"]);
+
+    // Only validate a formula if ALL components AND the expected total column are present
+    if (totalCC != null && allied != null && hbl != null) {
+      const expected = round2(allied + hbl);
+      if (Math.abs(expected - totalCC) > 0.02) {
+        errs.push({ rowNum, date, field: "Total CC", expected, got: totalCC });
+      }
+    }
+
+    if (totalSale != null && cash != null && allied != null && hbl != null && gk != null && voucher != null && crNotes != null) {
+      const expected = round2(cash + allied + hbl + gk + voucher - crNotes);
+      if (Math.abs(expected - totalSale) > 0.02) {
+        errs.push({ rowNum, date, field: "Total Sale", expected, got: totalSale });
+      }
+    }
+
+    if (netCash != null && cash != null && float_ != null && otherInc != null && expenses != null && deposit != null) {
+      const expected = round2(cash + float_ + otherInc - expenses - deposit);
+      if (Math.abs(expected - netCash) > 0.02) {
+        errs.push({ rowNum, date, field: "Net Cash", expected, got: netCash });
+      }
+    }
+  });
+
+  return errs;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export default function ExcelImportPanel({ stores, defaultStoreId, year, month, onClose, onImported }: Props) {
   const [step, setStep] = useState<Step>("upload");
   const [storeId, setStoreId] = useState(defaultStoreId || stores[0]?.id || "");
@@ -108,15 +186,30 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [summary, setSummary] = useState({ inserted: 0, updated: 0 });
+  const [formulaErrors, setFormulaErrors] = useState<FormulaError[]>([]);
+  const [formulaWarningAcked, setFormulaWarningAcked] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(async (f: File) => {
     setFile(f);
     setParseError(null);
+    setFormulaErrors([]);
+    setFormulaWarningAcked(false);
     setParsing(true);
     try {
       const rows = await parseExcel(f);
       setRawRows(rows);
+
+      // ── Client-side formula validation ──────────────────────────────────────
+      // Runs before sending to the server; detects Total CC / Total Sale /
+      // Net Cash columns in the Excel and checks them against components.
+      const fErrs = validateFormulas(rows);
+      if (fErrs.length > 0) {
+        setFormulaErrors(fErrs);
+        setParsing(false);
+        return; // block preview until user acknowledges
+      }
+
       // Call preview RPC — pass year/month so the API can validate dates are in range
       const res = await apiFetch("/api/daily-sales/import-preview", {
         method: "POST",
@@ -136,6 +229,29 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
       setParsing(false);
     }
   }, [storeId, selYear, selMonth]);
+
+  /** User acknowledged formula warnings — proceed to preview step anyway. */
+  const proceedDespiteWarnings = useCallback(async () => {
+    if (!rawRows.length) return;
+    setFormulaWarningAcked(true);
+    setFormulaErrors([]);
+    setParsing(true);
+    try {
+      const res = await apiFetch("/api/daily-sales/import-preview", {
+        method: "POST",
+        body: JSON.stringify({ store_id: storeId, year: selYear, month: selMonth, rows: rawRows }),
+      });
+      const json = await res.json() as { preview?: PreviewRow[]; batch_id?: string; error?: string };
+      if (!res.ok) { setParseError(json.error ?? "Preview failed"); return; }
+      setPreviewRows(json.preview ?? []);
+      setBatchId(json.batch_id ?? null);
+      setStep("preview");
+    } catch (e) {
+      setParseError(e instanceof Error ? e.message : "Preview failed");
+    } finally {
+      setParsing(false);
+    }
+  }, [rawRows, storeId, selYear, selMonth]);
 
   async function confirm() {
     if (!batchId) return;
@@ -310,6 +426,52 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
               {parseError && (
                 <div style={{ marginTop: 16, padding: "12px 14px", background: "#FFF5F5", border: "1px solid #FDECEA", borderRadius: 8, color: "#B3261E", fontSize: 13 }}>
                   {parseError}
+                </div>
+              )}
+
+              {/* ── Formula validation errors ── */}
+              {formulaErrors.length > 0 && !formulaWarningAcked && (
+                <div style={{ marginTop: 16, padding: "14px 16px", background: "#FFF8E6", border: "1px solid #F59E0B", borderRadius: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#B4791F", marginBottom: 8 }}>
+                    ⚠ Formula mismatch in {formulaErrors.length} row{formulaErrors.length !== 1 ? "s" : ""}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#92400E", marginBottom: 10 }}>
+                    The Excel file has total columns that don't match the component values. Please fix the file, or import anyway (the server will recalculate totals from the components).
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, marginBottom: 12 }}>
+                    <thead>
+                      <tr style={{ background: "#FEF3C7" }}>
+                        {["Row","Date","Column","Excel value","Expected"].map(h => (
+                          <th key={h} style={{ padding: "5px 8px", textAlign: h === "Row" ? "center" : "left", fontWeight: 600, color: "#92400E" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formulaErrors.map((e, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid #FDE68A" }}>
+                          <td style={{ padding: "4px 8px", textAlign: "center", color: "#92400E" }}>{e.rowNum}</td>
+                          <td style={{ padding: "4px 8px", color: "#92400E" }}>{e.date || "—"}</td>
+                          <td style={{ padding: "4px 8px", fontWeight: 600, color: "#B45309" }}>{e.field}</td>
+                          <td style={{ padding: "4px 8px", color: "#B3261E" }}>{e.got.toLocaleString("en-PK")}</td>
+                          <td style={{ padding: "4px 8px", color: "#0F7B5F" }}>{e.expected.toLocaleString("en-PK")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button
+                      onClick={() => { setFormulaErrors([]); setFile(null); if (fileRef.current) fileRef.current.value = ""; }}
+                      style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "1px solid #F59E0B", background: "#fff", color: "#B45309", fontFamily: "inherit" }}
+                    >
+                      Fix file and re-upload
+                    </button>
+                    <button
+                      onClick={() => void proceedDespiteWarnings()}
+                      style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", background: "#B45309", color: "#fff", fontFamily: "inherit" }}
+                    >
+                      Import anyway (server recalculates)
+                    </button>
+                  </div>
                 </div>
               )}
 

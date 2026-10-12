@@ -98,6 +98,19 @@ export default function RetailSalesTab({ companyId }: { companyId: string }) {
   const [showOB, setShowOB]         = useState(false);
   const [showImport, setShowImport] = useState(false);
 
+  // ── Delete modal ───────────────────────────────────────────────────────────
+  const [deleteModal, setDeleteModal] = useState<{ id: string; date: string } | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // ── Edit modal ─────────────────────────────────────────────────────────────
+  const [editModal, setEditModal] = useState<{ row: SalesRow } | null>(null);
+  const [editFields, setEditFields] = useState<Record<string, string>>({});
+  const [editReason, setEditReason] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   // Load stores list once
   useEffect(() => {
     (async () => {
@@ -153,6 +166,68 @@ export default function RetailSalesTab({ companyId }: { companyId: string }) {
   const isSelected = (y: number, m: number) => y === selYear && m === selMonth;
   const isFuture   = (y: number, m: number) =>
     y > now.year || (y === now.year && m > now.month);
+
+  // ── Delete handler ─────────────────────────────────────────────────────────
+  async function confirmDelete() {
+    if (!deleteModal || !deleteReason.trim()) return;
+    setDeleting(true);
+    setDeleteError(null);
+    const { error } = await supabase.rpc("soft_delete_daily_sale", {
+      p_id:     deleteModal.id,
+      p_reason: deleteReason.trim(),
+    });
+    setDeleting(false);
+    if (error) { setDeleteError(error.message); return; }
+    setDeleteModal(null);
+    setDeleteReason("");
+    void loadRows();
+  }
+
+  // ── Edit handlers ──────────────────────────────────────────────────────────
+  function openEditModal(r: SalesRow) {
+    setEditModal({ row: r });
+    setEditFields({
+      cash_sale:           String(r.cash_sale),
+      campaign_float_cash: String(r.campaign_float_cash),
+      expenses:            String(r.expenses),
+      other_income:        String(r.other_income),
+      deposit:             String(r.deposit),
+      allied_bank_cc_sale: String(r.allied_bank_cc_sale),
+      hbl_cc_sale:         String(r.hbl_cc_sale),
+      gift_karte:          String(r.gift_karte),
+      gift_vouchers:       String(r.gift_vouchers),
+      credit_notes_issue:  String(r.credit_notes_issue),
+      remarks:             r.remarks ?? "",
+    });
+    setEditReason("");
+    setEditError(null);
+  }
+
+  async function confirmEdit() {
+    if (!editModal || !editReason.trim()) return;
+    setEditing(true);
+    setEditError(null);
+    const f = editFields;
+    const { error } = await supabase.rpc("edit_daily_sale", {
+      p_id:                  editModal.row.id,
+      p_cash_sale:           parseFloat(f.cash_sale)           || 0,
+      p_campaign_float_cash: parseFloat(f.campaign_float_cash) || 0,
+      p_expenses:            parseFloat(f.expenses)            || 0,
+      p_other_income:        parseFloat(f.other_income)        || 0,
+      p_deposit:             parseFloat(f.deposit)             || 0,
+      p_allied_bank_cc_sale: parseFloat(f.allied_bank_cc_sale) || 0,
+      p_hbl_cc_sale:         parseFloat(f.hbl_cc_sale)         || 0,
+      p_gift_karte:          parseFloat(f.gift_karte)          || 0,
+      p_gift_vouchers:       parseFloat(f.gift_vouchers)       || 0,
+      p_credit_notes_issue:  parseFloat(f.credit_notes_issue)  || 0,
+      p_remarks:             f.remarks || null,
+      p_reason:              editReason.trim(),
+    });
+    setEditing(false);
+    if (error) { setEditError(error.message); return; }
+    setEditModal(null);
+    void loadRows();
+  }
 
   // ── Row state helpers ───────────────────────────────────────────────────────
   function rowClass(r: SalesRow): string {
@@ -393,19 +468,24 @@ export default function RetailSalesTab({ companyId }: { companyId: string }) {
                       </td>
                       <td style={{ ...tdStyle, textAlign: "center", whiteSpace: "nowrap" }}>
                         {isDeleted ? (
-                          <button style={{ padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: "pointer", border: "1px solid #C8EAE2", background: "#fff", color: "#0F7B5F", fontFamily: "inherit" }}>
-                            Restore
-                          </button>
+                          /* Restore is permanently blocked by the DB — cannot un-delete */
+                          <span style={{ fontSize: 10, color: "#94A3B8", fontStyle: "italic" }}>—</span>
                         ) : isLocked ? (
                           <button disabled style={{ padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: "not-allowed", border: "1px solid #EEF0F3", background: "#fff", color: "#94A3B8", fontFamily: "inherit", opacity: 0.4 }}>
                             Edit
                           </button>
                         ) : (
                           <>
-                            <button style={{ padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: "pointer", border: "1px solid #EEF0F3", background: "#fff", color: "#0F1720", fontFamily: "inherit" }}>
+                            <button
+                              onClick={() => openEditModal(r)}
+                              style={{ padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: "pointer", border: "1px solid #EEF0F3", background: "#fff", color: "#0F1720", fontFamily: "inherit" }}
+                            >
                               Edit
                             </button>
-                            <button style={{ marginLeft: 4, padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: "pointer", border: "1px solid #FDECEA", background: "#fff", color: "#B3261E", fontFamily: "inherit" }}>
+                            <button
+                              onClick={() => { setDeleteModal({ id: r.id, date: r.sales_date }); setDeleteReason(""); setDeleteError(null); }}
+                              style={{ marginLeft: 4, padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: "pointer", border: "1px solid #FDECEA", background: "#fff", color: "#B3261E", fontFamily: "inherit" }}
+                            >
                               Delete
                             </button>
                           </>
@@ -448,6 +528,131 @@ export default function RetailSalesTab({ companyId }: { companyId: string }) {
           </div>
         )}
       </div>
+
+      {/* ── Delete confirmation modal ── */}
+      {deleteModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: 420, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", fontFamily: "inherit" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#B3261E", marginBottom: 6 }}>Soft-delete row?</div>
+            <div style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>
+              Date: <strong>{formatDateUK(deleteModal.date)}</strong>. This is <em>permanent</em> — the row cannot be restored once deleted.
+            </div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#0F1720", marginBottom: 6 }}>
+              Reason <span style={{ color: "#B3261E" }}>*</span>
+            </label>
+            <textarea
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              rows={3}
+              placeholder="Why is this row being deleted?"
+              style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1px solid #EEF0F3", fontSize: 13, fontFamily: "inherit", resize: "vertical", outline: "none" }}
+            />
+            {deleteError && (
+              <div style={{ marginTop: 8, fontSize: 12, color: "#B3261E", background: "#FDECEA", padding: "6px 10px", borderRadius: 6 }}>{deleteError}</div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
+              <button
+                onClick={() => { setDeleteModal(null); setDeleteReason(""); setDeleteError(null); }}
+                disabled={deleting}
+                style={{ padding: "7px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid #EEF0F3", background: "#fff", color: "#64748B", fontFamily: "inherit" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void confirmDelete()}
+                disabled={deleting || !deleteReason.trim()}
+                style={{ padding: "7px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: deleting || !deleteReason.trim() ? "not-allowed" : "pointer", border: "none", background: deleting || !deleteReason.trim() ? "#F8D7D4" : "#B3261E", color: "#fff", fontFamily: "inherit", opacity: deleting || !deleteReason.trim() ? 0.7 : 1 }}
+              >
+                {deleting ? "Deleting…" : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit modal ── */}
+      {editModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: 560, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", fontFamily: "inherit" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0F1720", marginBottom: 4 }}>Edit row</div>
+            <div style={{ fontSize: 12, color: "#64748B", marginBottom: 20 }}>Date: <strong>{formatDateUK(editModal.row.sales_date)}</strong></div>
+
+            {/* Field grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px", marginBottom: 18 }}>
+              {([
+                ["cash_sale",           "Cash Sale"],
+                ["campaign_float_cash", "Float (Campaign)"],
+                ["expenses",            "Expenses"],
+                ["other_income",        "Other Income"],
+                ["deposit",             "Deposit"],
+                ["allied_bank_cc_sale", "Allied Bank CC"],
+                ["hbl_cc_sale",         "HBL CC"],
+                ["gift_karte",          "Gift Karte"],
+                ["gift_vouchers",       "Gift Vouchers"],
+                ["credit_notes_issue",  "Credit Notes"],
+              ] as [string, string][]).map(([key, label]) => (
+                <div key={key}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>{label}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editFields[key] ?? ""}
+                    onChange={(e) => setEditFields(prev => ({ ...prev, [key]: e.target.value }))}
+                    style={{ width: "100%", boxSizing: "border-box", padding: "6px 10px", borderRadius: 8, border: "1px solid #EEF0F3", fontSize: 13, fontFamily: "inherit", outline: "none" }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Remarks */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Remarks</label>
+              <input
+                type="text"
+                value={editFields.remarks ?? ""}
+                onChange={(e) => setEditFields(prev => ({ ...prev, remarks: e.target.value }))}
+                placeholder="Optional notes"
+                style={{ width: "100%", boxSizing: "border-box", padding: "6px 10px", borderRadius: 8, border: "1px solid #EEF0F3", fontSize: 13, fontFamily: "inherit", outline: "none" }}
+              />
+            </div>
+
+            {/* Reason (required) */}
+            <div style={{ marginBottom: 6 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#0F1720", marginBottom: 4 }}>
+                Reason for edit <span style={{ color: "#B3261E" }}>*</span>
+              </label>
+              <textarea
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                rows={2}
+                placeholder="Why is this row being edited?"
+                style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1px solid #EEF0F3", fontSize: 13, fontFamily: "inherit", resize: "vertical", outline: "none" }}
+              />
+            </div>
+
+            {editError && (
+              <div style={{ marginTop: 8, fontSize: 12, color: "#B3261E", background: "#FDECEA", padding: "6px 10px", borderRadius: 6 }}>{editError}</div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+              <button
+                onClick={() => { setEditModal(null); setEditError(null); }}
+                disabled={editing}
+                style={{ padding: "7px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid #EEF0F3", background: "#fff", color: "#64748B", fontFamily: "inherit" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void confirmEdit()}
+                disabled={editing || !editReason.trim()}
+                style={{ padding: "7px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: editing || !editReason.trim() ? "not-allowed" : "pointer", border: "none", background: editing || !editReason.trim() ? "#B0C4DE" : "#0F1720", color: "#fff", fontFamily: "inherit", opacity: editing || !editReason.trim() ? 0.7 : 1 }}
+              >
+                {editing ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
