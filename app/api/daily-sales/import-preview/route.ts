@@ -27,10 +27,11 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const body = await request.json() as {
-    store_id: string;
-    year:     number;
-    month:    number;
-    rows:     Record<string, unknown>[];
+    store_id:  string;
+    year:      number;
+    month:     number;
+    file_name: string;
+    rows:      Record<string, unknown>[];
   };
 
   if (!body.store_id || !Array.isArray(body.rows)) {
@@ -67,8 +68,9 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Generate a batch ID — passed back to the client and forwarded to import_confirm
-  const batchId = crypto.randomUUID();
+  // Get the authenticated user's ID for import_batches.imported_by
+  const { data: { user } } = await uc.auth.getUser();
+  if (!user) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data, error } = await uc.rpc("import_preview", {
     p_store_id: body.store_id,
@@ -81,6 +83,26 @@ export async function POST(request: NextRequest) {
   }
 
   const result = data as RpcResult;
+
+  // Create the import_batches record so daily_sales FK is satisfied on confirm.
+  // We do this after a successful preview (at least some valid rows).
+  const batchId = crypto.randomUUID();
+  const yearMonth = `${body.year}-${String(body.month).padStart(2, "0")}-01`;
+  const { error: batchErr } = await uc
+    .from("import_batches")
+    .insert({
+      id:          batchId,
+      store_id:    body.store_id,
+      year_month:  yearMonth,
+      file_name:   body.file_name || "unknown.xlsx",
+      row_count:   result.valid?.length ?? 0,
+      status:      "pending",
+      imported_by: user.id,
+    });
+  if (batchErr) {
+    console.error("import_batches insert failed:", batchErr.message);
+    // Non-fatal for preview — confirm will surface the FK error if it fails
+  }
 
   // Build the PreviewRow[] the client table expects.
   // Only valid rows appear in the preview; errors are shown separately.

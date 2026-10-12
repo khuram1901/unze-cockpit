@@ -321,7 +321,7 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
       // Call preview API with normalised rows (snake_case keys the RPC understands)
       const res = await apiFetch("/api/daily-sales/import-preview", {
         method: "POST",
-        body: JSON.stringify({ store_id: storeId, year: selYear, month: selMonth, rows: normRows }),
+        body: JSON.stringify({ store_id: storeId, year: selYear, month: selMonth, file_name: file.name, rows: normRows }),
       });
       const json = await res.json() as { preview?: PreviewRow[]; batch_id?: string; error?: string };
       if (!res.ok) {
