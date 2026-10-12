@@ -82,7 +82,7 @@ async function parseExcel(file: File): Promise<Record<string, unknown>[]> {
   // Dynamically import xlsx so it's not in the main bundle
   const XLSX = await import("xlsx");
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: "array" });
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const json = XLSX.utils.sheet_to_json(ws, { defval: null }) as Record<string, unknown>[];
   return json;
@@ -168,6 +168,74 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+
+// ── Column normalisation ──────────────────────────────────────────────────────
+// Maps Excel header variants → snake_case fields the RPCs understand.
+const FIELD_ALIASES: Record<string, string[]> = {
+  sales_date:          ["Date","date","DATE","Sales Date","Sales date","SalesDate","sales_date"],
+  cash_sale:           ["Cash Sale","Cash","Cash Sales","cash_sale"],
+  campaign_float_cash: ["Campaign Float Cash","Float","Campaign Float","Opening Float","Float Cash","campaign_float_cash"],
+  expenses:            ["Expenses","Expense","Total Expenses","Daily Expenses","expenses"],
+  other_income:        ["Other Income","OtherInc","Other Inc","other_income"],
+  deposit:             ["Deposit","Daily Deposit","Bank Deposit","deposit"],
+  allied_bank_cc_sale: ["Allied CC","Allied Bank CC","Allied Bank CC Sale","Allied","allied_bank_cc_sale"],
+  hbl_cc_sale:         ["HBL CC","HBL","HBL CC Sale","HBL Card","hbl_cc_sale"],
+  gift_karte:          ["Gift Karte","GK","Gift Karte Sale","gift_karte"],
+  gift_vouchers:       ["Gift Vouchers","Vouchers","Voucher","gift_vouchers"],
+  credit_notes_issue:  ["Credit Notes","CrNotes","Cr Notes","Credit Notes Issue","Credit Note","credit_notes_issue"],
+  remarks:             ["Remarks","Notes","Remark","Comment","remarks"],
+};
+
+/** Convert an Excel cell value (JS Date, serial number, or string) to YYYY-MM-DD. */
+function toISODate(v: unknown): string {
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    const y  = v.getFullYear();
+    const mo = String(v.getMonth() + 1).padStart(2, "0");
+    const da = String(v.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${da}`;
+  }
+  if (typeof v === "number" && !isNaN(v)) {
+    // Excel date serial (days since 1899-12-30 with the 1900 leap-year bug)
+    const dt = new Date(Date.UTC(1899, 11, 30) + v * 86_400_000);
+    return toISODate(dt);
+  }
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // DD/MM/YYYY or DD-MM-YYYY
+    const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (dmy) return `${dmy[3]}-${dmy[2].padStart(2,"0")}-${dmy[1].padStart(2,"0")}`;
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) return toISODate(parsed);
+  }
+  return String(v ?? "");
+}
+
+/** Find a value in a row by any alias (case-insensitive). */
+function findColVal(row: Record<string, unknown>, aliases: string[]): unknown {
+  for (const key of Object.keys(row)) {
+    const k = key.trim().toLowerCase();
+    if (aliases.some(a => a.toLowerCase() === k)) return row[key];
+  }
+  return null;
+}
+
+/** Normalise a raw Excel row → snake_case keys + ISO date, ready for the RPCs. */
+function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+    const val = findColVal(row, aliases);
+    if (field === "sales_date") {
+      out[field] = toISODate(val);
+    } else if (field === "remarks") {
+      out[field] = (val != null && val !== "") ? String(val) : null;
+    } else {
+      out[field] = (val != null && val !== "" && !isNaN(Number(val))) ? Number(val) : 0;
+    }
+  }
+  return out;
+}
+
 export default function ExcelImportPanel({ stores, defaultStoreId, year, month, onClose, onImported }: Props) {
   const [step, setStep] = useState<Step>("upload");
   const [storeId, setStoreId] = useState(defaultStoreId || stores[0]?.id || "");
@@ -187,6 +255,7 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [summary, setSummary] = useState({ inserted: 0, updated: 0 });
   const [formulaErrors, setFormulaErrors] = useState<FormulaError[]>([]);
+  const [normalizedRows, setNormalizedRows] = useState<Record<string, unknown>[]>([]);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -199,19 +268,21 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
       const rows = await parseExcel(f);
       setRawRows(rows);
 
+      // ── Normalise Excel column headers → snake_case before sending to API ─────────
+      const normRows = rows.map(normalizeRow);
+      setNormalizedRows(normRows);
+
       // ── Client-side formula validation (non-blocking) ─────────────────────────
-      // Detects Total CC / Total Sale / Net Cash columns and checks formulas.
-      // Non-blocking: shows warnings in preview step but does NOT stop the import.
       const fErrs = validateFormulas(rows);
       if (fErrs.length > 0) {
         setFormulaErrors(fErrs);
         // Don't return — proceed to preview so user can review and confirm
       }
 
-      // Call preview RPC — pass year/month so the API can validate dates are in range
+      // Call preview API with normalised rows (snake_case keys the RPC understands)
       const res = await apiFetch("/api/daily-sales/import-preview", {
         method: "POST",
-        body: JSON.stringify({ store_id: storeId, year: selYear, month: selMonth, rows }),
+        body: JSON.stringify({ store_id: storeId, year: selYear, month: selMonth, rows: normRows }),
       });
       const json = await res.json() as { preview?: PreviewRow[]; batch_id?: string; error?: string };
       if (!res.ok) {
@@ -236,7 +307,7 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
     try {
       const res = await apiFetch("/api/daily-sales/import-confirm", {
         method: "POST",
-        body: JSON.stringify({ store_id: storeId, batch_id: batchId, rows: rawRows }),
+        body: JSON.stringify({ store_id: storeId, batch_id: batchId, rows: normalizedRows }),
       });
       const json = await res.json() as { result?: { inserted?: number; updated?: number }; error?: string };
       if (!res.ok) {
