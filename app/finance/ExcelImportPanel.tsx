@@ -84,8 +84,47 @@ async function parseExcel(file: File): Promise<Record<string, unknown>[]> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array", cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const json = XLSX.utils.sheet_to_json(ws, { defval: null }) as Record<string, unknown>[];
-  return json;
+
+  // Read as array-of-arrays first — some LDS sheets have metadata rows above
+  // the real column headers (e.g. "Branch Code / SHOP Name" on row 1,
+  // actual "Date / Cash Sale / ..." headers on row 3).
+  const aoa = XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    defval: null,
+  }) as unknown[][];
+
+  // Find the first row that contains "date" (case-insensitive) in any cell.
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(aoa.length, 10); i++) {
+    if (aoa[i].some(c => typeof c === "string" && c.trim().toLowerCase() === "date")) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  // Build trimmed header names from that row
+  const headers = (aoa[headerIdx] ?? []).map(h => (h != null ? String(h).trim() : ""));
+  const dateColIdx = headers.findIndex(h => h.toLowerCase() === "date");
+
+  // Build records from data rows after the header
+  const result: Record<string, unknown>[] = [];
+  for (let i = headerIdx + 1; i < aoa.length; i++) {
+    const rowArr = aoa[i];
+    // Skip "Total" summary rows
+    const firstStr = String(rowArr[0] ?? "").trim().toLowerCase();
+    if (firstStr === "total") continue;
+    // Skip rows with no date value (blank spacer rows, sub-header rows)
+    const dateCell = dateColIdx >= 0 ? rowArr[dateColIdx] : rowArr[0];
+    if (dateCell == null || dateCell === "") continue;
+
+    const record: Record<string, unknown> = {};
+    headers.forEach((h, j) => {
+      if (h) record[h] = rowArr[j] ?? null;
+    });
+    result.push(record);
+  }
+
+  return result;
 }
 
 type Step = "upload" | "preview" | "done";
@@ -128,7 +167,7 @@ function validateFormulas(rows: Record<string, unknown>[]): FormulaError[] {
     const hbl     = colVal(row, ["HBL CC","HBL","HBL CC Sale","HBL Card"]);
     const totalCC = colVal(row, ["Total CC","Total CC Sale","Total Credit Card","Total Credit Card Sale","CC Total","Total Card"]);
     const cash    = colVal(row, ["Cash Sale","Cash","Cash Sales"]);
-    const float_  = colVal(row, ["Float","Campaign Float","Float Cash","Campaign Float Cash"]);
+    const float_  = colVal(row, ["Float","Campaign Float","Float Cash","Campaign Float Cash","Compaign Float Cash (Taken)","Campaign Float Cash (Taken)","Compaign Float Cash"]);
     const gk      = colVal(row, ["Gift Karte","Gift Card","Gift Karte Sale","GK"]);
     const voucher = colVal(row, ["Gift Vouchers","Vouchers","GV","Gift Voucher"]);
     const crNotes = colVal(row, ["Cr Notes","Credit Notes","CR Notes","Credit Note","CrNotes"]);
@@ -174,7 +213,7 @@ function round2(n: number): number {
 const FIELD_ALIASES: Record<string, string[]> = {
   sales_date:          ["Date","date","DATE","Sales Date","Sales date","SalesDate","sales_date"],
   cash_sale:           ["Cash Sale","Cash","Cash Sales","cash_sale"],
-  campaign_float_cash: ["Campaign Float Cash","Float","Campaign Float","Opening Float","Float Cash","campaign_float_cash"],
+  campaign_float_cash: ["Campaign Float Cash","Float","Campaign Float","Opening Float","Float Cash","campaign_float_cash","Compaign Float Cash (Taken)","Campaign Float Cash (Taken)","Compaign Float Cash"],
   expenses:            ["Expenses","Expense","Total Expenses","Daily Expenses","expenses"],
   other_income:        ["Other Income","OtherInc","Other Inc","other_income"],
   deposit:             ["Deposit","Daily Deposit","Bank Deposit","deposit"],
