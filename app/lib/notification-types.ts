@@ -21,3 +21,6 @@ export const TRIGGER_ESCALATION = "escalation";
 export const TRIGGER_TASK_SUBMITTED = "task_submitted";
 // Fired when a chat message is sent to a participant who hasn't read it yet.
 export const TRIGGER_CHAT_MESSAGE = "chat_message";
+// Fired when a comment is added to a task — sent to all participants
+// (assigner, assignee, co-assignees) except the person who wrote the comment.
+export const TRIGGER_TASK_COMMENT = "task_comment";
