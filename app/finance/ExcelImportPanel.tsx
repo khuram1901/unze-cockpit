@@ -346,7 +346,7 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
     try {
       const res = await apiFetch("/api/daily-sales/import-confirm", {
         method: "POST",
-        body: JSON.stringify({ store_id: storeId, batch_id: batchId, rows: normalizedRows }),
+        body: JSON.stringify({ store_id: storeId, batch_id: batchId, year: selYear, month: selMonth, rows: normalizedRows }),
       });
       const json = await res.json() as { result?: { inserted?: number; updated?: number }; error?: string };
       if (!res.ok) {

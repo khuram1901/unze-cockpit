@@ -16,12 +16,26 @@ export async function POST(request: NextRequest) {
   const body = await request.json() as {
     store_id: string;
     batch_id: string;
+    year:     number;
+    month:    number;
     rows: Record<string, unknown>[];
   };
 
   if (!body.store_id || !body.batch_id || !Array.isArray(body.rows)) {
     return Response.json({ error: "store_id, batch_id, and rows required" }, { status: 400 });
   }
+
+  // Strip rows that fall outside the selected month (e.g. opening-balance row
+  // dated the last day of the previous month in LDS Excel files).
+  const filteredRows = body.year && body.month
+    ? body.rows.filter(row => {
+        const ds = String(row.sales_date ?? "");
+        if (!ds) return false;
+        const d = new Date(ds);
+        if (isNaN(d.getTime())) return false;
+        return d.getUTCFullYear() === body.year && (d.getUTCMonth() + 1) === body.month;
+      })
+    : body.rows;
 
   const authHeader = request.headers.get("authorization") ?? "";
   const uc = createClient(
@@ -33,7 +47,7 @@ export async function POST(request: NextRequest) {
   const { data, error } = await uc.rpc("import_confirm", {
     p_store_id: body.store_id,
     p_batch_id: body.batch_id,
-    p_rows:     body.rows,
+    p_rows:     filteredRows,
   });
 
   if (error) {
