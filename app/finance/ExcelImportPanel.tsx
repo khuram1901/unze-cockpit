@@ -2,7 +2,7 @@
 
 /**
  * ExcelImportPanel — 3-step Excel import flow:
- *   1. Upload  — drag-and-drop or file picker
+ *   1. Upload  — choose store + month/year, drag-and-drop or file picker
  *   2. Preview — table of rows with conflict flags; confirm or cancel
  *   3. Done    — success/error summary
  *
@@ -48,6 +48,14 @@ interface Props {
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// Build year options: 2026 to current year
+function buildYearOptions(): number[] {
+  const currentYear = new Date().getFullYear();
+  const years: number[] = [];
+  for (let y = 2026; y <= currentYear; y++) years.push(y);
+  return years;
+}
+
 async function getToken(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token ?? "";
@@ -85,6 +93,11 @@ type Step = "upload" | "preview" | "done";
 export default function ExcelImportPanel({ stores, defaultStoreId, year, month, onClose, onImported }: Props) {
   const [step, setStep] = useState<Step>("upload");
   const [storeId, setStoreId] = useState(defaultStoreId || stores[0]?.id || "");
+
+  // Month/year selectors — default to whatever the tab has selected, but user can override
+  const [selYear, setSelYear]   = useState(year);
+  const [selMonth, setSelMonth] = useState(month);
+
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -104,10 +117,10 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
     try {
       const rows = await parseExcel(f);
       setRawRows(rows);
-      // Call preview RPC
+      // Call preview RPC — pass year/month so the API can validate dates are in range
       const res = await apiFetch("/api/daily-sales/import-preview", {
         method: "POST",
-        body: JSON.stringify({ store_id: storeId, rows }),
+        body: JSON.stringify({ store_id: storeId, year: selYear, month: selMonth, rows }),
       });
       const json = await res.json() as { preview?: PreviewRow[]; batch_id?: string; error?: string };
       if (!res.ok) {
@@ -122,7 +135,7 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
     } finally {
       setParsing(false);
     }
-  }, [storeId]);
+  }, [storeId, selYear, selMonth]);
 
   async function confirm() {
     if (!batchId) return;
@@ -160,6 +173,13 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
 
   const conflicts = previewRows.filter(r => r.conflict).length;
 
+  const selectStyle: React.CSSProperties = {
+    width: "100%", padding: "9px 30px 9px 12px", border: "1px solid #EEF0F3",
+    borderRadius: 8, fontSize: 13, fontFamily: "inherit", appearance: "none", background: "#fff",
+  };
+
+  const yearOptions = buildYearOptions();
+
   return (
     <>
       <div style={overlay} onClick={step === "upload" ? onClose : undefined} />
@@ -169,8 +189,9 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#0F1720" }}>Import Excel</div>
             <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-              {MONTHS[month - 1]} {year}
-              {step === "preview" && ` · ${previewRows.length} rows${conflicts > 0 ? ` · ${conflicts} conflict${conflicts !== 1 ? "s" : ""}` : ""}`}
+              {step === "upload"
+                ? "Choose store, month and file"
+                : `${MONTHS[selMonth - 1]} ${selYear}${step === "preview" ? ` · ${previewRows.length} rows${conflicts > 0 ? ` · ${conflicts} conflict${conflicts !== 1 ? "s" : ""}` : ""}` : ""}`}
             </div>
           </div>
           {/* Step indicator */}
@@ -196,13 +217,49 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
           {/* ── Step 1: Upload ── */}
           {step === "upload" && (
             <div>
+              {/* Month + Year row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#64748B", display: "flex", flexDirection: "column", gap: 6 }}>
+                  Month
+                  <div style={{ position: "relative" }}>
+                    <select
+                      value={selMonth}
+                      onChange={(e) => setSelMonth(Number(e.target.value))}
+                      style={selectStyle}
+                    >
+                      {MONTHS.map((m, i) => (
+                        <option key={i + 1} value={i + 1}>{m}</option>
+                      ))}
+                    </select>
+                    <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: 10, color: "#64748B" }}>▾</span>
+                  </div>
+                </label>
+
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#64748B", display: "flex", flexDirection: "column", gap: 6 }}>
+                  Year
+                  <div style={{ position: "relative" }}>
+                    <select
+                      value={selYear}
+                      onChange={(e) => setSelYear(Number(e.target.value))}
+                      style={selectStyle}
+                    >
+                      {yearOptions.map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                    <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: 10, color: "#64748B" }}>▾</span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Store selector */}
               <label style={{ fontSize: 11, fontWeight: 600, color: "#64748B", display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
                 Store
                 <div style={{ position: "relative" }}>
                   <select
                     value={storeId}
                     onChange={(e) => setStoreId(e.target.value)}
-                    style={{ width: "100%", padding: "9px 30px 9px 12px", border: "1px solid #EEF0F3", borderRadius: 8, fontSize: 13, fontFamily: "inherit", appearance: "none", background: "#fff" }}
+                    style={selectStyle}
                   >
                     {stores.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
