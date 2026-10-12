@@ -44,12 +44,35 @@ export async function POST(request: NextRequest) {
     { global: { headers: { Authorization: authHeader } } }
   );
 
+  // Filter rows to only those that fall within the selected year/month.
+  // The LDS Excel file contains an opening-balance row dated the last day of
+  // the PREVIOUS month (e.g. 2026-07-31 when importing August). Sending that
+  // row to the RPC triggers a lock-check on the wrong month, so we strip it
+  // here before the RPC ever sees it.
+  const filteredRows = (body.rows as Record<string, unknown>[]).filter(row => {
+    const ds = String(row.sales_date ?? "");
+    if (!ds) return false;
+    const d = new Date(ds);
+    if (isNaN(d.getTime())) return false;
+    return d.getUTCFullYear() === body.year && (d.getUTCMonth() + 1) === body.month;
+  });
+
+  if (filteredRows.length === 0) {
+    return Response.json({
+      preview:    [],
+      batch_id:   crypto.randomUUID(),
+      store_name: "",
+      errors:     [{ row: 0, sales_date: "", error: `No rows found for \${body.year}-\${String(body.month).padStart(2,"0")}` }],
+      warnings:   [],
+    });
+  }
+
   // Generate a batch ID — passed back to the client and forwarded to import_confirm
   const batchId = crypto.randomUUID();
 
   const { data, error } = await uc.rpc("import_preview", {
     p_store_id: body.store_id,
-    p_rows:     body.rows,
+    p_rows:     filteredRows,
   });
 
   if (error) {
