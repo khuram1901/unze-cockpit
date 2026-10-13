@@ -1,6 +1,5 @@
-import { google } from "googleapis";
+import { Resend } from "resend";
 import { createServiceClient } from "./supabase-server";
-import { encrypt, safeDecrypt } from "./crypto";
 import { TRIGGER_TASK_ASSIGNED, TRIGGER_ESCALATION } from "./notification-types";
 
 function buildWhatsAppLink(phone: string, message: string): string {
@@ -50,26 +49,6 @@ function buildEmailHtml({
   </div>
 </body>
 </html>`;
-}
-
-function buildRawEmail(to: string, from: string, subject: string, htmlBody: string): string {
-  const boundary = "boundary_" + Date.now();
-  const raw = [
-    `From: Unze Group Dashboard (No Reply) <${from}>`,
-    `To: ${to}`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/html; charset=utf-8`,
-    ``,
-    htmlBody,
-    ``,
-    `--${boundary}--`,
-  ].join("\r\n");
-
-  return Buffer.from(raw).toString("base64url");
 }
 
 // Khuram used to get every one of these as its own separate email —
@@ -126,81 +105,42 @@ export async function sendNotificationEmail({
     return { success: true, skipped: true };
   }
 
+  const supabase = createServiceClient();
+
   try {
-    // NOTIFICATION_GMAIL is required — no fallback. Only the configured sender account is used for all notification emails.
-    const supabaseForTokens = createServiceClient();
-    const notificationEmail = process.env.NOTIFICATION_GMAIL?.toLowerCase();
+    const apiKey = process.env.RESEND_API_KEY;
 
-    if (!notificationEmail) {
-      console.error("[send-email] NOTIFICATION_GMAIL env var is not set. Cannot send notification email.");
+    if (!apiKey) {
+      console.error("[send-email] RESEND_API_KEY env var is not set. Cannot send notification email.");
       try {
-        await supabaseForTokens.from("notification_log").insert({
+        await supabase.from("notification_log").insert({
           recipient_email: to,
           recipient_name: recipientName || null,
           channel: "email",
           subject,
-          body_preview: `FAILED: ${heading} — NOTIFICATION_GMAIL not configured`,
+          body_preview: `FAILED: ${heading} — RESEND_API_KEY not configured`,
           trigger_type: triggerType,
           trigger_record_id: triggerRecordId || null,
           status: "failed",
         });
       } catch { /* non-fatal */ }
-      return { success: false, error: "NOTIFICATION_GMAIL env var not configured" };
+      return { success: false, error: "RESEND_API_KEY env var not configured" };
     }
 
-    const query = supabaseForTokens
-      .from("google_oauth_tokens")
-      .select("id, user_email, access_token, refresh_token, token_expiry");
-
-    const { data: notifToken } = await query.ilike("user_email", notificationEmail).limit(1).single();
-
-    if (!notifToken) {
-      console.error(`[send-email] No OAuth token found for ${notificationEmail}. Connect this account at /api/google/connect.`);
-      try {
-        await supabaseForTokens.from("notification_log").insert({
-          recipient_email: to,
-          recipient_name: recipientName || null,
-          channel: "email",
-          subject,
-          body_preview: `FAILED: ${heading} — no OAuth token for ${notificationEmail}`,
-          trigger_type: triggerType,
-          trigger_record_id: triggerRecordId || null,
-          status: "failed",
-        });
-      } catch { /* non-fatal */ }
-      return { success: false, error: `No OAuth token found for notification Gmail account: ${notificationEmail}` };
-    }
-
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
-    );
-    oauth2Client.setCredentials({
-      access_token: safeDecrypt(notifToken.access_token),
-      refresh_token: safeDecrypt(notifToken.refresh_token),
-      expiry_date: notifToken.token_expiry ? new Date(notifToken.token_expiry).getTime() : undefined,
-    });
-
-    oauth2Client.on("tokens", async (newTokens) => {
-      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
-      if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
-      await supabaseForTokens.from("google_oauth_tokens").update(updates).eq("id", notifToken.id);
-    });
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    const fromEmail = notifToken.user_email;
-
+    const resend = new Resend(apiKey);
     const html = buildEmailHtml({ heading, body, linkUrl, linkLabel, whatsAppPhone, whatsAppMessage });
-    const raw = buildRawEmail(to, fromEmail, subject, html);
 
-    await gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw },
+    const { error: sendError } = await resend.emails.send({
+      from: "Unze Group Dashboard <notifications@unzegroup.com>",
+      to,
+      subject,
+      html,
     });
 
-    const supabase = createServiceClient();
+    if (sendError) {
+      throw new Error(sendError.message);
+    }
+
     await supabase.from("notification_log").insert({
       recipient_email: to,
       recipient_name: recipientName || null,
@@ -216,11 +156,8 @@ export async function sendNotificationEmail({
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : "Unknown error";
     console.error("[send-email] Email send failed:", errMsg);
-    // Log to notification_log so Gmail/OAuth failures are visible in the DB.
-    // errMsg is safe to store: it comes from the Gmail API or Node runtime, never from token values.
     try {
-      const supabaseFail = createServiceClient();
-      await supabaseFail.from("notification_log").insert({
+      await supabase.from("notification_log").insert({
         recipient_email: to,
         recipient_name: recipientName || null,
         channel: "email",
