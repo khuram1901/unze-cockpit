@@ -50,13 +50,30 @@ export async function POST(
     .select("member_email")
     .eq("task_id", taskId);
 
-  // Build unique set of recipient emails, excluding the commenter
+  // Build unique set of recipient emails from task participants
   const recipientSet = new Set<string>();
   if (task.assigned_to_email) recipientSet.add(task.assigned_to_email.toLowerCase());
   if (task.assigned_by_email) recipientSet.add(task.assigned_by_email.toLowerCase());
   for (const ca of (coAssignees ?? []) as { member_email: string | null }[]) {
     if (ca.member_email) recipientSet.add(ca.member_email.toLowerCase());
   }
+
+  // Parse @mentions from the comment and add those members as recipients
+  // regardless of whether they're on the task.
+  if (commentText) {
+    const { data: mentionableMembers } = await supabase
+      .from("members")
+      .select("email, name")
+      .eq("is_active", true);
+
+    for (const m of (mentionableMembers ?? []) as { email: string | null; name: string | null }[]) {
+      if (m.email && m.name && commentText.toLowerCase().includes(`@${m.name.toLowerCase()}`)) {
+        recipientSet.add(m.email.toLowerCase());
+      }
+    }
+  }
+
+  // Remove the commenter (they shouldn't notify themselves)
   if (commenterEmail) recipientSet.delete(commenterEmail.toLowerCase());
 
   if (recipientSet.size === 0) {

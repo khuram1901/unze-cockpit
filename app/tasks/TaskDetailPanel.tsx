@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
@@ -110,6 +110,14 @@ export default function TaskDetailPanel({
   const [postingComment, setPostingComment] = useState(false);
   const [autoRemind, setAutoRemind] = useState(task.whatsapp_auto_remind);
 
+  // @mention state — allMembers is always loaded (not gated on taskEditable)
+  // so any commenter (even non-editors) can mention someone.
+  const [allMembers, setAllMembers] = useState<MemberLite[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionStart, setMentionStart] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const commentRef = useRef<HTMLTextAreaElement>(null);
+
   // Core fields (description/priority/department/company/owners) — always
   // visible and auto-saving, same as Status/Stage further down. Khuram:
   // "we cannot amend the company, department, priority — these options
@@ -140,6 +148,16 @@ export default function TaskDetailPanel({
   // initializers re-run) instead of reusing state across tasks. Avoids
   // the "setState synchronously in an effect" anti-pattern for what's
   // really just a prop-driven initial value.
+  // Always load the full active member list for @mention autocomplete.
+  useEffect(() => {
+    supabase
+      .from("members")
+      .select("id, name, email")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setAllMembers((data as MemberLite[] | null) || []));
+  }, []);
+
   useEffect(() => {
     if (!taskEditable) return;
     (async () => {
@@ -256,6 +274,92 @@ export default function TaskDetailPanel({
         }),
       }).catch(() => { /* non-fatal */ });
     }
+  }
+
+  // Filtered candidates for the @mention dropdown
+  const mentionCandidates = mentionQuery !== null
+    ? allMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 8)
+    : [];
+
+  function handleCommentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value;
+    setNewComment(val);
+    const cursor = e.target.selectionStart ?? val.length;
+    const before = val.slice(0, cursor);
+    // Detect @word immediately before cursor (no spaces — user types first few chars to filter)
+    const match = before.match(/@(\w*)$/);
+    if (match) {
+      setMentionQuery(match[1]);
+      setMentionStart(cursor - match[0].length);
+      setMentionIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
+  }
+
+  function insertMention(member: MemberLite) {
+    const cursor = commentRef.current?.selectionStart ?? newComment.length;
+    const before = newComment.slice(0, mentionStart);
+    const after = newComment.slice(cursor);
+    const inserted = `@${member.name} `;
+    const next = before + inserted + after;
+    setNewComment(next);
+    setMentionQuery(null);
+    // Move cursor to just after the inserted mention
+    setTimeout(() => {
+      if (commentRef.current) {
+        const pos = before.length + inserted.length;
+        commentRef.current.setSelectionRange(pos, pos);
+        commentRef.current.focus();
+      }
+    }, 0);
+  }
+
+  function handleCommentKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (mentionQuery !== null && mentionCandidates.length > 0) {
+      if (e.key === "ArrowDown") { e.preventDefault(); setMentionIndex(i => Math.min(i + 1, mentionCandidates.length - 1)); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setMentionIndex(i => Math.max(i - 1, 0)); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertMention(mentionCandidates[mentionIndex]); return; }
+      if (e.key === "Escape") { e.preventDefault(); setMentionQuery(null); return; }
+    }
+    // Plain Enter posts the comment; Shift+Enter adds a newline
+    if (e.key === "Enter" && !e.shiftKey && mentionQuery === null) {
+      e.preventDefault();
+      postComment();
+    }
+  }
+
+  // Render comment text with @mention highlights (blue chip) and link detection
+  function renderCommentText(text: string): React.ReactNode {
+    if (!text) return null;
+    const memberNames = allMembers.map(m => m.name).filter(Boolean);
+    if (memberNames.length === 0) return renderWithLinks(text);
+
+    // Sort longest first so "Sundas Hussain" matches before "Sundas" (if both existed)
+    const escaped = memberNames
+      .sort((a, b) => b.length - a.length)
+      .map(n => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const pattern = new RegExp(`@(${escaped.join("|")})`, "g");
+
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(<React.Fragment key={`t${lastIndex}`}>{renderWithLinks(text.slice(lastIndex, match.index))}</React.Fragment>);
+      }
+      parts.push(
+        <span key={`m${match.index}`} style={{ color: COLOURS.BLUE, fontWeight: 600, backgroundColor: "#EEF1FC", borderRadius: "3px", padding: "0 2px" }}>
+          @{match[1]}
+        </span>
+      );
+      lastIndex = pattern.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      parts.push(<React.Fragment key={`t${lastIndex}`}>{renderWithLinks(text.slice(lastIndex))}</React.Fragment>);
+    }
+    return parts.length > 0 ? <>{parts}</> : <>{renderWithLinks(text)}</>;
   }
 
   // Owner chips — collapsed view of editOwnerIds against the loaded
@@ -417,20 +521,51 @@ export default function TaskDetailPanel({
                   <span style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY }}>{c.commented_by || "Unknown"}</span>
                   <span style={{ fontSize: "11px", color: COLOURS.INK_400, fontFamily: FONT_MONO }}>{formatDateUK(c.created_at)}</span>
                 </div>
-                <div style={{ fontSize: "13px", color: COLOURS.NAVY, lineHeight: 1.5 }}>{renderWithLinks(c.comment_text)}</div>
+                <div style={{ fontSize: "13px", color: COLOURS.NAVY, lineHeight: 1.5 }}>{renderCommentText(c.comment_text)}</div>
               </div>
             ))}
             {comments.length === 0 && (
               <div style={{ fontSize: "12.5px", color: COLOURS.INK_400, marginBottom: "10px" }}>No comments yet.</div>
             )}
             {!locked && (
-              <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-                <input
+              <div style={{ display: "flex", gap: "8px", marginTop: "6px", position: "relative" }}>
+                {/* @mention dropdown — floats above the textarea */}
+                {mentionQuery !== null && mentionCandidates.length > 0 && (
+                  <div style={{
+                    position: "absolute", bottom: "100%", left: 0, right: "72px",
+                    backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
+                    borderRadius: RADII.SM, boxShadow: "0 4px 12px rgba(15,23,32,0.10)",
+                    maxHeight: "200px", overflowY: "auto", zIndex: 200, marginBottom: "4px",
+                  }}>
+                    {mentionCandidates.map((m, i) => (
+                      <div
+                        key={m.id}
+                        onMouseDown={(e) => { e.preventDefault(); insertMention(m); }}
+                        onMouseEnter={() => setMentionIndex(i)}
+                        style={{
+                          padding: "7px 12px", fontSize: "13px", cursor: "pointer",
+                          backgroundColor: i === mentionIndex ? COLOURS.CARD_ALT : COLOURS.CARD,
+                          color: COLOURS.NAVY, display: "flex", gap: "8px", alignItems: "center",
+                        }}
+                      >
+                        <span style={{ fontWeight: i === mentionIndex ? 600 : 400 }}>{m.name}</span>
+                        {m.email && <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{m.email}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  ref={commentRef}
                   value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); postComment(); } }}
-                  placeholder="Add a comment…"
-                  style={{ flex: 1, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "8px 14px", fontSize: "13px", color: COLOURS.NAVY }}
+                  onChange={handleCommentChange}
+                  onKeyDown={handleCommentKeyDown}
+                  placeholder="Add a comment… (type @ to mention someone)"
+                  rows={2}
+                  style={{
+                    flex: 1, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
+                    padding: "8px 14px", fontSize: "13px", color: COLOURS.NAVY,
+                    resize: "none", fontFamily: "inherit", lineHeight: 1.5, backgroundColor: COLOURS.CARD,
+                  }}
                 />
                 <button
                   onClick={postComment}
@@ -438,7 +573,7 @@ export default function TaskDetailPanel({
                   style={{
                     backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.PILL,
                     padding: "8px 16px", fontSize: "12.5px", fontWeight: 600, cursor: postingComment || !newComment.trim() ? "not-allowed" : "pointer",
-                    opacity: postingComment || !newComment.trim() ? 0.6 : 1,
+                    opacity: postingComment || !newComment.trim() ? 0.6 : 1, alignSelf: "flex-end",
                   }}
                 >
                   Post
