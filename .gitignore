@@ -58,3 +58,4 @@ CLAUDE_SKILLS_CONTEXT.md
 
 # Claude-generated data exports (never commit)
 Claude outputs/
+package-lock.json
