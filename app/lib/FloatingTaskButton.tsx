@@ -18,12 +18,23 @@ import NewTaskForm from "../tasks/NewTaskForm";
 
 const NAVY = COLOURS.NAVY;
 
+type QuickPayload = {
+  description: string;
+  assigneeId?: string;
+  dueDate?: string;
+  priority?: string;
+};
+
 export default function FloatingTaskButton() {
   const isMobile = useMobile();
-  const [open,     setOpen]     = useState(false);
-  const [showFull, setShowFull] = useState(false);
+  const [open,        setOpen]        = useState(false);
+  const [showFull,    setShowFull]    = useState(false);
+  const [openVersion, setOpenVersion] = useState(0);
+  const [prefill,     setPrefill]     = useState<QuickPayload>({ description: "" });
 
-  function handleMoreOptions() {
+  function handleMoreOptions(payload: QuickPayload) {
+    setPrefill(payload);
+    setOpenVersion((v) => v + 1);
     setOpen(false);
     setShowFull(true);
   }
@@ -139,7 +150,14 @@ export default function FloatingTaskButton() {
 
       {/* ── Full form modal (opened via "More options") ── */}
       <Modal open={showFull} onClose={() => setShowFull(false)} maxWidth="640px">
-        <NewTaskForm onCreated={() => setShowFull(false)} />
+        <NewTaskForm
+          onCreated={() => setShowFull(false)}
+          prefillDescription={prefill.description}
+          prefillAssigneeId={prefill.assigneeId}
+          prefillDueDate={prefill.dueDate}
+          prefillPriority={prefill.priority}
+          openVersion={openVersion}
+        />
       </Modal>
     </>
   );

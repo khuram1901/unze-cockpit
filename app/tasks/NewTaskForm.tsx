@@ -131,7 +131,17 @@ export default function NewTaskForm({
     setDescription(prefillDescription);
     if (prefillDueDate) setDueDate(prefillDueDate);
     if (prefillPriority) setPriority(prefillPriority);
-    // Assignee is handled by the separate prefillAssigneeApplied effect below.
+    // If no assignee came from the quick form, clear any previously prefilled
+    // assignee so the full form starts fresh on every "More options" click.
+    if (!prefillAssigneeId) {
+      setAssignedToIds([]);
+      setCompanyId("");
+      setCompanyTouched(false);
+      setProject("");
+    }
+    // Reset the once-guard so prefillAssigneeApplied effect can re-fire and
+    // apply the correct assignee for this new invocation.
+    prefillAssigneeApplied.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openVersion]);
 
