@@ -355,7 +355,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       setMemberPhones(phones);
     });
     supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).then(({ data }) => setCompanies(data || []));
-    supabase.from("department_owners").select("department_name").order("department_name").then(({ data }) => setAllDepartments((data || []).map((d) => d.department_name)));
+    supabase.from("department_owners").select("department_name").eq("active", true).order("department_name").then(({ data }) => setAllDepartments((data || []).map((d) => d.department_name)));
     supabase.rpc("get_tasks_department_breakdown").then(({ data, error }) => { if (!error) setDeptBreakdown(data || []); });
     supabase.from("members").select("id, name, email, department, business_unit, employee_code").eq("is_active", true).order("name").then(({ data }) => {
       setBulkMembers(data || []);
