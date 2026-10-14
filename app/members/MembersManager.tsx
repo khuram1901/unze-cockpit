@@ -43,9 +43,23 @@ type DepartmentOwner = {
 };
 type TaskSummary = { id: string; assigned_to: string | null; status: string };
 
+// Fallback only — used if the departments table fails to load.
+// Canonical list lives in the `departments` table (migration 214+).
+// Keep in sync with DB; last updated migration 220.
 const DEPARTMENTS = [
-  "Unze Trading Ops", "Finance", "HR", "Admin",
-  "IT", "Tax", "Legal", "Sales", "Audit", "S&M Investment", "BINC",
+  // Unze Group (shared)
+  "Accounts", "Admin", "CCTV and Surveillance", "Finance", "Finance & Tax",
+  "Fit Out and Maintenance", "HR", "Internal Audit", "IT", "Management",
+  "Marketing", "Tax",
+  // IFPL
+  "LDS Store", "Online", "Retail Head Office", "Retail Store",
+  "Supply Chain", "Supply Chain Apparel", "Warehouse",
+  // Baranh
+  "Accounts Baranh", "Chocofay", "Restaurant", "Restaurant Head Office",
+  // UTPL
+  "Unze Meter Operations", "Unze Trading Accounts", "Unze Trading Operations",
+  // Unze London
+  "Accounts UK", "Retail Store UK",
 ];
 
 const ALL_BUSINESS_UNITS = [
