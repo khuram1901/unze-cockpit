@@ -126,7 +126,7 @@ export default function TasksPageClient() {
         </Modal>
       )}
 
-      {ctx?.department === "Audit" ? (
+      {ctx?.department === "Internal Audit" ? (
         /* ── Audit members: two-column layout ─────────────────────────────
            Left  (wider) : audit project stage tasks
            Right (narrower): general tasks assigned to this person         */

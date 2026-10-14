@@ -89,13 +89,16 @@ type MeetingTask = {
 };
 
 const DEPT_ACCENT: Record<string, string> = {
-  "Finance": COLOURS.GREEN,
+  "Finance & Tax": COLOURS.GREEN,
+  "Finance": COLOURS.GREEN,        // legacy records
   "HR": COLOURS.AMBER,
   "Admin": COLOURS.SLATE,
-  "Audit": COLOURS.RED,
+  "Internal Audit": COLOURS.RED,
+  "Audit": COLOURS.RED,            // legacy records
   "Taxation": COLOURS.RED,
   "IT": COLOURS.BLUE,
-  "Unze Trading Ops": COLOURS.BLUE,
+  "Unze Trading Operations": COLOURS.BLUE,
+  "Unze Trading Ops": COLOURS.BLUE, // legacy records
   "Unze Group": COLOURS.NAVY,
 };
 function deptAccent(dept: string) { return DEPT_ACCENT[dept] || COLOURS.SLATE; }
@@ -312,7 +315,7 @@ function MeetingCard({
                 <div>
                   <label style={labelStyle}>Department</label>
                   <select value={draft.department} onChange={(e) => setDraft({ ...draft, department: e.target.value })} style={sf}>
-                    {["Unze Group", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
+                    {["Unze Group", "Unze Trading Operations", "Finance & Tax", "HR", "Internal Audit", "Taxation", "Admin"].map((d) => (
                       <option key={d}>{d}</option>
                     ))}
                   </select>
@@ -1500,7 +1503,7 @@ export default function MeetingsPage() {
               <div>
                 <label style={labelStyle}>Department</label>
                 <select value={extracted.department} onChange={(e) => setExtracted({ ...extracted, department: e.target.value })} style={inputStyle}>
-                  {["Unze Group", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
+                  {["Unze Group", "Unze Trading Operations", "Finance & Tax", "HR", "Internal Audit", "Taxation", "Admin"].map((d) => (
                     <option key={d}>{d}</option>
                   ))}
                 </select>
@@ -1635,7 +1638,7 @@ export default function MeetingsPage() {
                     <label style={{ ...labelStyle, fontSize: "12px" }}>Department</label>
                     <select value={item.department || ""} onChange={(e) => updateActionItem(i, { department: e.target.value })} style={smallField}>
                       <option value="">None</option>
-                      {["Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
+                      {["Unze Trading Operations", "Finance & Tax", "HR", "Internal Audit", "Taxation", "Admin"].map((d) => (
                         <option key={d}>{d}</option>
                       ))}
                     </select>

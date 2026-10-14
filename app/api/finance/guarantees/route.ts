@@ -15,8 +15,8 @@ async function resolveGuaranteePerms(supabase: ReturnType<typeof createServiceCl
   const role = m?.role ?? null;
   const dept = m?.department ?? null;
   const isAdminTier = isAdminByEmail || role === "Admin" || role === "CEO";
-  const canView = isAdminTier || (role === "Manager" && (dept === "Finance" || dept === "Unze Trading Ops"));
-  const canViewFinancials = isAdminTier || (role === "Manager" && dept === "Finance");
+  const canView = isAdminTier || (role === "Manager" && (dept === "Finance & Tax" || dept === "Unze Trading Operations"));
+  const canViewFinancials = isAdminTier || (role === "Manager" && dept === "Finance & Tax");
   return { canView, canViewFinancials };
 }
 

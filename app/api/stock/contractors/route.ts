@@ -4,7 +4,7 @@ import { requireAuth } from "../../../lib/api-auth";
 
 function canManage(role: string, department: string | null) {
   return role === "Admin" || role === "CEO" || role === "Executive" ||
-    (role === "Manager" && department === "Unze Trading Ops");
+    (role === "Manager" && department === "Unze Trading Operations");
 }
 
 export async function GET(request: NextRequest) {

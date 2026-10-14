@@ -788,7 +788,7 @@ function HomePageInner() {
       // plus Completed tasks from the current month only (all that's
       // needed for the completedThisMonth stat below) — no arbitrary cap.
       supabase.from("tasks").select("id, description, project, priority, due_date, assigned_to, assigned_by, assigned_date, status, task_type, reply_required, reply_text, assigned_to_department, assigned_to_business_unit, created_at, updated_at, source_type, source_record_id, source_label, exception_type, explanation_required, assigned_to_email, submitted_by_name").or(`status.not.in.(Completed,Cancelled),and(status.eq.Completed,updated_at.gte.${currentMonthStart})`).order("created_at", { ascending: false }),
-      supabase.from("department_owners").select("department_name, primary_owner_name, primary_owner_email").eq("department_name", "Unze Trading Ops").single(),
+      supabase.from("department_owners").select("department_name, primary_owner_name, primary_owner_email").eq("department_name", "Unze Trading Operations").single(),
       supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
       supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
       // Monthly entries kept for the daily ops chart (per-day breakdown needed)
@@ -1583,7 +1583,7 @@ function HomePageInner() {
       const userRole = memberData?.role || "";
       const userDept = memberData?.department || "";
 
-      if (userRole === "Manager" && userDept === "Unze Trading Ops") {
+      if (userRole === "Manager" && userDept === "Unze Trading Operations") {
         const items: ManagerBriefingItem[] = [];
         const mStart = today.slice(0, 7) + "-01";
 
@@ -1594,8 +1594,8 @@ function HomePageInner() {
           supabase.from("dispatch_entries").select("qty_31, qty_36, qty_45, qty_meter").gte("entry_date", mStart).lte("entry_date", today),
           supabase.from("breakage_entries").select("qty_31, qty_36, qty_45, qty_meter").gte("entry_date", sevenDaysAgo).lte("entry_date", today),
           supabase.from("machine_issues").select("id, issue_status").neq("issue_status", "Resolved"),
-          supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to_department", "Unze Trading Ops").not("status", "in", '("Completed","Cancelled")'),
-          supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to_department", "Unze Trading Ops").not("status", "in", '("Completed","Cancelled")').lt("due_date", today),
+          supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to_department", "Unze Trading Operations").not("status", "in", '("Completed","Cancelled")'),
+          supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to_department", "Unze Trading Operations").not("status", "in", '("Completed","Cancelled")').lt("due_date", today),
         ]);
 
         const sumQty = (rows: { qty_31?: number; qty_36?: number; qty_45?: number; qty_meter?: number }[]) =>
@@ -1652,7 +1652,7 @@ function HomePageInner() {
         setManagerBriefingTitle("Operations Briefing");
       }
 
-      if (userRole === "Manager" && userDept === "Finance") {
+      if (userRole === "Manager" && userDept === "Finance & Tax") {
         const items: ManagerBriefingItem[] = [];
 
         const userCompany = memberData?.company || "";
@@ -1663,8 +1663,8 @@ function HomePageInner() {
         const [recOpenRes, recOverdueRes, finOpenRes, finOverdueRes] = await Promise.all([
           supabase.from("receivables").select("id, amount").neq("status", "Collected"),
           supabase.rpc("get_receivable_rag_by_customer"),
-          supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to_department", "Finance").not("status", "in", '("Completed","Cancelled")'),
-          supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to_department", "Finance").not("status", "in", '("Completed","Cancelled")').lt("due_date", today),
+          supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to_department", "Finance & Tax").not("status", "in", '("Completed","Cancelled")'),
+          supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to_department", "Finance & Tax").not("status", "in", '("Completed","Cancelled")').lt("due_date", today),
         ]);
 
         for (const cId of companyIds) {
@@ -2650,17 +2650,9 @@ function ExecutiveDashboardBody({
       owner: "—", detail: `${perf.total} task${perf.total === 1 ? "" : "s"}`, perf, hasConfig: false,
     });
   }
-  if (!scorecardRows.some((r) => r.title.toLowerCase() === "legal")) {
-    scorecardRows.push({ slug: "legal", title: "Legal", status: "GREEN", owner: "Not yet built", detail: "Dashboard pending", perf: null, hasConfig: false });
-  }
-  /* RED departments surface first so the worst problems are seen without scrolling; Legal (no dashboard yet) always pinned last. */
+  /* RED departments surface first so the worst problems are seen without scrolling. */
   const statusRank: Record<"RED" | "AMBER" | "GREEN", number> = { RED: 0, AMBER: 1, GREEN: 2 };
-  scorecardRows.sort((a, b) => {
-    const aLegal = a.title === "Legal" && a.owner === "Not yet built";
-    const bLegal = b.title === "Legal" && b.owner === "Not yet built";
-    if (aLegal !== bLegal) return aLegal ? 1 : -1;
-    return statusRank[a.status] - statusRank[b.status];
-  });
+  scorecardRows.sort((a, b) => statusRank[a.status] - statusRank[b.status]);
 
   const cashAlerts: { title: string; value: number; color: string }[] = [];
   if (showFinance) {

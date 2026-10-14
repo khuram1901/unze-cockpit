@@ -188,7 +188,7 @@ function FinancePageInner() {
       setIsAdmin(isAdminTier(ctx));
       setCanEdit(canEditFinance(ctx));
 
-      if (member.role === "Manager" && member.department === "Finance" && member.company) {
+      if (member.role === "Manager" && member.department === "Finance & Tax" && member.company) {
         const config = getCompanyByName(member.company);
         if (config) {
           router.replace(`/finance/${config.slug}`);

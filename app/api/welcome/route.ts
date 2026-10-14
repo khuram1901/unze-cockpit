@@ -32,10 +32,10 @@ type QuickLink = { href: string; title: string; icon: string; color: string };
 const DEPT_PAGES: Record<string, { href: string; icon: string }> = {
   "HR":             { href: "/department/hr",       icon: "🧑‍💼" },
   "Admin":          { href: "/department/admin",     icon: "🏛️"  },
-  "Audit":          { href: "/department/audit",     icon: "🔎"  },
-  "Tax":            { href: "/department/tax",       icon: "🧾"  },
+  "Internal Audit": { href: "/department/audit",     icon: "🔎"  },
+  "Finance & Tax":  { href: "/department/taxation",  icon: "🧾"  },
   "IT":             { href: "/department/it",        icon: "🖥️"  },
-  "Unze Trading Ops": { href: "/dashboard",          icon: "🏗️"  },
+  "Unze Trading Operations": { href: "/dashboard",   icon: "🏗️"  },
 };
 
 function computeQuickLinks(ctx: UserCtx): QuickLink[] {

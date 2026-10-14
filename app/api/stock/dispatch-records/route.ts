@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
         const { data: opsManagers } = await supabase
           .from("members")
           .select("email, first_name, last_name, name, notify_email, notify_whatsapp, phone_e164")
-          .eq("department", "Unze Trading Ops")
+          .eq("department", "Unze Trading Operations")
           .eq("role", "Manager")
           .eq("notify_email", true);
 

@@ -368,7 +368,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
   const teamName = (id: string) => teams.find((t) => t.id === id)?.name || "";
   const canUpdateTeam = (teamId: string) => isManager || viewer?.team_id === teamId;
   const isPreauditMember = !isManager && teams.length === 1 && teams[0]?.code === "PREAUDIT";
-  const canEnterDaily = isManager || isPreauditMember || (!!userCtx && userCtx.department === "Audit");
+  const canEnterDaily = isManager || isPreauditMember || (!!userCtx && userCtx.department === "Internal Audit");
 
   const statusOrder = ["In Progress", "Planned", "Completed", "Cancelled"];
   const sorted = [...teamProcesses].sort((a, b) =>

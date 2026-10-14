@@ -531,7 +531,6 @@ export default function DailyEntryPage() {
     { id: "utility",     label: "Utilities",    emoji: "🔌" },
     { id: "maintenance", label: "Maintenance",  emoji: "🔧" },
     { id: "tasks",       label: "My Tasks",     emoji: "✅" },
-    { id: "legal",       label: "Legal",        emoji: "⚖️" },
   ];
 
   const btnSt = (id: FormType): React.CSSProperties => ({

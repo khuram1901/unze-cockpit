@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const dept = member?.department ?? "";
   const allowed =
     role === "Admin" || role === "CEO" ||
-    (role === "Manager" && (dept === "Finance" || dept === "Unze Trading Ops"));
+    (role === "Manager" && (dept === "Finance & Tax" || dept === "Unze Trading Operations"));
   if (!allowed) return Response.json({ error: "Forbidden" }, { status: 403 });
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("q") || "";

@@ -177,7 +177,7 @@ export function canViewFinance(u: UserCtx) {
   const o = ov(u, "can_view_finance");
   if (o !== null) return o;
   if (isAdminTier(u)) return true;
-  return isManagerTier(u.role) && u.department === "Finance";
+  return isManagerTier(u.role) && u.department === "Finance & Tax";
 }
 
 export function canEditFinance(u: UserCtx) {
@@ -239,13 +239,13 @@ export function canViewReceivables(u: UserCtx) {
   const o = ov(u, "can_view_receivables");
   if (o !== null) return o;
   if (isAdminTier(u)) return true;
-  return isManagerTier(u.role) && (u.department === "Finance" || u.department === "Unze Trading Ops");
+  return isManagerTier(u.role) && (u.department === "Finance & Tax" || u.department === "Unze Trading Operations");
 }
 
 export function canEditReceivables(u: UserCtx) {
   const o = ov(u, "can_edit_receivables");
   if (o !== null) return o;
-  return isAdminTier(u) || u.department === "Unze Trading Ops";
+  return isAdminTier(u) || u.department === "Unze Trading Operations";
 }
 
 // ── Executive dashboard ───────────────────────────────────────────
@@ -259,16 +259,16 @@ export function canViewExecutiveDashboard(u: UserCtx) {
 export function canViewOperations(u: UserCtx) {
   const o = ov(u, "can_view_operations_dashboard");
   if (o !== null) return o;
-  return isAdminTier(u) || u.department === "Unze Trading Ops";
+  return isAdminTier(u) || u.department === "Unze Trading Operations";
 }
 
 export function canViewStock(u: UserCtx) {
   const o = ov(u, "can_view_stock");
   if (o !== null) return o;
-  return isAdminTier(u) || u.department === "Unze Trading Ops";
+  return isAdminTier(u) || u.department === "Unze Trading Operations";
 }
 
-// Guarantees: Finance dept + Unze Trading Ops (they chase releases)
+// Guarantees: Finance & Tax + Unze Trading Operations (they chase releases)
 export function canViewGuarantees(u: UserCtx) {
   // Same override-before-PA ordering bug as canViewFinance, fixed the
   // same way on 15 Jul 2026 — isPA() checked first, unconditionally.
@@ -276,7 +276,7 @@ export function canViewGuarantees(u: UserCtx) {
   const o = ov(u, "can_view_guarantees");
   if (o !== null) return o;
   if (isAdminTier(u)) return true;
-  return isManagerTier(u.role) && (u.department === "Finance" || u.department === "Unze Trading Ops");
+  return isManagerTier(u.role) && (u.department === "Finance & Tax" || u.department === "Unze Trading Operations");
 }
 
 // Full guarantee details (limits, cash margin, bank charges, facility utilisation)
@@ -284,7 +284,7 @@ export function canViewGuarantees(u: UserCtx) {
 export function canViewGuaranteeFinancials(u: UserCtx) {
   if (isPA(u)) return false;
   if (isAdminTier(u)) return true;
-  return isManagerTier(u.role) && u.department === "Finance";
+  return isManagerTier(u.role) && u.department === "Finance & Tax";
 }
 
 export function canManageGuarantees(u: UserCtx): boolean {
@@ -294,13 +294,13 @@ export function canManageGuarantees(u: UserCtx): boolean {
   const o = ov(u, "can_manage_guarantees");
   if (o !== null) return o;
   if (isAdminTier(u)) return true;
-  return isManagerTier(u.role) && u.department === "Finance";
+  return isManagerTier(u.role) && u.department === "Finance & Tax";
 }
 
 export function canManageStock(u: UserCtx) {
   const o = ov(u, "can_manage_stock");
   if (o !== null) return o;
-  return isAdminTier(u) || (isManagerTier(u.role) && u.department === "Unze Trading Ops");
+  return isAdminTier(u) || (isManagerTier(u.role) && u.department === "Unze Trading Operations");
 }
 
 // ── Tasks & meetings ──────────────────────────────────────────────
@@ -452,11 +452,10 @@ export function canDeleteMember(actor: UserCtx, target: UserCtx): boolean {
 
 // ── Departments ───────────────────────────────────────────────────
 const DEPT_PERM_KEY: Record<string, string> = {
-  "Unze Trading Ops": "can_view_dept_ops",
+  "Unze Trading Operations": "can_view_dept_ops",
   HR: "can_view_dept_hr",
-  Tax: "can_view_dept_tax",
-  Legal: "can_view_dept_legal",
-  Audit: "can_view_dept_audit",
+  "Finance & Tax": "can_view_dept_tax",
+  "Internal Audit": "can_view_dept_audit",
   Admin: "can_view_dept_admin",
   IT: "can_view_dept_it",
 };
@@ -473,12 +472,10 @@ export function canViewDepartment(u: UserCtx, departmentName: string): boolean {
   // can never let him in. Deliberately placed AFTER the override check so
   // the Access Matrix can still revoke it — previously this exemption lived
   // in the route guard and bypassed overrides entirely.
-  if (departmentName === "Tax" && isTaxConsultant(u)) return true;
+  if (departmentName === "Finance & Tax" && isTaxConsultant(u)) return true;
   if (u.role === "Executive") return false;
   if (isManagerTier(u.role)) {
     if (u.department === departmentName) return true;
-    // Finance HODs can view Tax Notices (closely related)
-    if (departmentName === "Tax" && u.department === "Finance") return true;
     return false;
   }
   // Members can view their own department page.
@@ -499,7 +496,7 @@ export function canViewPADashboard(u: UserCtx) {
 export function canAccessDailyEntry(u: UserCtx) {
   const o = ov(u, "can_access_daily_entry");
   if (o !== null) return o;
-  return isAdminTier(u) || u.department === "Unze Trading Ops";
+  return isAdminTier(u) || u.department === "Unze Trading Operations";
 }
 
 // ── Investments ──────────────────────────────────────────────────
@@ -540,9 +537,9 @@ export function canViewTaxAccounts(u: UserCtx): boolean {
   if (isPA(u)) return false;
   const o = ov(u, "can_view_dept_tax_accounts");
   if (o !== null) return o;
-  // Default: Admin/CEO and Tax/Finance departments only.
+  // Default: Admin/CEO and Finance & Tax department only.
   // Everyone else needs an explicit grant via the Access Matrix.
-  return isAdminTier(u) || u.department === "Tax" || u.department === "Finance";
+  return isAdminTier(u) || u.department === "Finance & Tax";
 }
 
 export function canManageTaxSchedule(u: UserCtx): boolean {
@@ -691,10 +688,10 @@ export function isDailyEntryOnly(u: UserCtx): boolean {
     !canCreateAssignments(u) &&
     !canViewDepartment(u, "Admin") &&
     !canViewDepartment(u, "HR") &&
-    !canViewDepartment(u, "Tax") &&
-    !canViewDepartment(u, "Audit") &&
+    !canViewDepartment(u, "Finance & Tax") &&
+    !canViewDepartment(u, "Internal Audit") &&
     !canViewDepartment(u, "IT") &&
-    !canViewDepartment(u, "Unze Trading Ops") &&
+    !canViewDepartment(u, "Unze Trading Operations") &&
     !canViewFinance(u) &&
     !canViewReceivables(u)
   );

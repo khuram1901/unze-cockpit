@@ -3,7 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
 function isOpsManager(role: string, department: string | null) {
-  return role === "Manager" && department === "Unze Trading Ops";
+  return role === "Manager" && department === "Unze Trading Operations";
 }
 
 function isPrivileged(role: string) {

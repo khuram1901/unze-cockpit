@@ -42,13 +42,16 @@ type Task = {
 };
 
 const DEPT_ACCENT: Record<string, string> = {
-  "Finance": COLOURS.GREEN,
+  "Finance & Tax": COLOURS.GREEN,
+  "Finance": COLOURS.GREEN,          // legacy records
   "HR": COLOURS.AMBER,
   "Admin": COLOURS.SLATE,
-  "Audit": COLOURS.RED,
+  "Internal Audit": COLOURS.RED,
+  "Audit": COLOURS.RED,              // legacy records
   "Taxation": COLOURS.RED,
   "IT": COLOURS.BLUE,
-  "Unze Trading Ops": COLOURS.BLUE,
+  "Unze Trading Operations": COLOURS.BLUE,
+  "Unze Trading Ops": COLOURS.BLUE,  // legacy records
   "Executive Office": COLOURS.NAVY,
 };
 const deptAccent = (dept: string) => DEPT_ACCENT[dept] || COLOURS.SLATE;

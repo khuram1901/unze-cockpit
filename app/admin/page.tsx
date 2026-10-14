@@ -753,7 +753,6 @@ export default function AdminDataPage() {
     { id: "compliance",    label: "Compliance",    widgetKey: "admin_ops.compliance" },
     { id: "documents",     label: "Documents",     widgetKey: "admin_ops.documents" },
     { id: "operations",    label: "Operations",    widgetKey: "admin_ops.operations" },
-    { id: "legal",         label: "Legal",         widgetKey: "admin_ops.legal" },
   ];
   // Only show tabs that are widget-visible for this user.
   const TABS = ALL_TABS.filter((t) => wv(t.widgetKey));

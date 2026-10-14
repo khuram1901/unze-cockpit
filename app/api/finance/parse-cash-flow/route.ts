@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     const dept = member?.department ?? "";
     const allowed =
       role === "Admin" || role === "CEO" ||
-      (role === "Manager" && dept === "Finance");
+      (role === "Manager" && dept === "Finance & Tax");
     if (!allowed) return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 

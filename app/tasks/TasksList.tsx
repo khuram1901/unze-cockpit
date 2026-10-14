@@ -406,7 +406,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // present alongside the AuditTasksPanel above it.
   // Privileged users (canSeeAll = true, e.g. Audit Manager Shahid) still
   // see the full list since they review tasks across the whole team.
-  if (department === "Audit" && !isPrivileged && tasks.length === 0) {
+  if (department === "Internal Audit" && !isPrivileged && tasks.length === 0) {
     return (
       <p style={{ color: COLOURS.SLATE, fontSize: "13px", margin: 0 }}>
         No general tasks assigned to you right now.
@@ -1736,7 +1736,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "12px", width: "100%" }}>
           {/* Row 1 — entity filters: company · dept · priority · status · owner */}
           <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "nowrap", width: "100%" }}>
-            {!(department === "Audit" && !isPrivileged) && (
+            {!(department === "Internal Audit" && !isPrivileged) && (
               <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
                 <option value="all">All companies</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

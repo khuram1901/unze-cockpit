@@ -17,7 +17,7 @@ async function requireGuaranteeFinancialsAccess(
   const role = m?.role ?? null;
   const dept = m?.department ?? null;
   const isAdminTier = isAdminByEmail || role === "Admin" || role === "CEO";
-  const allowed = isAdminTier || (role === "Manager" && dept === "Finance");
+  const allowed = isAdminTier || (role === "Manager" && dept === "Finance & Tax");
   if (!allowed) return Response.json({ error: "Forbidden" }, { status: 403 });
   return true;
 }

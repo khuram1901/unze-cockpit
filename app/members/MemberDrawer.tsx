@@ -239,9 +239,9 @@ const PLAIN_WIDGET_PAGES = [...new Set(PLAIN_WIDGETS.map((w) => w.page))].sort()
 // Keep in sync with DB; last updated migration 220.
 const DEPARTMENTS = [
   // Unze Group (shared)
-  "Accounts", "Admin", "CCTV and Surveillance", "Finance", "Finance & Tax",
+  "Accounts", "Admin", "CCTV and Surveillance", "Finance & Tax",
   "Fit Out and Maintenance", "HR", "Internal Audit", "IT", "Management",
-  "Marketing", "Tax",
+  "Marketing",
   // IFPL
   "Accounts IFPL", "LDS Store", "Online", "Retail Head Office", "Retail Store",
   "Supply Chain", "Supply Chain Apparel", "Warehouse",
@@ -258,7 +258,7 @@ const ALL_BUS = [
 ];
 const DEPT_BUS: Record<string, string[]> = {
   "Unze Trading Operations": ["Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
-  Finance: ALL_BUS, HR: ALL_BUS, Admin: ALL_BUS,
+  "Finance & Tax": ALL_BUS, HR: ALL_BUS, Admin: ALL_BUS,
   "Internal Audit": ALL_BUS,
 };
 /**
@@ -271,7 +271,6 @@ const DEPT_DEFAULT_COMPANY: Record<string, string> = {
   "Accounts":              "Unze Group",
   "Admin":                 "Unze Group",
   "CCTV and Surveillance": "Unze Group",
-  "Finance":               "Unze Group",
   "Finance & Tax":         "Unze Group",
   "Fit Out and Maintenance": "Unze Group",
   "HR":                    "Unze Group",
@@ -279,7 +278,6 @@ const DEPT_DEFAULT_COMPANY: Record<string, string> = {
   "IT":                    "Unze Group",
   "Management":            "Unze Group",
   "Marketing":             "Imperial Footwear",
-  "Tax":                   "Unze Group",
   // IFPL
   "Accounts IFPL":         "Imperial Footwear",
   "LDS Store":             "Imperial Footwear",

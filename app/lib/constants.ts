@@ -111,8 +111,8 @@ export const TAX_COMPANY_NAMES: string[] = ["UTPL", "IFPL", "HD", "BRNH", "KKJ",
 // Previously defined separately in each file with different variable names,
 // which meant a department added to one wouldn't appear in the other.
 export const COMPANY_DEPARTMENTS: Record<string, string[]> = {
-  [UTPL_COMPANY_ID]: ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit", "Unze Trading Ops"],
-  [IFPL_COMPANY_ID]: ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"],
+  [UTPL_COMPANY_ID]: ["Finance & Tax", "HR", "Admin", "IT", "Internal Audit", "Unze Trading Operations"],
+  [IFPL_COMPANY_ID]: ["Finance & Tax", "HR", "Admin", "IT", "Internal Audit"],
 };
 
 export const COMPANY_CATEGORIES: Record<string, string[]> = {
@@ -121,7 +121,7 @@ export const COMPANY_CATEGORIES: Record<string, string[]> = {
 };
 
 export function deptsForCompany(companyId: string): string[] {
-  return COMPANY_DEPARTMENTS[companyId] ?? ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
+  return COMPANY_DEPARTMENTS[companyId] ?? ["Finance & Tax", "HR", "Admin", "IT", "Internal Audit"];
 }
 
 export function catsForCompany(companyId: string): string[] {
