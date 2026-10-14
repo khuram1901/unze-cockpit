@@ -161,11 +161,11 @@ const PERM_SECTIONS: PermSection[] = [
   {
     title: "Departments", icon: "🏢",
     items: [
-      { key: "can_view_dept_ops", label: "Unze Trading Ops" },
+      { key: "can_view_dept_ops", label: "Unze Trading Operations" },
       { key: "can_view_dept_hr", label: "HR" },
       { key: "can_view_hr_full_data", label: "Full employee data", description: "All FlowHCM data incl. salaries & contact details. Without this, HR staff see names only; non-HR see nothing" },
       { key: "can_view_group_hr", label: "Group HR (CEO view)", description: "Group-wide people & payroll dashboard" },
-      { key: "can_view_dept_audit", label: "Audit" },
+      { key: "can_view_dept_audit", label: "Internal Audit" },
       { key: "can_view_dept_admin", label: "Admin" },
       { key: "can_view_dept_it", label: "IT" },
       { key: "can_view_dept_tax", label: "Tax Notices" },
@@ -234,55 +234,74 @@ const PLAIN_WIDGET_PAGES = [...new Set(PLAIN_WIDGETS.map((w) => w.page))].sort()
 
 /* ── Department / BU helpers ──────────────────────────────────────────── */
 
+// Fallback only — used if the departments table fails to load.
+// Canonical list lives in the `departments` table (migration 214+).
+// Keep in sync with DB; last updated migration 220.
 const DEPARTMENTS = [
-  "Unze Trading Ops", "Finance", "HR", "Admin",
-  "IT", "Tax", "Legal", "Sales", "Audit", "S&M Investment", "BINC",
-  "Marketing", "Online", "Supply Chain", "Supply Chain Apparel",
-  "CCTV and Surveillance", "Fit Out & Maintenance", "Retail Operations",
+  // Unze Group (shared)
+  "Accounts", "Admin", "CCTV and Surveillance", "Finance", "Finance & Tax",
+  "Fit Out and Maintenance", "HR", "Internal Audit", "IT", "Management",
+  "Marketing", "Tax",
+  // IFPL
+  "Accounts IFPL", "LDS Store", "Online", "Retail Head Office", "Retail Store",
+  "Supply Chain", "Supply Chain Apparel", "Warehouse",
+  // Baranh
+  "Accounts Baranh", "Chocofay", "Restaurant", "Restaurant Head Office",
+  // UTPL
+  "Accounts UTPL", "Unze Meter Operations", "Unze Trading Accounts", "Unze Trading Operations",
+  // Unze London
+  "Accounts UK", "Retail Store UK",
 ];
 const ALL_BUS = [
   "Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant",
   "Meters", "Retail", "Hospitality", "Property", "Nursing College",
 ];
 const DEPT_BUS: Record<string, string[]> = {
-  "Unze Trading Ops": ["Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
-  Finance: ALL_BUS, HR: ALL_BUS, Admin: ALL_BUS, Legal: ALL_BUS, Audit: ALL_BUS,
-  Sales: ["PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
-  "S&M Investment": ["Property"], BINC: ["Nursing College"],
+  "Unze Trading Operations": ["Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
+  Finance: ALL_BUS, HR: ALL_BUS, Admin: ALL_BUS,
+  "Internal Audit": ALL_BUS,
 };
 /**
  * Department → default company mapping.
  * Used to auto-set company when a department is selected in the member editor.
- *
- * Unze Group:        Finance, HR, Audit, Tax, Admin, CEO, IT
- * Unze Trading:      Unze Trading Ops
- * Imperial Footwear: Online, Supply Chain, Supply Chain Apparel, Marketing,
- *                    Retail Operations, Fit Out & Maintenance, CCTV and Surveillance
+ * Last updated: migration 220.
  */
 const DEPT_DEFAULT_COMPANY: Record<string, string> = {
-  // Unze Group
-  "Finance":               "Unze Group",
-  "HR":                    "Unze Group",
-  "Audit":                 "Unze Group",
-  "Tax":                   "Unze Group",
+  // Unze Group (shared)
+  "Accounts":              "Unze Group",
   "Admin":                 "Unze Group",
-  "CEO":                   "Unze Group",
+  "CCTV and Surveillance": "Unze Group",
+  "Finance":               "Unze Group",
+  "Finance & Tax":         "Unze Group",
+  "Fit Out and Maintenance": "Unze Group",
+  "HR":                    "Unze Group",
+  "Internal Audit":        "Unze Group",
   "IT":                    "Unze Group",
-  "CCTV and Surveillance": "Imperial Footwear",
-  // Unze Trading
-  "Unze Trading Ops":      "Unze Trading",
-  // Imperial Footwear
+  "Management":            "Unze Group",
+  "Marketing":             "Imperial Footwear",
+  "Tax":                   "Unze Group",
+  // IFPL
+  "Accounts IFPL":         "Imperial Footwear",
+  "LDS Store":             "Imperial Footwear",
   "Online":                "Imperial Footwear",
+  "Retail Head Office":    "Imperial Footwear",
+  "Retail Store":          "Imperial Footwear",
   "Supply Chain":          "Imperial Footwear",
   "Supply Chain Apparel":  "Imperial Footwear",
-  "Marketing":             "Imperial Footwear",
-  "Retail Operations":     "Imperial Footwear",
-  "Fit Out & Maintenance": "Imperial Footwear",
-  // Baranh departments
-  "Restaurant":             "Baranh",
-  "Restaurant Head Office": "Baranh",
+  "Warehouse":             "Imperial Footwear",
+  // Baranh
   "Accounts Baranh":        "Baranh",
   "Chocofay":               "Baranh",
+  "Restaurant":             "Baranh",
+  "Restaurant Head Office": "Baranh",
+  // UTPL
+  "Accounts UTPL":             "Unze Trading",
+  "Unze Meter Operations":     "Unze Trading",
+  "Unze Trading Accounts":     "Unze Trading",
+  "Unze Trading Operations":   "Unze Trading",
+  // Unze London
+  "Accounts UK":           "Unze London",
+  "Retail Store UK":       "Unze London",
 };
 // Company list for member assignment — imported from constants (single source of truth)
 const MEMBER_COMPANIES = MEMBER_COMPANY_NAMES;
