@@ -24,11 +24,9 @@ UPDATE public.members
 SET department = 'Restaurant Head Office'
 WHERE department = 'Restaurant'
   AND name IN ('Shahzaib Khan', 'Zeeshan  Iqbal');
--- Note: Zulfiqar Ahmad is the 3rd member — awaiting decision
+-- Zulfiqar Ahmad stays in Restaurant (confirmed).
 
--- Deactivate Restaurant (no tasks, will have ≤1 member after above)
--- UNCOMMENT the line below once ALL Restaurant members are moved out:
--- UPDATE public.departments SET active = false WHERE department_name = 'Restaurant';
+-- Restaurant stays ACTIVE — Zulfiqar Ahmad remains in this department.
 
 -- ─── 3. Retail Operations → Retail Head Office ─────────────────────────────
 -- 3a. Move all 7 members
