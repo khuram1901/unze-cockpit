@@ -52,12 +52,12 @@ const DEPARTMENTS = [
   "Fit Out and Maintenance", "HR", "Internal Audit", "IT", "Management",
   "Marketing", "Tax",
   // IFPL
-  "LDS Store", "Online", "Retail Head Office", "Retail Store",
+  "Accounts IFPL", "LDS Store", "Online", "Retail Head Office", "Retail Store",
   "Supply Chain", "Supply Chain Apparel", "Warehouse",
   // Baranh
   "Accounts Baranh", "Chocofay", "Restaurant", "Restaurant Head Office",
   // UTPL
-  "Unze Meter Operations", "Unze Trading Accounts", "Unze Trading Operations",
+  "Accounts UTPL", "Unze Meter Operations", "Unze Trading Accounts", "Unze Trading Operations",
   // Unze London
   "Accounts UK", "Retail Store UK",
 ];
@@ -71,11 +71,9 @@ const ALL_BUSINESS_UNITS = [
 const MEMBER_COMPANIES = MEMBER_COMPANY_NAMES;
 
 const DEPT_BUSINESS_UNITS: Record<string, string[]> = {
-  "Unze Trading Ops": ["Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
+  "Unze Trading Operations": ["Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
   Finance: ALL_BUSINESS_UNITS, HR: ALL_BUSINESS_UNITS, Admin: ALL_BUSINESS_UNITS,
-  Legal: ALL_BUSINESS_UNITS, Audit: ALL_BUSINESS_UNITS,
-  Sales: ["PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
-  "S&M Investment": ["Property"], BINC: ["Nursing College"],
+  "Internal Audit": ALL_BUSINESS_UNITS,
 };
 
 const AVATAR_GRADIENTS = [
@@ -234,13 +232,13 @@ export default function MembersManager() {
   }[]>([]);
   const [empLoading, setEmpLoading]     = useState(false);
 
-  // FlowHCM department names → app department dropdown values
+  // FlowHCM department names → app department canonical names
   const FLW_DEPT_MAP: Record<string, string> = {
     "HR": "HR", "IT": "IT", "Tax": "Tax", "Admin": "Admin",
-    "Internal Audit": "Audit", "Finance": "Finance", "Finance & Tax": "Finance",
-    "Accounts": "Finance", "Accounts Baranh": "Finance", "Accounts UK": "Finance",
-    "Unze Trading Operations": "Unze Trading Ops", "Unze Trading": "Unze Trading Ops",
-    "Unze Metering": "Unze Trading Ops",
+    "Internal Audit": "Internal Audit", "Finance": "Finance", "Finance & Tax": "Finance & Tax",
+    "Accounts": "Accounts", "Accounts Baranh": "Accounts Baranh", "Accounts UK": "Accounts UK",
+    "Unze Trading Operations": "Unze Trading Operations", "Unze Trading": "Unze Trading Operations",
+    "Unze Metering": "Unze Meter Operations",
   };
 
   useEffect(() => {
@@ -1095,21 +1093,21 @@ export default function MembersManager() {
                       const d = department;
                       const perms: { label: string; on: boolean }[] = [
                         { label: "Exec Dashboard", on: isA },
-                        { label: "Ops Dashboard", on: isA || isE || d === "Unze Trading Ops" },
+                        { label: "Ops Dashboard", on: isA || isE || d === "Unze Trading Operations" },
                         { label: "PA Dashboard", on: isA || isE },
                         { label: "View Finance", on: isA || (isM && d === "Finance") },
                         { label: "Edit Finance", on: isA || (isM && d === "Finance") },
-                        { label: "View Receivables", on: isA || (isM && (d === "Finance" || d === "Unze Trading Ops")) },
+                        { label: "View Receivables", on: isA || (isM && (d === "Finance" || d === "Unze Trading Operations")) },
                         { label: "All Tasks", on: isA || isE },
                         { label: "Create Tasks", on: isA || isE },
                         { label: "Review Tasks", on: isA || isE },
                         { label: "Recurring Tasks", on: isA || isE },
                         { label: "Calendar Mgmt", on: isA || isE },
                         { label: "All Minutes", on: isA || isE },
-                        { label: "Ops Dept", on: isA || d === "Unze Trading Ops" },
+                        { label: "Ops Dept", on: isA || d === "Unze Trading Operations" },
                         { label: "HR Dept", on: isA || d === "HR" },
                         { label: "Tax Dept", on: isA || d === "Tax" },
-                        { label: "Audit Dept", on: isA || d === "Audit" },
+                        { label: "Audit Dept", on: isA || d === "Internal Audit" },
                         { label: "Admin Dept", on: isA || isE || d === "Admin" },
                         { label: "IT Dept", on: isA || d === "IT" },
                         { label: "View Members", on: isA || isE },
@@ -1120,7 +1118,7 @@ export default function MembersManager() {
                         { label: "Audit Log", on: isA || isE },
                         { label: "Exceptions", on: isA || isE },
                         { label: "Import/Export", on: isA || isE },
-                        { label: "Daily Entry", on: isA || d === "Unze Trading Ops" },
+                        { label: "Daily Entry", on: isA || d === "Unze Trading Operations" },
                       ];
                       return perms.filter((p) => p.on).map((p) => (
                         <span key={p.label} style={{
