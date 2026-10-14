@@ -57,7 +57,7 @@ const DEPARTMENTS = [
   // Baranh
   "Accounts Baranh", "Chocofay", "Restaurant", "Restaurant Head Office",
   // UTPL
-  "Accounts UTPL", "Unze Meter Operations", "Unze Trading Accounts", "Unze Trading Operations",
+  "Accounts Unze Trading", "Unze Meter Operations", "Unze Trading Operations",
   // Unze London
   "Accounts UK", "Retail Store UK",
 ];

@@ -248,7 +248,7 @@ const DEPARTMENTS = [
   // Baranh
   "Accounts Baranh", "Chocofay", "Restaurant", "Restaurant Head Office",
   // UTPL
-  "Accounts UTPL", "Unze Meter Operations", "Unze Trading Accounts", "Unze Trading Operations",
+  "Accounts Unze Trading", "Unze Meter Operations", "Unze Trading Operations",
   // Unze London
   "Accounts UK", "Retail Store UK",
 ];
@@ -295,9 +295,8 @@ const DEPT_DEFAULT_COMPANY: Record<string, string> = {
   "Restaurant":             "Baranh",
   "Restaurant Head Office": "Baranh",
   // UTPL
-  "Accounts UTPL":             "Unze Trading",
+  "Accounts Unze Trading":     "Unze Trading",
   "Unze Meter Operations":     "Unze Trading",
-  "Unze Trading Accounts":     "Unze Trading",
   "Unze Trading Operations":   "Unze Trading",
   // Unze London
   "Accounts UK":           "Unze London",
