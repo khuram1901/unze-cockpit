@@ -1,6 +1,6 @@
 /**
  * POST /api/daily-sales/import-preview
- * Body: { store_id, year, month, rows: NormalisedRow[] }
+ * Body: { store_id, year, month, file_name, rows: NormalisedRow[] }
  *
  * rows must already be normalised (snake_case keys, ISO sales_date).
  * ExcelImportPanel.normalizeRow() handles this on the client.
@@ -46,10 +46,10 @@ export async function POST(request: NextRequest) {
   );
 
   // Filter rows to only those that fall within the selected year/month.
-  // The LDS Excel file contains an opening-balance row dated the last day of
-  // the PREVIOUS month (e.g. 2026-07-31 when importing August). Sending that
-  // row to the RPC triggers a lock-check on the wrong month, so we strip it
-  // here before the RPC ever sees it.
+  // Multi-sheet workbooks (e.g. Faisalabad Cash Banking Log) parse ALL sheets
+  // and pass all rows — we strip rows outside the selected month here.
+  // This also removes any opening-balance row dated the last day of the
+  // previous month (common in LDS Excel files).
   const filteredRows = (body.rows as Record<string, unknown>[]).filter(row => {
     const ds = String(row.sales_date ?? "");
     if (!ds) return false;
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       preview:    [],
       batch_id:   crypto.randomUUID(),
       store_name: "",
-      errors:     [{ row: 0, sales_date: "", error: `No rows found for \${body.year}-\${String(body.month).padStart(2,"0")}` }],
+      errors:     [{ row: 0, sales_date: "", error: `No rows found for ${body.year}-${String(body.month).padStart(2,"0")} — check the month/year selector matches your file` }],
       warnings:   [],
     });
   }
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
 
   // Build the PreviewRow[] the client table expects.
   // Only valid rows appear in the preview; errors are shown separately.
-  const preview = result.valid.map((v: RpcValid) => {
+  const preview = (result.valid ?? []).map((v: RpcValid) => {
     const row = filteredRows[v.row - 1] as Record<string, unknown>; // v.row is 1-based index into filteredRows sent to RPC
     return {
       sales_date:           String(row.sales_date   ?? ""),
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     preview,
     batch_id:   batchId,
     store_name: result.store_name,
-    errors:     result.errors,
-    warnings:   result.warnings,
+    errors:     result.errors   ?? [],
+    warnings:   result.warnings ?? [],
   });
 }

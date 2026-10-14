@@ -77,137 +77,6 @@ function pkr(n: number | null | undefined): string {
   return formatPKR(n);
 }
 
-/** Parse a minimal XLSX/CSV-like file into row objects. */
-async function parseExcel(file: File): Promise<Record<string, unknown>[]> {
-  // Dynamically import xlsx so it's not in the main bundle
-  const XLSX = await import("xlsx");
-  const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: "array", cellDates: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-
-  // Read as array-of-arrays first — some LDS sheets have metadata rows above
-  // the real column headers (e.g. "Branch Code / SHOP Name" on row 1,
-  // actual "Date / Cash Sale / ..." headers on row 3).
-  const aoa = XLSX.utils.sheet_to_json(ws, {
-    header: 1,
-    defval: null,
-  }) as unknown[][];
-
-  // Find the first row that contains "date" (case-insensitive) in any cell.
-  let headerIdx = 0;
-  for (let i = 0; i < Math.min(aoa.length, 10); i++) {
-    if (aoa[i].some(c => typeof c === "string" && c.trim().toLowerCase() === "date")) {
-      headerIdx = i;
-      break;
-    }
-  }
-
-  // Build trimmed header names from that row
-  const headers = (aoa[headerIdx] ?? []).map(h => (h != null ? String(h).trim() : ""));
-  const dateColIdx = headers.findIndex(h => h.toLowerCase() === "date");
-
-  // Build records from data rows after the header
-  const result: Record<string, unknown>[] = [];
-  for (let i = headerIdx + 1; i < aoa.length; i++) {
-    const rowArr = aoa[i];
-    // Skip "Total" summary rows
-    const firstStr = String(rowArr[0] ?? "").trim().toLowerCase();
-    if (firstStr === "total") continue;
-    // Skip rows with no date value (blank spacer rows, sub-header rows)
-    const dateCell = dateColIdx >= 0 ? rowArr[dateColIdx] : rowArr[0];
-    if (dateCell == null || dateCell === "") continue;
-
-    const record: Record<string, unknown> = {};
-    headers.forEach((h, j) => {
-      if (h) record[h] = rowArr[j] ?? null;
-    });
-    result.push(record);
-  }
-
-  return result;
-}
-
-type Step = "upload" | "preview" | "done";
-
-// ── Formula validation ────────────────────────────────────────────────────────
-
-interface FormulaError {
-  rowNum: number;        // 1-based row number in the Excel
-  date: string;
-  field: "Total CC" | "Total Sale" | "Net Cash";
-  expected: number;
-  got: number;
-}
-
-/**
- * Tries to find a column value by any of the given aliases (case-insensitive).
- * Returns null if the column doesn't exist or has no numeric value.
- */
-function colVal(row: Record<string, unknown>, aliases: string[]): number | null {
-  for (const key of Object.keys(row)) {
-    const k = key.trim().toLowerCase();
-    if (aliases.some((a) => a.toLowerCase() === k)) {
-      const v = row[key];
-      if (v != null && v !== "" && !isNaN(Number(v))) return Number(v);
-    }
-  }
-  return null;
-}
-
-function validateFormulas(rows: Record<string, unknown>[]): FormulaError[] {
-  const errs: FormulaError[] = [];
-
-  rows.forEach((row, idx) => {
-    const date = String(
-      row["Date"] ?? row["date"] ?? row["DATE"] ?? row["Sales Date"] ?? row["sales_date"] ?? ""
-    );
-    const rowNum = idx + 2; // +2 because row 1 is the header in Excel
-
-    const allied  = colVal(row, ["Allied CC","Allied Bank CC","Allied Bank CC Sale","Allied"]);
-    const hbl     = colVal(row, ["HBL CC","HBL","HBL CC Sale","HBL Card"]);
-    const totalCC = colVal(row, ["Total CC","Total CC Sale","Total Credit Card","Total Credit Card Sale","CC Total","Total Card"]);
-    const cash    = colVal(row, ["Cash Sale","Cash","Cash Sales"]);
-    const float_  = colVal(row, ["Float","Campaign Float","Float Cash","Campaign Float Cash","Compaign Float Cash (Taken)","Campaign Float Cash (Taken)","Compaign Float Cash"]);
-    const gk      = colVal(row, ["Gift Karte","Gift Card","Gift Karte Sale","GK"]);
-    const voucher = colVal(row, ["Gift Vouchers","Vouchers","GV","Gift Voucher"]);
-    const crNotes = colVal(row, ["Cr Notes","Credit Notes","CR Notes","Credit Note","CrNotes"]);
-    const totalSale = colVal(row, ["Total Sale","Total Sales","Grand Total"]);
-    const otherInc  = colVal(row, ["Other Income","Other Inc","Other","Other Incomes"]);
-    const expenses  = colVal(row, ["Expenses","Exp","Expense"]);
-    const deposit   = colVal(row, ["Deposit","Dep"]);
-    const netCash   = colVal(row, ["Net Cash","Net Cash Movement","Net Movement","Net"]);
-
-    // Only validate a formula if ALL components AND the expected total column are present
-    if (totalCC != null && allied != null && hbl != null) {
-      const expected = round2(allied + hbl);
-      if (Math.abs(expected - totalCC) > 0.02) {
-        errs.push({ rowNum, date, field: "Total CC", expected, got: totalCC });
-      }
-    }
-
-    if (totalSale != null && cash != null && allied != null && hbl != null && gk != null && voucher != null && crNotes != null) {
-      const expected = round2(cash + allied + hbl + gk + voucher - crNotes);
-      if (Math.abs(expected - totalSale) > 0.02) {
-        errs.push({ rowNum, date, field: "Total Sale", expected, got: totalSale });
-      }
-    }
-
-    if (netCash != null && cash != null && float_ != null && otherInc != null && expenses != null && deposit != null) {
-      const expected = round2(cash + float_ + otherInc - expenses - deposit);
-      if (Math.abs(expected - netCash) > 0.02) {
-        errs.push({ rowNum, date, field: "Net Cash", expected, got: netCash });
-      }
-    }
-  });
-
-  return errs;
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-
 // ── Column normalisation ──────────────────────────────────────────────────────
 // Maps Excel header variants → snake_case fields the RPCs understand.
 const FIELD_ALIASES: Record<string, string[]> = {
@@ -219,8 +88,8 @@ const FIELD_ALIASES: Record<string, string[]> = {
   deposit:             ["Deposit","Daily Deposit","Bank Deposit","deposit"],
   allied_bank_cc_sale: ["Allied CC","Allied Bank CC","Allied Bank CC Sale","Allied","allied_bank_cc_sale"],
   hbl_cc_sale:         ["HBL CC","HBL","HBL CC Sale","HBL Card","hbl_cc_sale"],
-  gift_karte:          ["Gift Karte","GK","Gift Karte Sale","gift_karte"],
-  gift_vouchers:       ["Gift Vouchers","Vouchers","Voucher","gift_vouchers"],
+  gift_karte:          ["Gift Karte","GK","Gift Karte Sale","gift_karte","Gift Karte "],
+  gift_vouchers:       ["Gift Vouchers","Vouchers","Voucher","gift_vouchers","Gift Vouchers "],
   credit_notes_issue:  ["Credit Notes","CrNotes","Cr Notes","Credit Notes Issue","Credit Note","credit_notes_issue"],
   remarks:             ["Remarks","Notes","Remark","Comment","remarks"],
 };
@@ -250,7 +119,7 @@ function toISODate(v: unknown): string {
   return String(v ?? "");
 }
 
-/** Find a value in a row by any alias (case-insensitive). */
+/** Find a value in a row by any alias (case-insensitive, trimmed). */
 function findColVal(row: Record<string, unknown>, aliases: string[]): unknown {
   for (const key of Object.keys(row)) {
     const k = key.trim().toLowerCase();
@@ -275,6 +144,65 @@ function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+/**
+ * Parse an XLSX/XLS file into normalised row objects.
+ *
+ * Scans ALL sheets so that multi-sheet workbooks (e.g. one sheet per month,
+ * like the Faisalabad Cash Banking Log) are handled correctly. Each sheet is
+ * checked for a "Date" header in the first 10 rows; sheets without one are
+ * skipped. The API's month/year filter then picks only the relevant rows.
+ */
+async function parseExcel(file: File): Promise<Record<string, unknown>[]> {
+  const XLSX = await import("xlsx");
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
+
+  const allRows: Record<string, unknown>[] = [];
+
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+
+    // Read as array-of-arrays — some sheets have metadata rows above the headers.
+    const aoa = XLSX.utils.sheet_to_json(ws, {
+      header: 1,
+      defval: null,
+    }) as unknown[][];
+
+    // Find the first row (within the first 10) that contains exactly "date".
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(aoa.length, 10); i++) {
+      if (aoa[i].some(c => typeof c === "string" && c.trim().toLowerCase() === "date")) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) continue; // no date header in this sheet — skip it
+
+    const headers = (aoa[headerIdx] ?? []).map(h => (h != null ? String(h).trim() : ""));
+    const dateColIdx = headers.findIndex(h => h.toLowerCase() === "date");
+
+    for (let i = headerIdx + 1; i < aoa.length; i++) {
+      const rowArr = aoa[i];
+      // Skip "Total" or "Totals" summary rows
+      const firstStr = String(rowArr[0] ?? "").trim().toLowerCase();
+      if (firstStr === "total" || firstStr === "totals") continue;
+      // Skip rows with no date value
+      const dateCell = dateColIdx >= 0 ? rowArr[dateColIdx] : rowArr[0];
+      if (dateCell == null || dateCell === "") continue;
+
+      const record: Record<string, unknown> = {};
+      headers.forEach((h, j) => {
+        if (h) record[h] = rowArr[j] ?? null;
+      });
+      allRows.push(record);
+    }
+  }
+
+  return allRows;
+}
+
+type Step = "upload" | "preview" | "done";
+
 export default function ExcelImportPanel({ stores, defaultStoreId, year, month, onClose, onImported }: Props) {
   const [step, setStep] = useState<Step>("upload");
   const [storeId, setStoreId] = useState(defaultStoreId || stores[0]?.id || "");
@@ -290,46 +218,39 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [rawRows, setRawRows] = useState<Record<string, unknown>[]>([]);
+  const [normalizedRows, setNormalizedRows] = useState<Record<string, unknown>[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [summary, setSummary] = useState({ inserted: 0, updated: 0 });
-  const [formulaErrors, setFormulaErrors] = useState<FormulaError[]>([]);
-  const [normalizedRows, setNormalizedRows] = useState<Record<string, unknown>[]>([]);
-
+  const [importErrors, setImportErrors] = useState<{ row: number; sales_date: string; error: string }[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(async (f: File) => {
     setFile(f);
     setParseError(null);
-    setFormulaErrors([]);
+    setImportErrors([]);
     setParsing(true);
     try {
       const rows = await parseExcel(f);
       setRawRows(rows);
 
-      // ── Normalise Excel column headers → snake_case before sending to API ─────────
+      // Normalise Excel column headers → snake_case before sending to API
       const normRows = rows.map(normalizeRow);
       setNormalizedRows(normRows);
 
-      // ── Client-side formula validation (non-blocking) ─────────────────────────
-      const fErrs = validateFormulas(rows);
-      if (fErrs.length > 0) {
-        setFormulaErrors(fErrs);
-        // Don't return — proceed to preview so user can review and confirm
-      }
-
-      // Call preview API with normalised rows (snake_case keys the RPC understands)
+      // Call preview API with normalised rows and snake_case keys the RPC understands
       const res = await apiFetch("/api/daily-sales/import-preview", {
         method: "POST",
         body: JSON.stringify({ store_id: storeId, year: selYear, month: selMonth, file_name: f.name, rows: normRows }),
       });
-      const json = await res.json() as { preview?: PreviewRow[]; batch_id?: string; error?: string };
+      const json = await res.json() as { preview?: PreviewRow[]; batch_id?: string; errors?: { row: number; sales_date: string; error: string }[]; error?: string };
       if (!res.ok) {
         setParseError(json.error ?? "Preview failed");
         return;
       }
       setPreviewRows(json.preview ?? []);
       setBatchId(json.batch_id ?? null);
+      setImportErrors(json.errors ?? []);
       setStep("preview");
     } catch (e) {
       setParseError(e instanceof Error ? e.message : "Failed to parse file");
@@ -337,7 +258,6 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
       setParsing(false);
     }
   }, [storeId, selYear, selMonth]);
-
 
   async function confirm() {
     if (!batchId) return;
@@ -515,17 +435,6 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
                 </div>
               )}
 
-              {/* ── Formula validation notice (non-blocking) ── */}
-              {formulaErrors.length > 0 && (
-                <div style={{ marginTop: 16, padding: "10px 14px", background: "#FFF8E6", border: "1px solid #F59E0B", borderRadius: 8, fontSize: 12, color: "#B4791F", display: "flex", gap: 8, alignItems: "flex-start" }}>
-                  <span style={{ marginTop: 1 }}>⚠</span>
-                  <span>
-                    <strong>Formula difference detected in {formulaErrors.length} row{formulaErrors.length !== 1 ? "s" : ""}.</strong>{" "}
-                    The server will recalculate totals from the component columns — this will not block your import.
-                  </span>
-                </div>
-              )}
-
               <div style={{ marginTop: 20, padding: "14px 16px", background: "#F8F9FB", borderRadius: 8, fontSize: 12, color: "#64748B" }}>
                 <strong style={{ color: "#0F1720" }}>Expected columns:</strong> Date, Cash Sale, Float, Expenses, Other Income, Deposit, Allied Bank CC, HBL CC, Gift Karte, Gift Vouchers, Cr Notes, Remarks
               </div>
@@ -583,6 +492,15 @@ export default function ExcelImportPanel({ stores, defaultStoreId, year, month, 
                 </table>
               </div>
 
+              {importErrors.length > 0 && (
+                <div style={{ marginTop: 12, padding: "10px 14px", background: "#FFF5F5", border: "1px solid #FDECEA", borderRadius: 8, color: "#B3261E", fontSize: 12 }}>
+                  <strong>{importErrors.length} row{importErrors.length !== 1 ? "s" : ""} skipped:</strong>
+                  {importErrors.slice(0, 5).map((e, i) => (
+                    <div key={i} style={{ marginTop: 4 }}>{e.sales_date ? `${e.sales_date}: ` : ""}{e.error}</div>
+                  ))}
+                  {importErrors.length > 5 && <div style={{ marginTop: 4 }}>…and {importErrors.length - 5} more</div>}
+                </div>
+              )}
               {confirmError && (
                 <div style={{ marginTop: 12, padding: "10px 14px", background: "#FFF5F5", border: "1px solid #FDECEA", borderRadius: 8, color: "#B3261E", fontSize: 13 }}>
                   {confirmError}
