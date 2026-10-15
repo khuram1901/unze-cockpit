@@ -46,6 +46,13 @@ function nowPkt(): { date: string; time: string } {
   return { date: `${y}-${mo}-${d}`, time: `${h}:${mi}` };
 }
 
+/** Convert PKT date+time → UTC ISO string (PKT = UTC+5) */
+function pktToUtcIso(date: string, time: string): string {
+  const [y, mo, d] = date.split("-").map(Number);
+  const [h, mi]    = time.split(":").map(Number);
+  return new Date(Date.UTC(y, mo - 1, d, h - 5, mi)).toISOString();
+}
+
 async function getToken(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token ?? "";
@@ -160,6 +167,7 @@ export default function VisitorEntryPage() {
   const [deptOpen, setDeptOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [flagInfo, setFlagInfo] = useState<{ type: string; reason: string | null } | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
 
   const deptRef = useRef<HTMLDivElement>(null);
@@ -207,6 +215,48 @@ export default function VisitorEntryPage() {
       // non-blocking — the form still works without dept/host lists
     }
   }
+
+  // ── Returning visitor autofill ────────────────────────────────────────────
+  async function lookupVisitor(params: { cnic?: string; mobile?: string }) {
+    try {
+      const qs = params.cnic ? `cnic=${params.cnic}` : `mobile=${params.mobile}`;
+      const res = await apiFetch(`/api/visitors/lookup?${qs}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      // Show flag banner regardless of whether we found a past visit
+      if (data.flag) setFlagInfo({ type: data.flag, reason: data.flag_reason ?? null });
+      else setFlagInfo(null);
+      // Autofill fields from most recent visit (don't overwrite what the user already typed)
+      if (data.found) {
+        setForm((f) => ({
+          ...f,
+          visitor_name: f.visitor_name || data.visitor_name || "",
+          department:   f.department   || data.department_name || "",
+          host_id:      f.host_id      || data.host_member_id  || "",
+          host_name:    f.host_name    || data.host_name       || "",
+          purpose:      f.purpose      || data.purpose         || "",
+        }));
+      }
+    } catch { /* non-blocking */ }
+  }
+
+  // Trigger autofill when CNIC is complete (13 digits), 800ms debounce
+  useEffect(() => {
+    const cnic = normaliseCnic(form.cnic);
+    if (cnic.length !== 13) { setFlagInfo(null); return; }
+    const t = setTimeout(() => lookupVisitor({ cnic }), 800);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.cnic]);
+
+  // Trigger autofill when mobile is valid, 800ms debounce
+  useEffect(() => {
+    const mobile = normaliseMobile(form.mobile);
+    if (!/^\+923\d{9}$/.test(mobile)) return;
+    const t = setTimeout(() => lookupVisitor({ mobile }), 800);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.mobile]);
 
   // Host filtering — show dept members on dept select, search-filtered otherwise
   useEffect(() => {
@@ -282,17 +332,19 @@ export default function VisitorEntryPage() {
     setError("");
     try {
       const payload = {
-        date: form.date,
-        time_in: form.time_in,
-        visitor_name: form.visitor_name.trim(),
-        cnic: normaliseCnic(form.cnic),
-        mobile: normaliseMobile(form.mobile),
-        department: form.department || null,
-        host_id: form.host_id,
-        purpose: form.purpose === "Other" ? `Other: ${form.purpose_other.trim()}` : form.purpose,
-        comments: form.comments.trim() || null,
+        visit_date:      form.date,
+        time_in:         pktToUtcIso(form.date, form.time_in),
+        visitor_name:    form.visitor_name.trim(),
+        cnic:            normaliseCnic(form.cnic),
+        mobile:          normaliseMobile(form.mobile),
+        department_name: form.department || "",
+        host_member_id:  form.host_id   || null,
+        host_name:       form.host_name,
+        purpose:         form.purpose,
+        purpose_other:   form.purpose === "Other" ? (form.purpose_other.trim() || null) : null,
+        comments:        form.comments.trim() || null,
       };
-      const res = await apiFetch("/api/visitors/log", {
+      const res = await apiFetch("/api/visitors/check-in", {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -412,6 +464,20 @@ export default function VisitorEntryPage() {
         {/* Header */}
         <p style={{ fontSize: 11, fontWeight: 700, color: C.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Visitors Log</p>
         <p style={{ fontSize: isDesktop ? 26 : 22, fontWeight: 700, color: C.NAVY, margin: "0 0 20px" }}>New Visitor Entry</p>
+
+        {/* Flag banner */}
+        {flagInfo && (
+          <div style={{
+            padding: "10px 14px", borderRadius: 8, marginBottom: 14,
+            background: flagInfo.type === "blacklist" ? "#FEF2F2" : "#FFFBEB",
+            border: `1px solid ${flagInfo.type === "blacklist" ? "#FECACA" : "#FDE68A"}`,
+            color: flagInfo.type === "blacklist" ? C.RED : C.AMBER,
+            fontSize: 13, fontWeight: 600,
+          }}>
+            {flagInfo.type === "blacklist" ? "⛔ BLACKLISTED VISITOR" : "⭐ VIP VISITOR"}
+            {flagInfo.reason && <span style={{ fontWeight: 400 }}> — {flagInfo.reason}</span>}
+          </div>
+        )}
 
         {/* Card 1 — Date & Time */}
         <div style={cardStyle}>
