@@ -43,11 +43,11 @@ export async function POST(request: NextRequest) {
   // Load members once for matching
   const { data: members } = await supabase
     .from("members")
-    .select("id, full_name, department")
-    .eq("active", true);
+    .select("id, name, department")
+    .eq("is_active", true);
   const memberMap = new Map<string, { id: string; department: string | null }>();
   for (const m of members ?? []) {
-    memberMap.set(m.full_name?.toLowerCase().trim() ?? "", { id: m.id, department: m.department });
+    memberMap.set((m as any).name?.toLowerCase().trim() ?? "", { id: m.id, department: m.department });
   }
 
   let imported = 0;

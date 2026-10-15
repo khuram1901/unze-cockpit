@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   // Resolve member ID for entered_by
   const { data: member } = await supabase
     .from("members")
-    .select("id, full_name")
+    .select("id, name")
     .eq("email", auth.email)
     .single();
   if (!member) return Response.json({ error: "Member not found" }, { status: 403 });

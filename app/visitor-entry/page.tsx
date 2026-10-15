@@ -41,7 +41,7 @@ type Screen = "loading" | "form" | "confirm" | "success";
 
 interface Host {
   id: string;
-  full_name: string;
+  name: string;
   department: string | null;
 }
 
@@ -293,7 +293,7 @@ export default function VisitorEntryPage() {
 
   // ── Filtered host list for search ──
   const filteredHosts = hosts.filter((h) =>
-    h.full_name.toLowerCase().includes(hostSearch.toLowerCase())
+    h.name.toLowerCase().includes(hostSearch.toLowerCase())
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -545,12 +545,12 @@ export default function VisitorEntryPage() {
                   <button
                     key={h.id}
                     onClick={() => {
-                      setForm((f) => ({ ...f, host_id: h.id, host_name: h.full_name }));
+                      setForm((f) => ({ ...f, host_id: h.id, host_name: h.name }));
                       setHostSearch("");
                     }}
                     style={{ width: "100%", textAlign: "left", padding: "12px 14px", border: "none", background: "transparent", cursor: "pointer", borderBottom: `1px solid ${C.BORDER}`, fontSize: "14px" }}
                   >
-                    <span style={{ fontWeight: 600 }}>{h.full_name}</span>
+                    <span style={{ fontWeight: 600 }}>{h.name}</span>
                     {h.department && <span style={{ color: C.SLATE, fontSize: "12px" }}> · {h.department}</span>}
                   </button>
                 ))}
