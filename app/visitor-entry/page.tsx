@@ -407,7 +407,7 @@ export default function VisitorEntryPage() {
               <label style={labelStyle}>Date</label>
               <DateInput
                 value={form.date}
-                onChange={(v) => set("date", v)}
+                onChange={(e) => set("date", e.target.value)}
                 style={iStyle}
               />
             </div>
