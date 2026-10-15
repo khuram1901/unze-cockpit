@@ -79,7 +79,7 @@ type UtilityLocation = {
   months: { month: number; total_bill: number | null; meters_read: number }[] | null;
 };
 
-type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations" | "legal";
+type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations" | "legal" | "visitors";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -753,11 +753,473 @@ export default function AdminDataPage() {
     { id: "compliance",    label: "Compliance",    widgetKey: "admin_ops.compliance" },
     { id: "documents",     label: "Documents",     widgetKey: "admin_ops.documents" },
     { id: "operations",    label: "Operations",    widgetKey: "admin_ops.operations" },
+    { id: "visitors",      label: "Visitors",      widgetKey: "admin_ops.visitors" },
   ];
   // Only show tabs that are widget-visible for this user.
   const TABS = ALL_TABS.filter((t) => wv(t.widgetKey));
   // If the current activeTab was hidden, jump to the first visible one.
   const safeActiveTab: TabId = TABS.some((t) => t.id === activeTab) ? activeTab : (TABS[0]?.id ?? "registrations");
+
+  // ── Visitor Log state ─────────────────────────────────────────────────────
+  type VisitorRow = {
+    id: string; visit_date: string; time_in: string; time_out: string | null;
+    visitor_name: string; mobile_masked: string; cnic_masked: string | null;
+    department_name: string; host_name: string; purpose: string; purpose_other: string | null;
+    comments: string | null; duration_mins: number | null; is_inside: boolean;
+    flag_type: "vip" | "blacklist" | null; entered_by_name: string | null;
+  };
+  type VisitorKpi = {
+    total: number; currently_inside: number; overstay: number;
+    unique_visitors: number; avg_duration_mins: number;
+  };
+  type VisitorDeptRow = { department_name: string; total: number; inside: number; avg_mins: number | null };
+  type VisitorHostRow = { host_name: string; department_name: string; total: number; inside: number; avg_mins: number | null };
+  type VisitorHeatCell = { dow: number; hour: number; visits: number };
+  type VisitorException = { id: string; visitor_name: string; mobile_masked: string; department_name: string; host_name: string; time_in: string; time_out: string | null; flag_type: string | null; exception_type: string | null; mins_inside: number };
+
+  const [visitorRows, setVisitorRows]         = useState<VisitorRow[]>([]);
+  const [visitorTotal, setVisitorTotal]       = useState(0);
+  const [loadingVisitors, setLoadingVisitors] = useState(false);
+  const [visitorKpi, setVisitorKpi]           = useState<VisitorKpi | null>(null);
+  const [visitorDeptRows, setVisitorDeptRows] = useState<VisitorDeptRow[]>([]);
+  const [visitorHostRows, setVisitorHostRows] = useState<VisitorHostRow[]>([]);
+  const [visitorHeatmap, setVisitorHeatmap]   = useState<VisitorHeatCell[]>([]);
+  const [visitorExceptions, setVisitorExceptions] = useState<VisitorException[]>([]);
+  const [visitorDateFrom, setVisitorDateFrom] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() - 6);
+    return d.toISOString().slice(0, 10);
+  });
+  const [visitorDateTo, setVisitorDateTo]     = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [visitorSearch, setVisitorSearch]     = useState("");
+  const [visitorStatus, setVisitorStatus]     = useState<"" | "inside" | "checked_out">("");
+  const [visitorDeptFilter, setVisitorDeptFilter] = useState("");
+  const [visitorPage, setVisitorPage]         = useState(0);
+  const [visitorDashView, setVisitorDashView] = useState<"kpi" | "league" | "heatmap" | "exceptions">("kpi");
+  const [editingVisitor, setEditingVisitor]   = useState<VisitorRow | null>(null);
+  const [savingVisitor, setSavingVisitor]     = useState(false);
+  const visitorPageSize = 50;
+
+  async function loadVisitorList() {
+    setLoadingVisitors(true);
+    try {
+      const params = new URLSearchParams({
+        date_from: visitorDateFrom, date_to: visitorDateTo,
+        limit: String(visitorPageSize), offset: String(visitorPage * visitorPageSize),
+      });
+      if (visitorSearch)     params.set("search",     visitorSearch);
+      if (visitorStatus)     params.set("status",     visitorStatus);
+      if (visitorDeptFilter) params.set("department", visitorDeptFilter);
+      const res  = await authFetch(`/api/visitors/list?${params}`);
+      const data = await res.json();
+      setVisitorRows(data.rows ?? []);
+      setVisitorTotal(data.total ?? 0);
+    } finally { setLoadingVisitors(false); }
+  }
+
+  async function loadVisitorKpi() {
+    const params = new URLSearchParams({ date_from: visitorDateFrom, date_to: visitorDateTo });
+
+    const [kpiRes, leagueRes, heatRes, excRes] = await Promise.all([
+      authFetch(`/api/visitors/kpi?view=kpi&${params}`),
+      authFetch(`/api/visitors/kpi?view=league&${params}`),
+      authFetch(`/api/visitors/kpi?view=heatmap&${params}`),
+      authFetch(`/api/visitors/kpi?view=exceptions&date_from=${visitorDateTo}&date_to=${visitorDateTo}`),
+    ]);
+    setVisitorKpi(await kpiRes.json());
+    const league = await leagueRes.json();
+    setVisitorDeptRows(league.by_department ?? []);
+    setVisitorHostRows(league.by_host ?? []);
+    setVisitorHeatmap(await heatRes.json());
+    setVisitorExceptions(await excRes.json());
+  }
+
+  async function handleVisitorCheckout(id: string) {
+    if (!(await confirm("Check out this visitor now?"))) return;
+    await authFetch("/api/visitors/check-out", { method: "POST", body: JSON.stringify({ visitor_id: id }) });
+    showToast("Visitor checked out");
+    loadVisitorList();
+    loadVisitorKpi();
+  }
+
+  async function handleVisitorDelete(id: string) {
+    if (!(await confirm("Soft-delete this visitor record? This cannot be undone."))) return;
+    await authFetch("/api/visitors/list", { method: "DELETE", body: JSON.stringify({ id }) });
+    showToast("Record deleted");
+    loadVisitorList();
+  }
+
+  async function handleVisitorEdit() {
+    if (!editingVisitor) return;
+    setSavingVisitor(true);
+    try {
+      const res = await authFetch("/api/visitors/list", {
+        method: "PATCH",
+        body: JSON.stringify({ ...editingVisitor }),
+      });
+      if (!res.ok) { showToast("Save failed"); return; }
+      showToast("Saved");
+      setEditingVisitor(null);
+      loadVisitorList();
+    } finally { setSavingVisitor(false); }
+  }
+
+  // Load visitors when tab becomes active
+  useEffect(() => {
+    if (safeActiveTab === "visitors" && !checking) {
+      loadVisitorList();
+      loadVisitorKpi();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeActiveTab, checking, visitorDateFrom, visitorDateTo, visitorPage]);
+
+  function visitorPreset(label: string) {
+    const today = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    if (label === "Today") { setVisitorDateFrom(fmt(today)); setVisitorDateTo(fmt(today)); }
+    else if (label === "Yesterday") { const d = new Date(today); d.setDate(d.getDate()-1); setVisitorDateFrom(fmt(d)); setVisitorDateTo(fmt(d)); }
+    else if (label === "This Week") { const d = new Date(today); d.setDate(d.getDate()-6); setVisitorDateFrom(fmt(d)); setVisitorDateTo(fmt(today)); }
+    else if (label === "This Month") { const d = new Date(today.getFullYear(), today.getMonth(), 1); setVisitorDateFrom(fmt(d)); setVisitorDateTo(fmt(today)); }
+    setVisitorPage(0);
+  }
+
+  // ── Heat-map max for colour scale ──
+  const heatMax = Math.max(1, ...visitorHeatmap.map((c) => c.visits));
+  const DOW_LABELS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  function renderVisitorDashboard() {
+    const dashBtnStyle = (v: typeof visitorDashView): React.CSSProperties => ({
+      padding: "6px 14px", borderRadius: RADII.PILL, border: "none", cursor: "pointer",
+      fontSize: "13px", fontWeight: 600,
+      backgroundColor: visitorDashView === v ? COLOURS.NAVY : "transparent",
+      color: visitorDashView === v ? "white" : COLOURS.SLATE,
+    });
+    return (
+      <div style={{ background: "white", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+          <p style={{ margin: 0, fontWeight: 700, color: COLOURS.NAVY }}>Visitor Analytics</p>
+          <div style={{ display: "flex", gap: "4px" }}>
+            {(["kpi","league","heatmap","exceptions"] as const).map((v) => (
+              <button key={v} onClick={() => setVisitorDashView(v)} style={dashBtnStyle(v)}>
+                {v === "kpi" ? "📊 KPIs" : v === "league" ? "🏆 League" : v === "heatmap" ? "🔥 Peak Hours" : "⚠️ Alerts"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* KPI cards */}
+        {visitorDashView === "kpi" && visitorKpi && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px" }}>
+            {[
+              { label: "Total Visits",   value: visitorKpi.total,             colour: COLOURS.NAVY },
+              { label: "Inside Now",     value: visitorKpi.currently_inside,  colour: COLOURS.GREEN },
+              { label: "Overstay",       value: visitorKpi.overstay,          colour: visitorKpi.overstay > 0 ? COLOURS.RED : COLOURS.SLATE },
+              { label: "Unique Visitors",value: visitorKpi.unique_visitors,   colour: COLOURS.NAVY },
+              { label: "Avg Duration",   value: `${visitorKpi.avg_duration_mins}m`, colour: COLOURS.SLATE },
+            ].map(({ label, value, colour }) => (
+              <div key={label} style={{ textAlign: "center", padding: "12px 8px", background: COLOURS.CARD_ALT, borderRadius: "10px" }}>
+                <p style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: 800, color: colour }}>{value}</p>
+                <p style={{ margin: 0, fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>{label}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* League table */}
+        {visitorDashView === "league" && (
+          <div style={{ overflowX: "auto" }}>
+            <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE }}>BY DEPARTMENT</p>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${COLOURS.HAIRLINE}` }}>
+                  {["Department","Total","Inside","Avg (mins)"].map((h) => (
+                    <th key={h} style={{ padding: "6px 10px", textAlign: "left", color: COLOURS.SLATE, fontWeight: 600, fontSize: "11px" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visitorDeptRows.map((row, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <td style={{ padding: "8px 10px", fontWeight: 600 }}>{row.department_name}</td>
+                    <td style={{ padding: "8px 10px" }}>{row.total}</td>
+                    <td style={{ padding: "8px 10px", color: row.inside > 0 ? COLOURS.GREEN : COLOURS.SLATE }}>{row.inside}</td>
+                    <td style={{ padding: "8px 10px", color: COLOURS.SLATE }}>{row.avg_mins ?? "—"}</td>
+                  </tr>
+                ))}
+                {visitorDeptRows.length === 0 && (
+                  <tr><td colSpan={4} style={{ padding: "16px 10px", textAlign: "center", color: COLOURS.SLATE }}>No data</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Peak hours heat map */}
+        {visitorDashView === "heatmap" && (
+          <div style={{ overflowX: "auto" }}>
+            <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE }}>VISITS BY HOUR × DAY</p>
+            <table style={{ borderCollapse: "collapse", fontSize: "11px" }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: "4px 6px", color: COLOURS.SLATE }}>Hour</th>
+                  {DOW_LABELS.map((d) => (
+                    <th key={d} style={{ padding: "4px 8px", color: COLOURS.SLATE }}>{d}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 24 }, (_, hr) => (
+                  <tr key={hr}>
+                    <td style={{ padding: "4px 6px", color: COLOURS.SLATE, fontWeight: 600 }}>{String(hr).padStart(2,"0")}:00</td>
+                    {Array.from({ length: 7 }, (_, dow) => {
+                      const cell = visitorHeatmap.find((c) => c.dow === dow && c.hour === hr);
+                      const v    = cell?.visits ?? 0;
+                      const alpha = v / heatMax;
+                      return (
+                        <td key={dow} title={`${v} visits`} style={{
+                          padding: "4px 8px", textAlign: "center",
+                          background: v === 0 ? COLOURS.CARD_ALT : `rgba(15,123,95,${0.15 + alpha * 0.85})`,
+                          color: alpha > 0.6 ? "white" : COLOURS.NAVY,
+                          fontWeight: v > 0 ? 700 : 400,
+                          fontSize: "11px",
+                          minWidth: "32px",
+                        }}>{v || ""}</td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Exceptions */}
+        {visitorDashView === "exceptions" && (
+          <div>
+            <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE }}>TODAY&apos;S ALERTS</p>
+            {visitorExceptions.length === 0 ? (
+              <p style={{ color: COLOURS.SLATE, fontSize: "14px", textAlign: "center", padding: "20px 0" }}>No alerts today ✓</p>
+            ) : visitorExceptions.map((ex) => (
+              <div key={ex.id} style={{
+                padding: "12px 14px", borderRadius: "10px", marginBottom: "8px",
+                background: ex.exception_type === "overstay" ? "#FEF2F2" : "#FFFBEB",
+                border: `1px solid ${ex.exception_type === "overstay" ? "#FECACA" : "#FDE68A"}`,
+                display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px",
+              }}>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: "14px" }}>
+                    {ex.exception_type === "overstay" ? "🕐" : ex.flag_type === "blacklist" ? "🚫" : "⭐"} {ex.visitor_name}
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: COLOURS.SLATE }}>
+                    {ex.department_name} · {ex.host_name}
+                    {ex.exception_type === "overstay" && ` · ${ex.mins_inside}m inside`}
+                    {ex.flag_type && ` · ${ex.flag_type.toUpperCase()}`}
+                  </p>
+                </div>
+                {ex.time_out === null && (
+                  <button
+                    onClick={() => handleVisitorCheckout(ex.id)}
+                    style={{ padding: "6px 12px", borderRadius: RADII.PILL, border: "none", background: COLOURS.NAVY, color: "white", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >Check Out</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderVisitorsTab() {
+    const distinctDepts = [...new Set(visitorRows.map((r) => r.department_name))].sort();
+    return (
+      <div>
+        {renderVisitorDashboard()}
+
+        {/* Filters row */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "14px", alignItems: "flex-end" }}>
+          {/* Date presets */}
+          {["Today","Yesterday","This Week","This Month"].map((p) => (
+            <button key={p} onClick={() => visitorPreset(p)} style={{
+              padding: "5px 12px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`,
+              background: "white", color: COLOURS.SLATE, fontSize: "12px", fontWeight: 600, cursor: "pointer",
+            }}>{p}</button>
+          ))}
+          <DateInput value={visitorDateFrom} onChange={(e) => { setVisitorDateFrom(e.target.value); setVisitorPage(0); }} />
+          <span style={{ color: COLOURS.SLATE, alignSelf: "center" }}>→</span>
+          <DateInput value={visitorDateTo}   onChange={(e) => { setVisitorDateTo(e.target.value);   setVisitorPage(0); }} />
+
+          {/* Status */}
+          <select
+            value={visitorStatus}
+            onChange={(e) => { setVisitorStatus(e.target.value as typeof visitorStatus); setVisitorPage(0); }}
+            style={inputStyle}
+          >
+            <option value="">All statuses</option>
+            <option value="inside">Currently Inside</option>
+            <option value="checked_out">Checked Out</option>
+          </select>
+
+          {/* Dept filter */}
+          <select
+            value={visitorDeptFilter}
+            onChange={(e) => { setVisitorDeptFilter(e.target.value); setVisitorPage(0); }}
+            style={inputStyle}
+          >
+            <option value="">All departments</option>
+            {distinctDepts.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="Search name / mobile…"
+            value={visitorSearch}
+            onChange={(e) => { setVisitorSearch(e.target.value); setVisitorPage(0); }}
+            style={{ ...inputStyle, minWidth: "180px" }}
+            onKeyDown={(e) => e.key === "Enter" && loadVisitorList()}
+          />
+          <button onClick={() => loadVisitorList()} style={{ ...primaryButtonStyle, padding: "7px 16px" }}>Search</button>
+        </div>
+
+        {/* Table */}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", minWidth: "800px" }}>
+            <thead>
+              <tr style={{ borderBottom: `2px solid ${COLOURS.HAIRLINE}`, background: COLOURS.CARD_ALT }}>
+                {["Date","Time In","Time Out","Duration","Visitor","Mobile","Department","Meeting","Purpose","Status","Actions"].map((h) => (
+                  <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: COLOURS.SLATE, fontSize: "11px", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loadingVisitors && (
+                <tr><td colSpan={11}><SkeletonRows count={8} /></td></tr>
+              )}
+              {!loadingVisitors && visitorRows.length === 0 && (
+                <tr><td colSpan={11} style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No records found</td></tr>
+              )}
+              {!loadingVisitors && visitorRows.map((row) => (
+                <tr key={row.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                  <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{formatDateUK(row.visit_date)}</td>
+                  <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
+                    {new Date(row.time_in).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" })}
+                  </td>
+                  <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
+                    {row.time_out
+                      ? new Date(row.time_out).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" })
+                      : <span style={{ color: COLOURS.GREEN, fontWeight: 700 }}>Inside</span>}
+                  </td>
+                  <td style={{ padding: "8px 10px" }}>
+                    {row.duration_mins != null ? `${row.duration_mins}m` : row.is_inside ? "—" : "—"}
+                  </td>
+                  <td style={{ padding: "8px 10px", fontWeight: 600 }}>
+                    {row.visitor_name}
+                    {row.flag_type === "blacklist" && <span style={{ marginLeft: "4px", fontSize: "10px", color: COLOURS.RED }}>🚫</span>}
+                    {row.flag_type === "vip"       && <span style={{ marginLeft: "4px", fontSize: "10px", color: COLOURS.AMBER }}>⭐</span>}
+                  </td>
+                  <td style={{ padding: "8px 10px", color: COLOURS.SLATE }}>{row.mobile_masked}</td>
+                  <td style={{ padding: "8px 10px" }}>{row.department_name}</td>
+                  <td style={{ padding: "8px 10px" }}>{row.host_name}</td>
+                  <td style={{ padding: "8px 10px" }}>{row.purpose === "Other" ? row.purpose_other || "Other" : row.purpose}</td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <span style={{
+                      fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: RADII.PILL,
+                      backgroundColor: row.is_inside ? "#D1FAE5" : COLOURS.HAIRLINE,
+                      color: row.is_inside ? COLOURS.GREEN : COLOURS.SLATE,
+                    }}>{row.is_inside ? "Inside" : "Checked Out"}</span>
+                  </td>
+                  <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <button
+                        onClick={() => setEditingVisitor(row)}
+                        style={{ padding: "3px 8px", borderRadius: "5px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", fontSize: "11px" }}
+                      >Edit</button>
+                      {row.is_inside && (
+                        <button
+                          onClick={() => handleVisitorCheckout(row.id)}
+                          style={{ padding: "3px 8px", borderRadius: "5px", border: `1px solid ${COLOURS.GREEN}`, background: "#D1FAE5", color: COLOURS.GREEN, cursor: "pointer", fontSize: "11px", fontWeight: 600 }}
+                        >Check Out</button>
+                      )}
+                      <button
+                        onClick={() => handleVisitorDelete(row.id)}
+                        style={{ padding: "3px 8px", borderRadius: "5px", border: `1px solid #FECACA`, background: "#FEF2F2", color: COLOURS.RED, cursor: "pointer", fontSize: "11px" }}
+                      >Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {visitorTotal > visitorPageSize && (
+          <div style={{ display: "flex", gap: "8px", marginTop: "12px", alignItems: "center" }}>
+            <button
+              disabled={visitorPage === 0}
+              onClick={() => setVisitorPage((p) => p - 1)}
+              style={{ padding: "5px 12px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer" }}
+            >‹ Prev</button>
+            <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>
+              {visitorPage * visitorPageSize + 1}–{Math.min((visitorPage + 1) * visitorPageSize, visitorTotal)} of {visitorTotal}
+            </span>
+            <button
+              disabled={(visitorPage + 1) * visitorPageSize >= visitorTotal}
+              onClick={() => setVisitorPage((p) => p + 1)}
+              style={{ padding: "5px 12px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer" }}
+            >Next ›</button>
+          </div>
+        )}
+
+        {/* Historical Import panel */}
+        <details style={{ marginTop: "28px" }}>
+          <summary style={{ fontWeight: 700, color: COLOURS.SLATE, cursor: "pointer", padding: "10px 0", fontSize: "14px" }}>
+            📥 Historical Import (Excel)
+          </summary>
+          <div style={{ background: "#FFFBEB", border: `1px solid #FDE68A`, borderRadius: "10px", padding: "16px", marginTop: "8px" }}>
+            <p style={{ margin: "0 0 8px", fontWeight: 600, color: COLOURS.NAVY }}>Import from Excel</p>
+            <p style={{ margin: "0 0 12px", fontSize: "13px", color: COLOURS.SLATE }}>
+              Paste or upload historical visitor records. Expected columns: <code>visit_date, visitor_name, mobile, cnic, department_name, host_name, purpose, time_in, time_out, comments</code>
+            </p>
+            <p style={{ margin: 0, fontSize: "12px", color: COLOURS.AMBER }}>
+              ⚠️ Awaiting historical Excel file. Once provided, the import API at <code>/api/visitors/import</code> is ready. Use the import script or upload via this panel.
+            </p>
+          </div>
+        </details>
+
+        {/* Edit modal */}
+        {editingVisitor && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(15,23,32,0.6)", zIndex: 200,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "16px",
+          }}>
+            <div style={{ background: "white", borderRadius: "16px", padding: "24px", width: "100%", maxWidth: "480px", maxHeight: "90vh", overflowY: "auto" }}>
+              <h3 style={{ margin: "0 0 16px", color: COLOURS.NAVY }}>Edit Visitor Record</h3>
+              {(["visitor_name", "host_name", "department_name", "purpose", "comments"] as const).map((field) => (
+                <div key={field} style={{ marginBottom: "12px" }}>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px", textTransform: "uppercase" }}>
+                    {field.replace(/_/g, " ")}
+                  </label>
+                  <input
+                    type="text"
+                    value={(editingVisitor as unknown as Record<string, string>)[field] ?? ""}
+                    onChange={(e) => setEditingVisitor((v) => v ? { ...v, [field]: e.target.value } : v)}
+                    style={{ ...inputStyle, display: "block", width: "100%", boxSizing: "border-box" }}
+                  />
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+                <button onClick={() => setEditingVisitor(null)} style={{ flex: 1, padding: "10px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer" }}>Cancel</button>
+                <button onClick={handleVisitorEdit} disabled={savingVisitor} style={{ flex: 2, ...primaryButtonStyle, padding: "10px" }}>
+                  {savingVisitor ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const tabStyle = (id: TabId): React.CSSProperties => ({
     padding: "8px 16px",
@@ -2946,6 +3408,8 @@ export default function AdminDataPage() {
 
         {/* ── OPERATIONS ── */}
         {safeActiveTab === "legal" && <LegalCases />}
+
+        {safeActiveTab === "visitors" && renderVisitorsTab()}
 
         {safeActiveTab === "operations" && (
           <div>

@@ -70,8 +70,11 @@ export const PAGE_REGISTRY: PageCard[] = [
   // Admin Entry (/daily-entry) and Daily Entry (/production) are intentionally
   // hidden from the sidebar — staff access them via a direct bookmarked link on
   // mobile. Both pages still enforce useRequireCapability (login required).
+  // Visitor Entry (/visitor-entry) is similarly hidden — reception staff access
+  // it via a bookmarked link; the page enforces useRequireCapability.
   // { permKey: "can_access_admin_entry", title: "Admin Entry", subtitle: "Log fuel, solar, utilities, vehicle maintenance", href: "/daily-entry", icon: "📝", group: "Operations" },
   // { permKey: "can_access_daily_entry", title: "Daily Entry", subtitle: "Log daily production and dispatch", href: "/production", icon: "📊", group: "Operations" },
+  // { permKey: "admin_ops.visitor_entry", title: "Visitor Entry", subtitle: "Log visitor check-ins", href: "/visitor-entry", icon: "🪪", group: "Operations" },
   { permKey: "can_manage_stock", title: "Manage POs", subtitle: "Create POs, contractors, authority letters", href: "/stock/manage", icon: "📋", group: "Operations" },
   { permKey: "can_view_operations_dashboard", title: "Operations Dashboard", subtitle: "Production, dispatch, stock, machines", href: "/dashboard", icon: "🏗️", group: "Operations", badgeKey: "operations" },
   { permKey: "can_view_stock", title: "Stock", subtitle: "Customer POs, authority letters, dispatch balances", href: "/stock", icon: "🏭", group: "Operations" },

@@ -128,6 +128,9 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "admin_ops.compliance",    label: "Compliance tab",    page: "Admin Operations", tip: "Licence and certificate renewals — civil defence, PFA, medical, fire" },
   { key: "admin_ops.documents",     label: "Documents tab",     page: "Admin Operations", tip: "NTN certificates and other location documents" },
   { key: "admin_ops.operations",    label: "Operations tab",    page: "Admin Operations", tip: "Fleet fuel tracking, vehicle maintenance, and solar site production" },
+  { key: "admin_ops.visitors",       label: "Visitors tab",       page: "Admin Operations", tip: "Visitor log — daily check-ins, durations, overstay alerts, and analytics" },
+  { key: "admin_ops.visitor_entry",  label: "Visitor Entry form", page: "Admin Operations", tip: "Mobile-first visitor check-in form (hidden from nav; share link directly)" },
+  { key: "admin.visitors_dashboard", label: "Visitors Dashboard", page: "Admin Operations", tip: "KPI cards, dept/host league table, peak-hours heat map, and exceptions" },
 
   // ── Banking (app/banking/page.tsx) ───────────────────────────────────
   { key: "banking.eobi_ss",    label: "EOBI & SS Payments tab",  page: "Banking", tip: "Monthly EOBI and Social Security payment tracking across all entities" },
