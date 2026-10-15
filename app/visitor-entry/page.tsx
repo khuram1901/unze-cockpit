@@ -191,20 +191,34 @@ export default function VisitorEntryPage() {
 
   async function loadData() {
     try {
-      const [dRes, hRes] = await Promise.all([
-        apiFetch("/api/visitors/departments"),
-        apiFetch("/api/visitors/hosts"),
-      ]);
-      if (dRes.ok) { const d = await dRes.json(); setDepartments(d.departments ?? []); }
-      if (hRes.ok) { const h = await hRes.json(); setAllHosts(h.hosts ?? []); }
+      const res = await apiFetch("/api/visitors/departments");
+      if (res.ok) {
+        const d = await res.json();
+        setDepartments(d.departments ?? []);
+        // RPC returns full_name; normalise to name for the Host type
+        const hosts = (d.hosts ?? []).map((h: { id: string; full_name?: string; name?: string; department: string | null }) => ({
+          id: h.id,
+          name: h.full_name ?? h.name ?? "",
+          department: h.department,
+        }));
+        setAllHosts(hosts);
+      }
     } catch {
       // non-blocking — the form still works without dept/host lists
     }
   }
 
-  // Host filtering
+  // Host filtering — show dept members on dept select, search-filtered otherwise
   useEffect(() => {
-    if (!hostSearch.trim()) { setFilteredHosts([]); return; }
+    if (!hostSearch.trim()) {
+      // No search text: if a dept is selected show all its members
+      if (form.department) {
+        setFilteredHosts(allHosts.filter((h) => h.department === form.department));
+      } else {
+        setFilteredHosts([]);
+      }
+      return;
+    }
     const q = hostSearch.toLowerCase();
     const results = allHosts.filter(
       (h) => h.name.toLowerCase().includes(q) ||
@@ -542,7 +556,7 @@ export default function VisitorEntryPage() {
                 }}
                 style={iStyle}
               />
-              {hostSearch && filteredHosts.length > 0 && (
+              {filteredHosts.length > 0 && !form.host_id && (
                 <div style={{
                   position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
                   background: C.WHITE, border: `1.5px solid ${C.BORDER}`, borderRadius: 8,
