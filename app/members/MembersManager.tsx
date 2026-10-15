@@ -680,7 +680,7 @@ export default function MembersManager() {
           (m.department || "").toLowerCase().includes(q);
       })
     : members).filter((m) => {
-      if (cleanupMode === "missing_company_id") return !m.task_default_company_id && m.is_active !== false;
+      if (cleanupMode === "missing_company_id") return !m.task_default_company_id && m.is_active !== false && m.department !== "Retail Store";
       if (cleanupMode === "missing_dept")       return (!m.department || m.department === "") && m.is_active !== false;
       return true;
     }).filter((m) => {
@@ -688,7 +688,9 @@ export default function MembersManager() {
       if (userTypeFilter === "staff") return !m.email || !STORE_USER_RE.test(m.email);
       return true; // "all"
     });
-  const missingCompanyIdCount = members.filter((m) => !m.task_default_company_id && m.is_active !== false).length;
+  // Retail Store members are service accounts for /daily-sales only — they never create tasks,
+  // so task_default_company_id is not meaningful for them. Exclude from the cleanup badge.
+  const missingCompanyIdCount = members.filter((m) => !m.task_default_company_id && m.is_active !== false && m.department !== "Retail Store").length;
   const missingDeptCount      = members.filter((m) => (!m.department || m.department === "") && m.is_active !== false).length;
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
