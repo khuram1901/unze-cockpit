@@ -738,28 +738,6 @@ export default function AdminDataPage() {
     return grouped;
   }
 
-  // ── Render guard ───────────────────────────────────────────────────
-  if (checking) return (
-    <AuthWrapper>
-      <main style={{ padding: "14px 18px" }}>
-        <p style={{ color: COLOURS.SLATE }}>Checking permissions...</p>
-      </main>
-    </AuthWrapper>
-  );
-
-  const ALL_TABS: { id: TabId; label: string; widgetKey: string }[] = [
-    { id: "registrations", label: "Registrations", widgetKey: "admin_ops.registrations" },
-    { id: "payments",      label: "Payments",      widgetKey: "admin_ops.payments" },
-    { id: "compliance",    label: "Compliance",    widgetKey: "admin_ops.compliance" },
-    { id: "documents",     label: "Documents",     widgetKey: "admin_ops.documents" },
-    { id: "operations",    label: "Operations",    widgetKey: "admin_ops.operations" },
-    { id: "visitors",      label: "Visitors",      widgetKey: "admin_ops.visitors" },
-  ];
-  // Only show tabs that are widget-visible for this user.
-  const TABS = ALL_TABS.filter((t) => wv(t.widgetKey));
-  // If the current activeTab was hidden, jump to the first visible one.
-  const safeActiveTab: TabId = TABS.some((t) => t.id === activeTab) ? activeTab : (TABS[0]?.id ?? "registrations");
-
   // ── Visitor Log state ─────────────────────────────────────────────────────
   type VisitorRow = {
     id: string; visit_date: string; time_in: string; time_out: string | null;
@@ -865,12 +843,35 @@ export default function AdminDataPage() {
 
   // Load visitors when tab becomes active
   useEffect(() => {
-    if (safeActiveTab === "visitors" && !checking) {
+    if (activeTab === "visitors" && !checking) {
       loadVisitorList();
       loadVisitorKpi();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [safeActiveTab, checking, visitorDateFrom, visitorDateTo, visitorPage]);
+  }, [activeTab, checking, visitorDateFrom, visitorDateTo, visitorPage]);
+
+  // ── Render guard ───────────────────────────────────────────────────
+  if (checking) return (
+    <AuthWrapper>
+      <main style={{ padding: "14px 18px" }}>
+        <p style={{ color: COLOURS.SLATE }}>Checking permissions...</p>
+      </main>
+    </AuthWrapper>
+  );
+
+  const ALL_TABS: { id: TabId; label: string; widgetKey: string }[] = [
+    { id: "registrations", label: "Registrations", widgetKey: "admin_ops.registrations" },
+    { id: "payments",      label: "Payments",      widgetKey: "admin_ops.payments" },
+    { id: "compliance",    label: "Compliance",    widgetKey: "admin_ops.compliance" },
+    { id: "documents",     label: "Documents",     widgetKey: "admin_ops.documents" },
+    { id: "operations",    label: "Operations",    widgetKey: "admin_ops.operations" },
+    { id: "visitors",      label: "Visitors",      widgetKey: "admin_ops.visitors" },
+  ];
+  // Only show tabs that are widget-visible for this user.
+  const TABS = ALL_TABS.filter((t) => wv(t.widgetKey));
+  // If the current activeTab was hidden, jump to the first visible one.
+  const safeActiveTab: TabId = TABS.some((t) => t.id === activeTab) ? activeTab : (TABS[0]?.id ?? "registrations");
+
 
   function visitorPreset(label: string) {
     const today = new Date();
