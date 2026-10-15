@@ -786,7 +786,9 @@ export default function MeetingsPage() {
     setSaving(true);
 
     // Save the extracted data so the CEO can review without re-running AI.
-    const updates: Record<string, unknown> = {
+    // Route through the API (service client) because the Executive role is
+    // excluded from the pending_minutes RLS policy.
+    const payload: Record<string, unknown> = {
       status: "pa_approved",
       pa_approved_by: currentUserEmail,
       pa_approved_at: new Date().toISOString(),
@@ -795,7 +797,25 @@ export default function MeetingsPage() {
     };
 
     if (activePendingId) {
-      await supabase.from("pending_minutes").update(updates).eq("id", activePendingId);
+      // UPDATE the existing email-queue row
+      payload.id = activePendingId;
+    } else {
+      // INSERT a new row — PA submitted via direct paste / upload
+      payload.raw_text = transcript;
+      payload.from_address = currentUserEmail;
+    }
+
+    const res = await authFetch("/api/meetings/pending", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      setMessage("Error submitting for review: " + (errData.error || res.statusText));
+      setSaving(false);
+      return;
     }
 
     logAction("Updated", "meetings", `Minutes submitted for CEO approval: ${extracted.meeting_title}`);
