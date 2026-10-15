@@ -142,9 +142,15 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   // else in the app.
   { key: "guarantees.financials", label: "Financial Figures (amounts, limits, margins)", page: "Bank Facilities", tip: "Guarantee amounts, cash margin, bank charges, facility limits & utilisation — all PKR figures. Defaults to Finance managers/Admin/CEO only; toggle to grant or deny it for a specific person." },
 
-  // ── Retail Sales (app/finance/imperial/page.tsx → /daily-sales) ─────
-  { key: "imperial.retail_sales",     label: "Retail Sales",                                         page: "Retail Sales", tip: "Grants access to the Retail Sales tab on the Imperial finance page (daily-sales data entry for HODs and Finance Managers)" },
-  { key: "imperial.retail_sales_hod", label: "Retail Sales – HOD (delete & reopen month)",           page: "Retail Sales", tip: "Extends Retail Sales access with the ability to delete a submitted month and reopen it for re-entry (HOD-level only)" },
+  // ── Finance – Imperial Footwear tabs (app/finance/imperial/page.tsx) ──
+  // Each widget controls one tab on the Imperial Footwear finance page.
+  // Finance Overview is the cash-position / daily-position / budgets tab.
+  // Retail Sales is the store daily-sales entry and reporting tab.
+  // Grant only the tab(s) a person needs — e.g. give Retail Sales to HODs
+  // without exposing the Finance Overview cash data.
+  { key: "imperial.finance_overview", label: "Finance Overview",                                      page: "Finance – Imperial Footwear", tip: "Grants access to the Finance Overview tab on the Imperial Footwear finance page (cash position, daily entries, budgets). Finance Managers see this by default via their role." },
+  { key: "imperial.retail_sales",     label: "Retail Sales",                                         page: "Finance – Imperial Footwear", tip: "Grants access to the Retail Sales tab on the Imperial Footwear finance page (store daily-sales data entry and reporting for HODs and Finance Managers)" },
+  { key: "imperial.retail_sales_hod", label: "Retail Sales – HOD (delete & reopen month)",           page: "Finance – Imperial Footwear", tip: "Extends Retail Sales access with the ability to soft-delete a submitted month and reopen it for re-entry (HOD-level only)" },
 
   // ── Finance panel cards, one row per company (app/home/page.tsx: CompanyFinancePanel) ──
   { key: "finance.cash_in_hand", label: "Cash in Hand", page: "Finance Panels", perCompany: true },

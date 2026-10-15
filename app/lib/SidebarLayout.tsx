@@ -22,6 +22,7 @@ import {
   canViewIfplPnl, canViewRestaurantsPnl, canViewGroupHR,
   canViewTeamPerformance,
   isMainAdmin, isSecondaryCEO, isDailyEntryOnly, isCEO,
+  widgetVisible,
   type UserCtx,
 } from "./permissions";
 
@@ -83,9 +84,16 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
     return scope === "both" || scope === "UTPL";
   }
   if (card.permKey === "can_view_finance_ifpl") {
-    if (!canViewFinance(ctx)) return false;
-    const scope = financeCompanies(ctx);
-    return scope === "both" || scope === "IFPL";
+    // Full finance role: check company scope as before.
+    if (canViewFinance(ctx)) {
+      const scope = financeCompanies(ctx);
+      return scope === "both" || scope === "IFPL";
+    }
+    // Widget-only users: show the Imperial Footwear link if they have either tab widget.
+    return (
+      widgetVisible(ctx, "imperial.retail_sales", false) ||
+      widgetVisible(ctx, "imperial.finance_overview", false)
+    );
   }
   if (perms) {
     const val = perms[card.permKey];

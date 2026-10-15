@@ -1,14 +1,13 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../../lib/AuthWrapper";
 import { getCompanyBySlug } from "../../lib/constants";
 import { PageHeader } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
-import { useRequireCapability } from "../../lib/useRouteGuard";
 import { useUserCtx } from "../../lib/useUserCtx";
-import { financeCompanies, widgetVisible } from "../../lib/permissions";
+import { financeCompanies, canViewFinance, widgetVisible } from "../../lib/permissions";
 import FinanceManager from "../FinanceManager";
 import RetailSalesTab from "../RetailSalesTab";
 
@@ -16,27 +15,57 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
   const { company } = use(params);
   const isMobile = useMobile();
   const router = useRouter();
-  const { checking } = useRequireCapability("finance");
+  // No useRequireCapability("finance") here — imperial lets in widget-only users
+  // (retail_sales or finance_overview), while other companies still need canViewFinance.
+  // The redirect logic below enforces access rather than the capability hook.
   const { ctx, loading: ctxLoading } = useUserCtx();
   const config = getCompanyBySlug(company);
   const [activeTab, setActiveTab] = useState<"overview" | "retail">("overview");
 
-  // useRequireCapability("finance") only checks whether the user can view
-  // finance at all — it has no idea which company the URL is for. Found 16
-  // Jul 2026 while reviewing Kamran's access: his finance_company_scope was
-  // "IFPL" but the sidebar just hid the Unze Trading link rather than the
-  // page actually blocking it, so the URL alone would have let him in and
-  // let him edit it. This is the real per-company enforcement.
-  if (!checking && !ctxLoading && ctx && config) {
-    const scope = financeCompanies(ctx);
-    const allowed = scope === "both" || scope === config.shortCode;
-    if (!allowed) {
-      router.replace("/home");
-      return null;
-    }
-  }
+  const isAdminOrCEO = ctx?.role === "Admin" || ctx?.role === "CEO";
+  const hasFullFinance = !!ctx && canViewFinance(ctx);
 
-  if (checking || ctxLoading) return null;
+  // Per-tab access for the imperial page.
+  // Finance Overview: finance role by default, or explicit widget override.
+  const canSeeFinanceOverview =
+    company === "imperial" && !!ctx &&
+    (hasFullFinance || isAdminOrCEO || widgetVisible(ctx, "imperial.finance_overview", false));
+
+  // Retail Sales: Admin/CEO always; others need explicit imperial.retail_sales widget.
+  const canSeeRetailTab =
+    company === "imperial" && !!ctx &&
+    (isAdminOrCEO || widgetVisible(ctx, "imperial.retail_sales", false));
+
+  // Access enforcement: run once ctx is loaded.
+  useEffect(() => {
+    if (ctxLoading || !ctx) return;
+
+    if (company === "imperial") {
+      // Imperial: allow if user has any access (role or either tab widget).
+      const canAccess =
+        hasFullFinance || isAdminOrCEO ||
+        widgetVisible(ctx, "imperial.retail_sales", false) ||
+        widgetVisible(ctx, "imperial.finance_overview", false);
+      if (!canAccess) { router.replace("/home"); return; }
+
+      // Finance-role users: additionally enforce company scope.
+      if (hasFullFinance && !isAdminOrCEO) {
+        const scope = financeCompanies(ctx);
+        if (scope !== "both" && scope !== "IFPL") { router.replace("/home"); return; }
+      }
+    } else {
+      // Non-imperial: must have full finance role with correct company scope.
+      // (mirrors the original useRequireCapability("finance") + per-company check)
+      if (!hasFullFinance && !isAdminOrCEO) { router.replace("/home"); return; }
+      if (config) {
+        const scope = financeCompanies(ctx);
+        const allowed = scope === "both" || scope === config.shortCode;
+        if (!allowed) { router.replace("/home"); return; }
+      }
+    }
+  }, [ctxLoading, ctx, company, config, hasFullFinance, isAdminOrCEO, router]);
+
+  if (ctxLoading) return null;
 
   if (!config) {
     return (
@@ -48,18 +77,13 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
     );
   }
 
-  // Retail Sales tab: CEO/Admin always see it by role (mirrors has_widget DB logic).
-  // Other users need an explicit imperial.retail_sales widget override row.
-  // The tab is only available on the imperial company page.
-  const isAdminOrCEO = ctx?.role === "Admin" || ctx?.role === "CEO";
-  const canSeeRetailTab =
-    company === "imperial" && !!ctx &&
-    (isAdminOrCEO || widgetVisible(ctx, "imperial.retail_sales", false));
+  // Show the tab bar only when the user can access BOTH tabs.
+  // A finance-only user sees Finance Overview directly (no tab chrome).
+  // A retail-only user sees Retail Sales directly (no tab chrome).
+  const showTabBar = canSeeFinanceOverview && canSeeRetailTab;
 
-  // Tab bar is only rendered when there are 2 tabs to show (Finance Overview +
-  // Retail Sales).  A plain finance user sees the Finance Overview content
-  // directly with no tab chrome above it.
-  const showTabBar = canSeeRetailTab; // Finance Overview is always available for any user who reaches this page
+  // If the user has no Finance Overview access, lock them to the retail tab.
+  const displayTab = (!canSeeFinanceOverview && canSeeRetailTab) ? "retail" : activeTab;
 
   const TAB_STYLE_BASE: React.CSSProperties = {
     padding: "10px 20px",
@@ -119,13 +143,13 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
           </div>
         )}
 
-        {/* FinanceManager is only mounted when the Finance Overview tab is active.
-            It is never mounted for widget-only users viewing the Retail Sales tab. */}
-        {activeTab === "overview" && (
+        {/* FinanceManager: only when user can see Finance Overview AND that tab is active.
+            Widget-only Retail-Sales users never see or mount this component. */}
+        {canSeeFinanceOverview && displayTab === "overview" && (
           <FinanceManager companyId={config.id} companyName={config.name} />
         )}
 
-        {activeTab === "retail" && canSeeRetailTab && (
+        {canSeeRetailTab && displayTab === "retail" && (
           <RetailSalesTab companyId={config.id} />
         )}
       </main>
