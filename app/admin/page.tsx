@@ -1034,7 +1034,7 @@ export default function AdminDataPage() {
     const distinctDepts = [...new Set(visitorRows.map((r) => r.department_name))].sort();
     return (
       <div>
-        {renderVisitorDashboard()}
+        {wv("admin.visitors_dashboard") && renderVisitorDashboard()}
 
         {/* Filters row */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "14px", alignItems: "flex-end" }}>
