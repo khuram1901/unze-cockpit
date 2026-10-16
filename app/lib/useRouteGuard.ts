@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { supabase, loadMyPermissions, loadMyWidgetOverrides } from "./supabase";
+import { supabase, loadMyPermissions, loadMyWidgetOverrides, ensureFreshSession } from "./supabase";
 
 // Store users have email addresses of the form store{3-digit-code}@unze.co.uk.
 // They are restricted to /daily-sales only. This regex is the single source of
@@ -160,8 +160,25 @@ function useAuthGuard(
         router.replace("/daily-sales");
         return;
       }
-      const loaded = await loadUserCtx(session.user.email);
+      let loaded = await loadUserCtx(session.user.email);
       if (!active) return;
+      // If overrides didn't load on the first try (Vercel cold start, brief
+      // network hiccup), retry once after 1.5 s — mirrors the retry that
+      // AuthWrapper performs for fast-path pages.  Without this, any transient
+      // failure in /api/me/permissions permanently denies access for the
+      // entire 5-minute TTL window on pages that use the slow path (e.g.
+      // the Banking page, which renders useRequireCapability before its own
+      // <AuthWrapper> is mounted).
+      if (loaded.overrides === null) {
+        await new Promise(r => setTimeout(r, 1500));
+        if (!active) return;
+        // ensureFreshSession forces a token refresh if the access token has
+        // expired — a common cause of the initial failure.
+        await ensureFreshSession();
+        if (!active) return;
+        loaded = await loadUserCtx(session.user.email);
+        if (!active) return;
+      }
       if (!allowRef.current(loaded)) {
         router.replace("/welcome");
         return;
