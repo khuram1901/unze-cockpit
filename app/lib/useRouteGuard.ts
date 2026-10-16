@@ -12,7 +12,7 @@ import {
   canViewFinance, canViewReceivables, canViewExecutiveDashboard, canViewDepartment,
   canViewOperations, canSeeAllMinutes, canSeeAllTasks, canManageRecurringTasks,
   canManageMembers, canViewAuditLog, canImportExport,
-  canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry, canAccessBanking,
+  canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry, canAccessVisitorEntry, canAccessBanking,
   canViewPADashboard, canViewInvestments,
   canViewStock, canViewGuarantees, canViewIfplPnl, canViewRestaurantsPnl, canViewGroupHR, canAccessFolderit,
   canViewTaxAccounts, canViewTeamPerformance,
@@ -25,7 +25,7 @@ type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
   | "audit_log" | "import_export" | "daily_entry"
   | "pa_dashboard" | "investments" | "system_backups" | "stock" | "guarantees"
-  | "ifpl_pnl" | "restaurants_pnl" | "admin_ops" | "admin_entry" | "folderit" | "banking" | "group_hr"
+  | "ifpl_pnl" | "restaurants_pnl" | "admin_ops" | "admin_entry" | "visitor_entry" | "folderit" | "banking" | "group_hr"
   | "dept_tax_accounts"
   | "team_performance";
 
@@ -47,6 +47,7 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   system_backups: isMainAdmin,
   admin_ops: canAccessAdminOps,
   admin_entry: canAccessAdminEntry,
+  visitor_entry: canAccessVisitorEntry,
   stock: canViewStock,
   ifpl_pnl: canViewIfplPnl,
   restaurants_pnl: canViewRestaurantsPnl,

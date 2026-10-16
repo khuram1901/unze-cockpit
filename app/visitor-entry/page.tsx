@@ -155,7 +155,7 @@ function CentredMsg({ children }: { children: React.ReactNode }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function VisitorEntryPage() {
   // Auth guard — redirects to /login if not authenticated, /welcome if no admin_ops access
-  const { checking } = useRequireCapability("admin_ops");
+  const { checking } = useRequireCapability("visitor_entry");
 
   const [screen, setScreen] = useState<"form" | "confirm" | "success">("form");
   const [form, setForm] = useState<Form>(BLANK());

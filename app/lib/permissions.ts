@@ -665,6 +665,13 @@ export function canAccessAdminOps(u: UserCtx): boolean {
   return isAdminTier(u) || (isManagerTier(u.role) && u.department === "Admin");
 }
 
+// ── Visitor Entry (reception check-in form — /visitor-entry) ──────
+// Off by default. Granted to admin tier automatically, or to any member
+// who has the admin_ops.visitor_entry widget turned on (e.g. reception staff).
+export function canAccessVisitorEntry(u: UserCtx): boolean {
+  return isAdminTier(u) || widgetVisible(u, "admin_ops.visitor_entry", false);
+}
+
 // ── Admin Entry (fuel, solar, utility, maintenance — mobile form) ─
 // Off by default — granted explicitly per member via the Access Matrix.
 export function canAccessAdminEntry(u: UserCtx): boolean {
