@@ -490,7 +490,8 @@ function parseBaranhStyle(
   const pdcMatch = text.match(/Total\s+PDC[''']?s?\s+Balance\s+\(?([,\d]+(?:\.\d+)?)\)?/i);
   if (pdcMatch) {
     const searchStart = text.search(/Total\s+PDC[''']?s?\s+Balance/i);
-    const chunk = text.slice(searchStart, searchStart + 80);
+    const lineEnd = text.indexOf("\n", searchStart);
+    const chunk = text.slice(searchStart, lineEnd >= 0 ? lineEnd : searchStart + 80);
     pdcTotal = chunk.includes("(") ? -parseAmount(pdcMatch[1]) : parseAmount(pdcMatch[1]);
   }
 
