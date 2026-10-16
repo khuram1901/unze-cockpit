@@ -552,12 +552,13 @@ export const primaryButtonStyle: React.CSSProperties = {
 // ─────────────────────────────────────────────────────────────────
 // Toast notification
 // ─────────────────────────────────────────────────────────────────
-type ToastType = "success" | "error" | "info";
+type ToastType = "success" | "error" | "info" | "warning";
 
 const TOAST_COLORS: Record<ToastType, { bg: string; border: string; text: string; icon: string }> = {
-  success: { bg: COLOURS.SUCCESS_SOFT, border: "#A8D5C2", text: COLOURS.GREEN, icon: "✓" },
-  error:   { bg: COLOURS.DANGER_SOFT,  border: "#EDB5B2", text: COLOURS.RED,   icon: "✗" },
-  info:    { bg: "#EEF1FC",            border: "#C0C8EF", text: COLOURS.BLUE,  icon: "ℹ" },
+  success: { bg: COLOURS.SUCCESS_SOFT, border: "#A8D5C2", text: COLOURS.GREEN,  icon: "✓" },
+  error:   { bg: COLOURS.DANGER_SOFT,  border: "#EDB5B2", text: COLOURS.RED,    icon: "✗" },
+  info:    { bg: "#EEF1FC",            border: "#C0C8EF", text: COLOURS.BLUE,   icon: "ℹ" },
+  warning: { bg: "#FEF3E2",            border: "#E8C97A", text: COLOURS.AMBER,  icon: "⚠" },
 };
 
 export function Toast({ message, type = "info", onClose }: { message: string; type?: ToastType; onClose: () => void }) {
