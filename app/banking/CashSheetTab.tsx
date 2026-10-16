@@ -278,6 +278,14 @@ export default function CashSheetTab() {
         parsedTxns = pdfJson.parsed.transactions ?? [];
         parsedPdcBuckets = pdfJson.parsed.pdc_buckets ?? [];
       }
+      // If the parser couldn't read the values reliably, warn the user so they
+      // know to enter the balances manually rather than silently storing zeros.
+      if (pdfJson.parseWarning) {
+        showToast(
+          "PDF uploaded but values couldn't be read automatically — please enter the balances below manually.",
+          "warning",
+        );
+      }
     }
 
     // 2. Build validated transactions — manually entered rows first; if none

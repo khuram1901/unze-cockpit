@@ -379,10 +379,15 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
 
   // ── PDC total ──
   // Format: "Total PDC's Balance  62,057,051"
+  // Sign check: only look within the same line as "Total PDC" — a 60-char
+  // lookahead bleeds into the following "Closing Balance\n(161,609,884)"
+  // line and incorrectly treats that closing-balance "(" as a negative sign.
   let pdcTotal = 0;
   const pdcMatch = text.match(/Total\s+PDC[''']s\s+Balance\s+\(?([,\d]+(?:\.\d+)?)\)?/i);
   if (pdcMatch) {
-    const chunk = text.slice(text.search(/Total\s+PDC/i), text.search(/Total\s+PDC/i) + 60);
+    const pdcStart = text.search(/Total\s+PDC/i);
+    const pdcLineEnd = text.indexOf("\n", pdcStart);
+    const chunk = text.slice(pdcStart, pdcLineEnd >= 0 ? pdcLineEnd : pdcStart + 50);
     pdcTotal = chunk.includes("(") ? -parseAmount(pdcMatch[1]) : parseAmount(pdcMatch[1]);
   }
 
@@ -400,6 +405,29 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
       const impIsNeg = impPrefix.includes("-") || impPrefix.includes("(");
       closingAfterPDC = impIsNeg ? -parseAmount(m[2]) : parseAmount(m[2]);
     }
+  }
+
+  // ── Suspicious-parse guard ──
+  // If all three of these are true simultaneously, the parser has produced a
+  // result that looks internally consistent but is actually wrong:
+  //   • openingBalance = 0  → "Today Opening Balance" label was found (for
+  //     detectCompany) but extractInlineAmount couldn't read the number after it
+  //   • closingRaw = null   → "Today Closing Balance" number wasn't extracted
+  //   • paymentsTotal = 0   → "Date Payments" header wasn't found in the text
+  //   • receiptsTotal > 0   → but some "Total" was matched in a receipts-shaped block
+  // In this case closing = 0 + receipts − 0 = receipts, which gives a plausible
+  // but incorrect result that passes checkNotMostlyZero (only 2 zeros, not 3).
+  // This happens when pdf-parse produces a different text format from the one
+  // the regexes were written for — typically a different PDF export variant.
+  if (openingBalance === 0 && closingRaw === null && paymentsTotal === 0 && receiptsTotal > 0) {
+    throw new Error(
+      `Imperial PDF parsed but result is suspicious — opening=0, closing not found, payments=0, receipts=${receiptsTotal}. ` +
+      `The PDF text format may differ from expected. ` +
+      `Labels found: hasDayPayments=${/Date\s*Payments/i.test(text)}, ` +
+      `hasDayReceipts=${/Date\s*Receipts/i.test(text)}, ` +
+      `hasOpeningLabel=${/Today Opening Balance/i.test(text)}. ` +
+      `Text starts: ${text.slice(0, 200).replace(/\n/g, "\\n")}`
+    );
   }
 
   return {
