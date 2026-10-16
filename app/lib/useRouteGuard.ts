@@ -84,7 +84,15 @@ async function loadUserCtx(email: string): Promise<UserCtx> {
     company: m?.company ?? null,
     overrides: (permData as PermOverrides | null) ?? null,
   };
-  _ctxCache = { email, ctx, ts: Date.now() };
+  // Only cache if overrides loaded successfully. A null-overrides ctx means
+  // a transient API failure; caching it would block override-dependent
+  // features (e.g. banking, admin_ops) for the full 5-minute TTL. With no
+  // cache entry, the next navigation retries the permissions load.
+  // loadMyPermissions() already skips its own cache on null results, so
+  // retrying is cheap and safe.
+  if (ctx.overrides !== null) {
+    _ctxCache = { email, ctx, ts: Date.now() };
+  }
   return ctx;
 }
 
