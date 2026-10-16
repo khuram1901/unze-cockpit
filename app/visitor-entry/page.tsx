@@ -53,6 +53,14 @@ function pktToUtcIso(date: string, time: string): string {
   return new Date(Date.UTC(y, mo - 1, d, h - 5, mi)).toISOString();
 }
 
+/** Format a UTC ISO timestamp as PKT HH:MM */
+function formatTimePkt(utcIso: string): string {
+  try {
+    const pkt = new Date(new Date(utcIso).getTime() + 5 * 60 * 60 * 1000);
+    return `${String(pkt.getUTCHours()).padStart(2, "0")}:${String(pkt.getUTCMinutes()).padStart(2, "0")}`;
+  } catch { return "—"; }
+}
+
 async function getToken(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token ?? "";
@@ -68,6 +76,15 @@ async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> 
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Host = { id: string; name: string; department: string | null };
+
+type CurrentVisitor = {
+  id: string;
+  visitor_name: string;
+  host_name: string;
+  time_in: string;       // UTC ISO string
+  department_name: string;
+  purpose: string;
+};
 
 type Form = {
   date: string;
@@ -169,6 +186,9 @@ export default function VisitorEntryPage() {
   const [error, setError] = useState("");
   const [flagInfo, setFlagInfo] = useState<{ type: string; reason: string | null } | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [currentVisitors, setCurrentVisitors] = useState<CurrentVisitor[]>([]);
+  const [checkingOut, setCheckingOut] = useState<Set<string>>(new Set());
+  const [loadingCurrent, setLoadingCurrent] = useState(false);
 
   const deptRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -213,6 +233,35 @@ export default function VisitorEntryPage() {
       }
     } catch {
       // non-blocking — the form still works without dept/host lists
+    }
+    loadCurrentVisitors();
+  }
+
+  async function loadCurrentVisitors() {
+    setLoadingCurrent(true);
+    try {
+      const res = await apiFetch("/api/visitors/current");
+      if (res.ok) {
+        const d = await res.json();
+        setCurrentVisitors(d.visitors ?? []);
+      }
+    } catch { /* non-blocking */ }
+    finally { setLoadingCurrent(false); }
+  }
+
+  async function handleCheckOut(visitorId: string) {
+    setCheckingOut((s) => new Set(s).add(visitorId));
+    try {
+      const res = await apiFetch("/api/visitors/check-out", {
+        method: "POST",
+        body: JSON.stringify({ visitor_id: visitorId }),
+      });
+      if (res.ok) {
+        setCurrentVisitors((vs) => vs.filter((v) => v.id !== visitorId));
+      }
+    } catch { /* non-blocking */ }
+    finally {
+      setCheckingOut((s) => { const n = new Set(s); n.delete(visitorId); return n; });
     }
   }
 
@@ -353,6 +402,7 @@ export default function VisitorEntryPage() {
         throw new Error(j.error ?? "Failed to save visitor log.");
       }
       setScreen("success");
+      loadCurrentVisitors(); // refresh the panel so the new arrival appears
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "An error occurred. Please try again.");
       setScreen("form");
@@ -399,7 +449,7 @@ export default function VisitorEntryPage() {
             {form.visitor_name} has been logged in to see {form.host_name}.
           </p>
           <button
-            onClick={() => { setForm(BLANK()); setScreen("form"); setError(""); }}
+            onClick={() => { setForm(BLANK()); setScreen("form"); setError(""); loadCurrentVisitors(); }}
             style={{ background: C.NAVY, color: C.WHITE, border: "none", borderRadius: 10, padding: "13px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer", width: "100%" }}
           >
             Log Another Visitor
@@ -464,6 +514,63 @@ export default function VisitorEntryPage() {
         {/* Header */}
         <p style={{ fontSize: 11, fontWeight: 700, color: C.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Visitors Log</p>
         <p style={{ fontSize: isDesktop ? 26 : 22, fontWeight: 700, color: C.NAVY, margin: "0 0 20px" }}>New Visitor Entry</p>
+
+        {/* Currently in Office panel */}
+        <div style={{ ...cardStyle, marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: currentVisitors.length > 0 ? 12 : 0 }}>
+            <p style={{ ...sectionTitle, marginBottom: 0 }}>Currently in Office</p>
+            <span style={{
+              background: currentVisitors.length > 0 ? "#E6F4F0" : C.BORDER,
+              color: currentVisitors.length > 0 ? C.GREEN : C.SLATE,
+              fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+            }}>
+              {loadingCurrent ? "…" : `${currentVisitors.length} ${currentVisitors.length === 1 ? "person" : "people"}`}
+            </span>
+          </div>
+          {!loadingCurrent && currentVisitors.length === 0 && (
+            <p style={{ fontSize: 13, color: C.SLATE, margin: 0, paddingTop: 6 }}>No visitors currently in the office.</p>
+          )}
+          {currentVisitors.map((v, idx) => (
+            <div
+              key={v.id}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                gap: 10,
+                paddingTop: 10, paddingBottom: 10,
+                borderTop: idx === 0 ? `1px solid ${C.BORDER}` : "none",
+                borderBottom: `1px solid ${C.BORDER}`,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {v.visitor_name}
+                </p>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: C.SLATE }}>
+                  {[v.host_name, v.department_name].filter(Boolean).join(" · ")}
+                  {v.time_in ? ` · Arrived ${formatTimePkt(v.time_in)}` : ""}
+                </p>
+              </div>
+              <button
+                onClick={() => handleCheckOut(v.id)}
+                disabled={checkingOut.has(v.id)}
+                style={{
+                  flexShrink: 0,
+                  padding: "7px 14px",
+                  borderRadius: 8,
+                  border: `1.5px solid ${C.BORDER}`,
+                  background: checkingOut.has(v.id) ? C.BORDER : C.WHITE,
+                  color: checkingOut.has(v.id) ? C.SLATE : C.NAVY,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: checkingOut.has(v.id) ? "wait" : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {checkingOut.has(v.id) ? "Saving…" : "Check Out"}
+              </button>
+            </div>
+          ))}
+        </div>
 
         {/* Flag banner */}
         {flagInfo && (
