@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Fragment } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import LegalCases from "./LegalCases";
-import { widgetVisible, isAdminTier, isPrivileged } from "../lib/permissions";
+import { widgetVisible, isAdminTier, isPrivileged, canAccessAdminOps, canAccessVisitorEntry } from "../lib/permissions";
 import { useUserCtx } from "../lib/useUserCtx";
 import { authFetch, supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
@@ -155,11 +155,13 @@ const CURRENT_FY_START = currentFyStart();
 // ── Main component ────────────────────────────────────────────────────
 
 export default function AdminDataPage() {
-  const { checking } = useRequireCapability("admin_ops");
+  const { checking } = useRequireCapability("admin_page");
   const { ctx } = useUserCtx();
   const isMobile = useMobile();
   // Widget visibility — gates individual tabs. Default true = visible unless explicitly hidden.
   const wv = (key: string) => !ctx || widgetVisible(ctx, key, true);
+  // Visitor-entry-only users (reception staff) see only the Visitors tab
+  const isVisitorOnly = !!ctx && canAccessVisitorEntry(ctx) && !canAccessAdminOps(ctx);
   const { confirm, element: confirmElement } = useConfirm();
   const { show: showToast, element: toastElement } = useToast();
 
@@ -868,7 +870,9 @@ export default function AdminDataPage() {
     { id: "visitors",      label: "Visitors",      widgetKey: "admin_ops.visitors" },
   ];
   // Only show tabs that are widget-visible for this user.
-  const TABS = ALL_TABS.filter((t) => wv(t.widgetKey));
+  const TABS = isVisitorOnly
+    ? ALL_TABS.filter((t) => t.id === "visitors")
+    : ALL_TABS.filter((t) => wv(t.widgetKey));
   // If the current activeTab was hidden, jump to the first visible one.
   const safeActiveTab: TabId = TABS.some((t) => t.id === activeTab) ? activeTab : (TABS[0]?.id ?? "registrations");
 

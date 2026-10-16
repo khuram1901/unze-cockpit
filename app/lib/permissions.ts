@@ -672,6 +672,11 @@ export function canAccessVisitorEntry(u: UserCtx): boolean {
   return isAdminTier(u) || widgetVisible(u, "admin_ops.visitor_entry", false);
 }
 
+/** Admin Operations page: full admin_ops users OR visitor-entry-only reception staff. */
+export function canAccessAdminPage(u: UserCtx): boolean {
+  return canAccessAdminOps(u) || canAccessVisitorEntry(u);
+}
+
 // ── Admin Entry (fuel, solar, utility, maintenance — mobile form) ─
 // Off by default — granted explicitly per member via the Access Matrix.
 export function canAccessAdminEntry(u: UserCtx): boolean {
