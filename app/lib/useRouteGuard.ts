@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { supabase, loadMyPermissions } from "./supabase";
+import { supabase, loadMyPermissions, loadMyWidgetOverrides } from "./supabase";
 
 // Store users have email addresses of the form store{3-digit-code}@unze.co.uk.
 // They are restricted to /daily-sales only. This regex is the single source of
@@ -17,7 +17,7 @@ import {
   canViewStock, canViewGuarantees, canViewIfplPnl, canViewRestaurantsPnl, canViewGroupHR, canAccessFolderit,
   canViewTaxAccounts, canViewTeamPerformance,
   isPrivileged, isAdminTier, isMainAdmin,
-  type UserCtx, type PermOverrides,
+  type UserCtx, type PermOverrides, type WidgetOverrides,
 } from "./permissions";
 import { UserCtxContext } from "./AuthWrapper";
 
@@ -72,10 +72,11 @@ async function loadUserCtx(email: string): Promise<UserCtx> {
   if (_ctxCache && _ctxCache.email === email && Date.now() - _ctxCache.ts < CTX_TTL_MS) {
     return _ctxCache.ctx;
   }
-  // Parallelise the two independent DB calls
-  const [{ data: m }, permData] = await Promise.all([
+  // Parallelise the three independent DB calls
+  const [{ data: m }, permData, widgetData] = await Promise.all([
     supabase.from("members").select("id, role, department, company").eq("email", email).maybeSingle(),
     loadMyPermissions(),
+    loadMyWidgetOverrides(),
   ]);
   const ctx: UserCtx = {
     email,
@@ -83,6 +84,7 @@ async function loadUserCtx(email: string): Promise<UserCtx> {
     department: m?.department ?? null,
     company: m?.company ?? null,
     overrides: (permData as PermOverrides | null) ?? null,
+    widgetOverrides: (widgetData as WidgetOverrides | null) ?? null,
   };
   // Only cache if overrides loaded successfully. A null-overrides ctx means
   // a transient API failure; caching it would block override-dependent

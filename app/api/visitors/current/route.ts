@@ -20,12 +20,12 @@ async function canAccess(
   if (["admin", "ceo"].includes(member.role)) return true;
   const { data: ov } = await supabase
     .from("member_widget_overrides")
-    .select("is_enabled")
+    .select("visible")
     .eq("member_id", member.id)
     .eq("widget_key", "admin_ops.visitor_entry")
-    .eq("is_enabled", true)
+    .eq("visible", true)
     .maybeSingle();
-  return ov?.is_enabled === true;
+  return ov?.visible === true;
 }
 
 /** GET /api/visitors/current
