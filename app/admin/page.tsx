@@ -788,6 +788,10 @@ export default function AdminDataPage() {
   const [settingsSaving, setSettingsSaving]           = useState(false);
   const [settingsNewKw, setSettingsNewKw]             = useState("");
   const [settingsNewMins, setSettingsNewMins]         = useState("");
+  // F14 — Historical import state
+  const [visitorImportFile, setVisitorImportFile]     = useState<File | null>(null);
+  const [visitorImporting, setVisitorImporting]       = useState(false);
+  const [visitorImportResult, setVisitorImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
 
   async function loadVisitorList() {
     setLoadingVisitors(true);
@@ -903,6 +907,19 @@ export default function AdminDataPage() {
   async function deletePurposeThreshold(keyword: string) {
     await authFetch(`/api/visitors/settings?keyword=${encodeURIComponent(keyword)}`, { method: "DELETE" });
     loadVisitorSettings();
+  }
+
+  async function handleVisitorImport() {
+    if (!visitorImportFile) return;
+    setVisitorImporting(true);
+    setVisitorImportResult(null);
+    const form = new FormData();
+    form.append("file", visitorImportFile);
+    const res = await authFetch("/api/visitors/import", { method: "POST", body: form });
+    const json = await res.json();
+    setVisitorImportResult(json);
+    setVisitorImporting(false);
+    if (json.imported > 0) loadVisitorList();
   }
 
   // Load visitors when tab becomes active
@@ -1357,20 +1374,57 @@ export default function AdminDataPage() {
         )}
 
         {/* Historical Import panel */}
-        <details style={{ marginTop: "28px" }}>
-          <summary style={{ fontWeight: 700, color: COLOURS.SLATE, cursor: "pointer", padding: "10px 0", fontSize: "14px" }}>
-            📥 Historical Import (Excel)
-          </summary>
-          <div style={{ background: "#FFFBEB", border: `1px solid #FDE68A`, borderRadius: "10px", padding: "16px", marginTop: "8px" }}>
-            <p style={{ margin: "0 0 8px", fontWeight: 600, color: COLOURS.NAVY }}>Import from Excel</p>
-            <p style={{ margin: "0 0 12px", fontSize: "13px", color: COLOURS.SLATE }}>
-              Paste or upload historical visitor records. Expected columns: <code>visit_date, visitor_name, mobile, cnic, department_name, host_name, purpose, time_in, time_out, comments</code>
-            </p>
-            <p style={{ margin: 0, fontSize: "12px", color: COLOURS.AMBER }}>
-              ⚠️ Awaiting historical Excel file. Once provided, the import API at <code>/api/visitors/import</code> is ready. Use the import script or upload via this panel.
-            </p>
-          </div>
-        </details>
+        {ctx && isAdminTier(ctx) && (
+          <details style={{ marginTop: "28px" }}>
+            <summary style={{ fontWeight: 700, color: COLOURS.SLATE, cursor: "pointer", padding: "10px 0", fontSize: "14px" }}>
+              📥 Historical Import (Excel)
+            </summary>
+            <div style={{ background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "20px", marginTop: "8px" }}>
+              <p style={{ margin: "0 0 8px", fontWeight: 600, color: COLOURS.NAVY }}>Bulk import from Excel / CSV</p>
+              <p style={{ margin: "0 0 12px", fontSize: "13px", color: COLOURS.SLATE }}>
+                Upload historical visitor records. Required columns: <code>visit_date</code>, <code>visitor_name</code>, <code>mobile</code>.<br/>
+                Optional: <code>cnic</code>, <code>department_name</code>, <code>host_name</code>, <code>purpose</code>, <code>time_in</code>, <code>time_out</code>, <code>comments</code>.<br/>
+                Duplicate rows (same mobile + time_in) are skipped automatically.
+              </p>
+              {visitorImportResult && (
+                <div style={{ borderRadius: "8px", padding: "12px 14px", marginBottom: "14px",
+                  backgroundColor: visitorImportResult.imported > 0 ? "#ECFDF5" : "#FFFBEB",
+                  border: `1px solid ${visitorImportResult.imported > 0 ? "#A7F3D0" : "#FDE68A"}` }}>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: visitorImportResult.imported > 0 ? COLOURS.GREEN : COLOURS.AMBER }}>
+                    ✓ {visitorImportResult.imported} row{visitorImportResult.imported !== 1 ? "s" : ""} imported · {visitorImportResult.skipped} skipped
+                  </div>
+                  {visitorImportResult.errors.length > 0 && (
+                    <ul style={{ margin: "8px 0 0", padding: "0 0 0 16px", fontSize: "12px", color: COLOURS.RED }}>
+                      {visitorImportResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                <label style={{
+                  padding: "7px 14px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`,
+                  background: "white", color: COLOURS.SLATE, fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                }}>
+                  Choose File
+                  <input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }}
+                    onChange={(e) => { setVisitorImportFile(e.target.files?.[0] ?? null); setVisitorImportResult(null); }} />
+                </label>
+                {visitorImportFile && (
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                    {visitorImportFile.name} · {(visitorImportFile.size / 1024).toFixed(1)} KB
+                  </span>
+                )}
+                <button
+                  onClick={handleVisitorImport}
+                  disabled={!visitorImportFile || visitorImporting}
+                  style={{ ...primaryButtonStyle, padding: "7px 18px", opacity: (!visitorImportFile || visitorImporting) ? 0.5 : 1 }}
+                >
+                  {visitorImporting ? "Importing…" : "Import"}
+                </button>
+              </div>
+            </div>
+          </details>
+        )}
 
         {/* Edit modal */}
         {editingVisitor && (
