@@ -236,7 +236,7 @@ function KpiTile({
       style={{
         backgroundColor: "var(--bg-card)",
         border: "1px solid var(--border-color)",
-        borderRadius: RADII.card,
+        borderRadius: RADII.CARD,
         padding: "14px 16px",
         display: "flex",
         flexDirection: "column",
@@ -325,7 +325,7 @@ function FilterBar({
       style={{
         display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center",
         backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
-        borderRadius: RADII.card, padding: "12px 16px", marginBottom: "20px",
+        borderRadius: RADII.CARD, padding: "12px 16px", marginBottom: "20px",
       }}
     >
       <select value={filters.department} onChange={(e) => onChange("department", e.target.value)} style={sel}>
@@ -392,7 +392,7 @@ function Card({ title, children, style }: { title: string; children: React.React
     <div
       style={{
         backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
-        borderRadius: RADII.card, overflow: "hidden", ...style,
+        borderRadius: RADII.CARD, overflow: "hidden", ...style,
       }}
     >
       <div
