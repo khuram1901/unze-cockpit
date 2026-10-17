@@ -38,13 +38,17 @@ Ops managers are currently kept out).
 - Facility limits are enforced on every insert / amount change / conversion (422).
 - Facilities with guarantees cannot be deleted (FK `on delete restrict`).
 
+## Expiry alerts (approved 17/10/2026)
+- Daily email at 09:00 PKT via `/api/cron/guarantee-alerts` (Vercel cron, `CRON_SECRET`).
+- Recipient: Shakeel, whenever anything is overdue or due within 30 days. Silent otherwise.
+- Khuram is copied only when the oldest overdue guarantee is **more than 15 days** past due.
+- All decisions come from `get_guarantee_alert_digest()` (migration 272); the route only renders and sends.
+
 ## Migrations
-060–064, 097, 203, **270** (write policies disabled via ALTER POLICY, rollback in file).
+060–064, 097, 203, **270** (write policies disabled via ALTER POLICY), **271** (SELECT policies follow toggles via `can_view_guarantees_db()`), **272** (alert digest RPC). All applied 17/10/2026, rollback in each file.
 
 ## Open items
 - `is_finance_manager()` (used by migration 015 policies on other finance tables)
   still checks `department = 'Finance'`, which no longer exists. Cross-page
   decision — not changed here.
-- 21 members hold an explicit `false` for `can_view_guarantees` from an old
-  Access Matrix save; left as-is (equivalent to the approved access list).
-- Expiry alerts by email / WhatsApp (alerts RPC already exists) — later.
+- Explicit `false` denies kept for the 4 Unze Trading Ops managers and taxation@unze.co.uk (role default would otherwise grant them); 28 other stale `false` values cleared 17/10/2026.
