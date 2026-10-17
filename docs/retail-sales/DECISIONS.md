@@ -7,6 +7,15 @@ aliases: [retail-sales-decisions]
 
 ---
 
+## SESSION HANDOVER – 2026-10-17 (page audit of /finance/imperial)
+
+- Live DB state (supersedes the handovers below): **33 opening balances set, 46 import batches, 1,023 daily_sales rows, all 33 store logins linked** (`store_users`). September is imported; October entries start as stores submit.
+- Migration **275** applied: `get_daily_sales_month_totals(store_id, month_start)` — the Retail Sales footer now comes from Postgres (`/api/daily-sales/rows` returns `totals`). No JS reduce() left in RetailSalesTab.
+- Finance tables RLS split view/edit (migration 274) — unrelated to retail tables, noted for completeness.
+- Still open: middleware no-Bearer gap; migration 259 P&L aliases.
+
+---
+
 ## SESSION HANDOVER – 2026-10-08
 
 ### CURRENT STATE
