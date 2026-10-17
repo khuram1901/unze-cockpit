@@ -4,6 +4,19 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.5 — 2026-10-17 (minor bump)
+
+**Bank Facilities page audit + fix (PR #34)**
+
+- Shakeel / Abbasi could see Bank Facilities in the sidebar but every API call returned 403: the API routes re-implemented permissions from role + department and ignored the Access Matrix toggles. New `app/lib/guarantee-access.ts` is the single server-side resolver (overrides, Director role, `guarantees.financials` widget); all three guarantee routes use it.
+- `GET /api/finance/guarantees` now strips PKR figures server-side for chase-only users (was UI-only).
+- `/api/finance/guarantee-alerts` now requires view access (was open to any signed-in user).
+- Migration 270: direct authenticated INSERT/UPDATE/DELETE on `guarantees` / `guarantee_facilities` disabled (any Manager or PA could write via the Supabase client).
+- Access set per Khuram: Khuram, Kamran, Shakeel, Sania, Abbasi (view + figures). New `docs/guarantees/DECISIONS.md`.
+- Rollback: production commit `5f5f299e` (deployment `unze-cockpit-9y4vxz4e7`).
+
+---
+
 ## v4.4 — 2026-09-09 (minor bump)
 
 **member onboarding: 44-member import, Director role, three-tier HR data access, full FlowHCM mapping**
