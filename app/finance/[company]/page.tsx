@@ -27,9 +27,15 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
 
   // Per-tab access for the imperial page.
   // Finance Overview: finance role by default, or explicit widget override.
+  // 17/10/2026: this used to require company === "imperial", which left every
+  // other company's finance page (Unze Trading, Baranh, HD, K&K) blank — the
+  // redirect logic below let the user in but FinanceManager never mounted.
   const canSeeFinanceOverview =
-    company === "imperial" && !!ctx &&
-    (hasFullFinance || isAdminOrCEO || widgetVisible(ctx, "imperial.finance_overview", false));
+    !!ctx && (
+      company === "imperial"
+        ? (hasFullFinance || isAdminOrCEO || widgetVisible(ctx, "imperial.finance_overview", false))
+        : (hasFullFinance || isAdminOrCEO)
+    );
 
   // Retail Sales: Admin/CEO always; others need explicit imperial.retail_sales widget.
   const canSeeRetailTab =
