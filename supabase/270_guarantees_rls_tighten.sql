@@ -14,28 +14,33 @@
 -- admin-tier / Finance & Tax managers (the page itself goes via the API,
 -- which honours the Access Matrix toggles).
 
+-- Applied to production 17/10/2026 via ALTER POLICY (the policies are kept
+-- but can never match), which is simpler to roll back than DROP.
+
 begin;
 
-drop policy if exists admin_insert_guarantees on public.guarantees;
-drop policy if exists admin_update_guarantees on public.guarantees;
-drop policy if exists admin_delete_guarantees on public.guarantees;
+alter policy admin_insert_guarantees on public.guarantees with check (false);
+alter policy admin_update_guarantees on public.guarantees using (false) with check (false);
+alter policy admin_delete_guarantees on public.guarantees using (false);
 
-drop policy if exists admin_insert_guarantee_facilities on public.guarantee_facilities;
-drop policy if exists admin_update_guarantee_facilities on public.guarantee_facilities;
-drop policy if exists admin_delete_guarantee_facilities on public.guarantee_facilities;
+alter policy admin_insert_guarantee_facilities on public.guarantee_facilities with check (false);
+alter policy admin_update_guarantee_facilities on public.guarantee_facilities using (false) with check (false);
+alter policy admin_delete_guarantee_facilities on public.guarantee_facilities using (false);
 
 commit;
 
 -- ─── ROLLBACK ────────────────────────────────────────────────────────────────
 -- begin;
--- create policy admin_insert_guarantees on public.guarantees for insert to authenticated with check (true);
--- create policy admin_update_guarantees on public.guarantees for update to authenticated
+-- alter policy admin_insert_guarantees on public.guarantees with check (true);
+-- alter policy admin_update_guarantees on public.guarantees
+--   using (exists (select 1 from members where members.email = (select auth.email()) and members.role = any (array['Admin','Executive','Manager'])))
+--   with check (true);
+-- alter policy admin_delete_guarantees on public.guarantees
 --   using (exists (select 1 from members where members.email = (select auth.email()) and members.role = any (array['Admin','Executive','Manager'])));
--- create policy admin_delete_guarantees on public.guarantees for delete to authenticated
---   using (exists (select 1 from members where members.email = (select auth.email()) and members.role = any (array['Admin','Executive','Manager'])));
--- create policy admin_insert_guarantee_facilities on public.guarantee_facilities for insert to authenticated with check (true);
--- create policy admin_update_guarantee_facilities on public.guarantee_facilities for update to authenticated
---   using (exists (select 1 from members where members.email = (select auth.email()) and members.role = any (array['Admin','Executive','Manager'])));
--- create policy admin_delete_guarantee_facilities on public.guarantee_facilities for delete to authenticated
+-- alter policy admin_insert_guarantee_facilities on public.guarantee_facilities with check (true);
+-- alter policy admin_update_guarantee_facilities on public.guarantee_facilities
+--   using (exists (select 1 from members where members.email = (select auth.email()) and members.role = any (array['Admin','Executive','Manager'])))
+--   with check (true);
+-- alter policy admin_delete_guarantee_facilities on public.guarantee_facilities
 --   using (exists (select 1 from members where members.email = (select auth.email()) and members.role = any (array['Admin','Executive','Manager'])));
 -- commit;
