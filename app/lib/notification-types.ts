@@ -24,3 +24,7 @@ export const TRIGGER_CHAT_MESSAGE = "chat_message";
 // Fired when a comment is added to a task — sent to all participants
 // (assigner, assignee, co-assignees) except the person who wrote the comment.
 export const TRIGGER_TASK_COMMENT = "task_comment";
+// Fired daily (9am PKT) by the task-overdue cron for each member who has
+// notif_task_overdue = true and notify_email = true and has at least one
+// open task whose due_date is in the past.
+export const TRIGGER_TASK_OVERDUE = "task_overdue";

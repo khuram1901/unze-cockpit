@@ -199,6 +199,15 @@ export default function AuthWrapper({
           overrides,
           widgetOverrides: widgetData ? (widgetData as WidgetOverrides) : null,
         });
+        // Members land on /tasks (their to-do list) instead of the CEO dashboard.
+        // Admin, Executive, Manager, and HOD users keep going to /home.
+        if (memberData.role === "Member") {
+          const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+          if (currentPath === "/" || currentPath === "/home") {
+            router.push("/tasks");
+            return;
+          }
+        }
       }
       setLoading(false);
     }
