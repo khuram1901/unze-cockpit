@@ -122,13 +122,14 @@ export async function DELETE(request: NextRequest) {
   if (!member) return Response.json({ error: "Member not found" }, { status: 403 });
 
   const body = await request.json();
-  const { id } = body;
+  const { id, delete_reason } = body;
   if (!id) return Response.json({ error: "id required" }, { status: 400 });
+  if (!delete_reason?.trim()) return Response.json({ error: "delete_reason required" }, { status: 400 });
 
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("visitor_log")
-    .update({ is_deleted: true, deleted_at: now, deleted_by: member.id })
+    .update({ is_deleted: true, deleted_at: now, deleted_by: member.id, delete_reason: delete_reason.trim() })
     .eq("id", id)
     .eq("is_deleted", false);
 
@@ -139,7 +140,7 @@ export async function DELETE(request: NextRequest) {
       visitor_id:  id,
       changed_by:  member.id,
       change_type: "delete",
-      new_values:  { deleted_at: now },
+      new_values:  { deleted_at: now, delete_reason: delete_reason.trim() },
     }).throwOnError();
   } catch { /* best-effort */ }
 

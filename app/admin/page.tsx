@@ -777,6 +777,8 @@ export default function AdminDataPage() {
   const [visitorDashView, setVisitorDashView] = useState<"kpi" | "league" | "heatmap" | "exceptions">("kpi");
   const [editingVisitor, setEditingVisitor]   = useState<VisitorRow | null>(null);
   const [savingVisitor, setSavingVisitor]     = useState(false);
+  const [deleteVisitorId, setDeleteVisitorId] = useState<string | null>(null);
+  const [deleteReason, setDeleteReason]       = useState("");
   const visitorPageSize = 50;
 
   async function loadVisitorList() {
@@ -821,9 +823,19 @@ export default function AdminDataPage() {
     loadVisitorKpi();
   }
 
-  async function handleVisitorDelete(id: string) {
-    if (!(await confirm("Soft-delete this visitor record? This cannot be undone."))) return;
-    await authFetch("/api/visitors/list", { method: "DELETE", body: JSON.stringify({ id }) });
+  function handleVisitorDelete(id: string) {
+    setDeleteReason("");
+    setDeleteVisitorId(id);
+  }
+
+  async function confirmVisitorDelete() {
+    if (!deleteVisitorId || !deleteReason.trim()) return;
+    await authFetch("/api/visitors/list", {
+      method: "DELETE",
+      body: JSON.stringify({ id: deleteVisitorId, delete_reason: deleteReason.trim() }),
+    });
+    setDeleteVisitorId(null);
+    setDeleteReason("");
     showToast("Record deleted");
     loadVisitorList();
   }
@@ -1219,6 +1231,29 @@ export default function AdminDataPage() {
                 <button onClick={handleVisitorEdit} disabled={savingVisitor} style={{ flex: 2, ...primaryButtonStyle, padding: "10px" }}>
                   {savingVisitor ? "Saving…" : "Save Changes"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete confirmation modal */}
+        {deleteVisitorId && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+            <div style={{ background: "white", borderRadius: RADII.CARD, padding: "24px", width: "100%", maxWidth: "380px", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+              <p style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY }}>Delete visitor record?</p>
+              <p style={{ margin: "0 0 16px", fontSize: "13px", color: COLOURS.SLATE }}>This cannot be undone. A reason is required for the audit log.</p>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "6px" }}>REASON</label>
+              <input
+                autoFocus
+                placeholder="e.g. Duplicate entry"
+                value={deleteReason}
+                onChange={e => setDeleteReason(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && deleteReason.trim()) confirmVisitorDelete(); if (e.key === "Escape") { setDeleteVisitorId(null); setDeleteReason(""); } }}
+                style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px", outline: "none", marginBottom: "16px" }}
+              />
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button onClick={() => { setDeleteVisitorId(null); setDeleteReason(""); }} style={{ flex: 1, padding: "10px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
+                <button onClick={confirmVisitorDelete} disabled={!deleteReason.trim()} style={{ flex: 2, padding: "10px", borderRadius: RADII.PILL, border: "none", background: deleteReason.trim() ? COLOURS.RED : COLOURS.HAIRLINE, color: deleteReason.trim() ? "white" : COLOURS.SLATE, cursor: deleteReason.trim() ? "pointer" : "not-allowed", fontSize: "13px", fontWeight: 700 }}>Delete Record</button>
               </div>
             </div>
           </div>
