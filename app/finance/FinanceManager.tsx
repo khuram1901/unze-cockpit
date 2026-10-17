@@ -925,7 +925,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         style={{
           border: `1px solid ${HAIRLINE}`,
           borderRadius: "14px",
-          overflow: "hidden",
+          overflowX: "auto",
           backgroundColor: CARD,
           marginBottom: "16px",
         }}
@@ -940,12 +940,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               <thead>
                 <tr style={{ backgroundColor: CARD_ALT }}>
                   <th style={th}>Date</th>
-                  <th style={th}>Opening</th>
-                  <th style={th}>Receipts</th>
-                  <th style={th}>Payments</th>
-                  <th style={th}>Closing</th>
-                  <th style={th}>Post-dated</th>
-                  <th style={th}>Net</th>
+                  <th style={{ ...th, textAlign: "right" }}>Opening</th>
+                  <th style={{ ...th, textAlign: "right" }}>Receipts</th>
+                  <th style={{ ...th, textAlign: "right" }}>Payments</th>
+                  <th style={{ ...th, textAlign: "right" }}>Closing</th>
+                  <th style={{ ...th, textAlign: "right" }}>Post-dated</th>
+                  <th style={{ ...th, textAlign: "right" }}>Net</th>
                 </tr>
               </thead>
               <tbody>
@@ -1484,6 +1484,8 @@ const td: React.CSSProperties = {
   fontSize: "13px",
   fontFamily: MONO,
   fontVariantNumeric: "tabular-nums",
+  whiteSpace: "nowrap",
+  textAlign: "right",
 };
 
 const tdBold: React.CSSProperties = {
@@ -1492,4 +1494,5 @@ const tdBold: React.CSSProperties = {
   fontWeight: 600,
   color: NAVY,
   fontSize: "13px",
+  textAlign: "left",
 };
