@@ -1149,6 +1149,19 @@ export default function AdminDataPage() {
             onKeyDown={(e) => e.key === "Enter" && loadVisitorList()}
           />
           <button onClick={() => loadVisitorList()} style={{ ...primaryButtonStyle, padding: "7px 16px" }}>Search</button>
+          {/* F13 — Export CSV (role-aware CNIC masking happens server-side) */}
+          <a
+            href={`/api/visitors/export?from=${visitorDateFrom}&to=${visitorDateTo}`}
+            download
+            style={{
+              padding: "7px 14px", borderRadius: RADII.PILL,
+              background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`,
+              color: COLOURS.SLATE, fontSize: "12px", fontWeight: 600,
+              textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "5px",
+            }}
+          >
+            ↓ Export CSV
+          </a>
         </div>
 
         {/* Table */}
