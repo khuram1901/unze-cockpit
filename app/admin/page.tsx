@@ -750,7 +750,7 @@ export default function AdminDataPage() {
   };
   type VisitorKpi = {
     total: number; currently_inside: number; overstay: number;
-    unique_visitors: number; avg_duration_mins: number; longest_stay_mins: number;
+    unique_visitors: number; avg_duration_mins: number; longest_stay_mins: number; repeat_visitors: number;
   };
   type VisitorDeptRow = { department_name: string; total: number; inside: number; avg_mins: number | null };
   type VisitorHostRow = { host_name: string; department_name: string; total: number; inside: number; avg_mins: number | null };
@@ -984,6 +984,7 @@ export default function AdminDataPage() {
               { label: "Unique Visitors",value: visitorKpi.unique_visitors,   colour: COLOURS.NAVY },
               { label: "Avg Duration",   value: `${visitorKpi.avg_duration_mins}m`, colour: COLOURS.SLATE },
               { label: "Longest Stay",   value: `${visitorKpi.longest_stay_mins}m`, colour: COLOURS.SLATE },
+              { label: "Repeat Visitors", value: visitorKpi.repeat_visitors, colour: visitorKpi.repeat_visitors > 0 ? COLOURS.AMBER : COLOURS.SLATE },
             ].map(({ label, value, colour }) => (
               <div key={label} style={{ textAlign: "center", padding: "12px 8px", background: COLOURS.CARD_ALT, borderRadius: "10px" }}>
                 <p style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: 800, color: colour }}>{value}</p>
