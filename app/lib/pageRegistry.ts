@@ -93,6 +93,7 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_review_tasks", title: "Escalations", subtitle: "Overdue tasks escalated to you by priority level", href: "/escalations", icon: "🚨", group: "My Workspace" },
   { permKey: "can_view_hr_performance", title: "HR Performance", subtitle: "Team and full company performance overview", href: "/department/hr?tab=performance", icon: "📊", group: "My Workspace" },
   { permKey: "can_view_team_performance", title: "My Team", subtitle: "Your team's task performance", href: "/my-team", icon: "👥", group: "My Workspace" },
+  { permKey: "can_see_all_tasks", title: "Task Dashboard", subtitle: "Performance KPIs, SLA breaches, department breakdown", href: "/task-dashboard", icon: "📊", group: "My Workspace" },
 
   // ── Settings ──
   { permKey: "can_view_members", title: "Members", subtitle: "Team members, roles, access", href: "/members", icon: "👥", group: "Settings", badgeKey: "members" },
