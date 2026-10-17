@@ -963,8 +963,31 @@ export default function AdminDataPage() {
     else if (label === "Yesterday") { const d = new Date(today); d.setDate(d.getDate()-1); setVisitorDateFrom(fmt(d)); setVisitorDateTo(fmt(d)); }
     else if (label === "This Week") { const d = new Date(today); d.setDate(d.getDate()-6); setVisitorDateFrom(fmt(d)); setVisitorDateTo(fmt(today)); }
     else if (label === "This Month") { const d = new Date(today.getFullYear(), today.getMonth(), 1); setVisitorDateFrom(fmt(d)); setVisitorDateTo(fmt(today)); }
+    else if (label === "Last Month") {
+      const first = new Date(today.getFullYear(), today.getMonth()-1, 1);
+      const last  = new Date(today.getFullYear(), today.getMonth(), 0);
+      setVisitorDateFrom(fmt(first)); setVisitorDateTo(fmt(last));
+    }
     setVisitorPage(0);
   }
+
+  // Build month quick-jump options (current month going back 12 months)
+  const visitorMonthOptions = (() => {
+    const opts: { label: string; from: string; to: string }[] = [];
+    const today = new Date();
+    for (let i = 0; i < 13; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const from = d.toISOString().slice(0, 10);
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      const to = last.toISOString().slice(0, 10);
+      opts.push({
+        label: d.toLocaleDateString("en-GB", { month: "short", year: "numeric" }),
+        from,
+        to,
+      });
+    }
+    return opts;
+  })();
 
   // ── Heat-map max for colour scale ──
   const heatMax = Math.max(1, ...visitorHeatmap.map((c) => c.visits));
@@ -1228,67 +1251,150 @@ export default function AdminDataPage() {
 
   function renderVisitorsTab() {
     const distinctDepts = [...new Set(visitorRows.map((r) => r.department_name))].sort();
+
+    // Determine which preset tab is active (if any)
+    const today = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const presetRanges: Record<string, { from: string; to: string }> = {
+      "Today":      { from: fmt(today), to: fmt(today) },
+      "Yesterday":  { from: fmt(new Date(today.getFullYear(), today.getMonth(), today.getDate()-1)), to: fmt(new Date(today.getFullYear(), today.getMonth(), today.getDate()-1)) },
+      "This Week":  { from: fmt(new Date(today.getFullYear(), today.getMonth(), today.getDate()-6)), to: fmt(today) },
+      "This Month": { from: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), to: fmt(today) },
+      "Last Month": { from: fmt(new Date(today.getFullYear(), today.getMonth()-1, 1)), to: fmt(new Date(today.getFullYear(), today.getMonth(), 0)) },
+    };
+    const activePreset = Object.entries(presetRanges).find(([, r]) => r.from === visitorDateFrom && r.to === visitorDateTo)?.[0] ?? null;
+
+    const filterCardStyle: React.CSSProperties = {
+      background: COLOURS.CARD,
+      border: `1px solid ${COLOURS.HAIRLINE}`,
+      borderRadius: "12px",
+      padding: "14px 16px",
+      marginBottom: "16px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px",
+    };
+    const tabGroupStyle: React.CSSProperties = {
+      display: "flex",
+      background: COLOURS.CANVAS,
+      borderRadius: RADII.PILL,
+      padding: "3px",
+      gap: "2px",
+    };
+    const tabBtn = (active: boolean): React.CSSProperties => ({
+      padding: "5px 13px",
+      borderRadius: RADII.PILL,
+      border: "none",
+      cursor: "pointer",
+      fontSize: "12px",
+      fontWeight: 600,
+      whiteSpace: "nowrap" as const,
+      background: active ? COLOURS.NAVY : "transparent",
+      color: active ? "#fff" : COLOURS.SLATE,
+      transition: "background 0.15s, color 0.15s",
+    });
+    const monthSelectStyle: React.CSSProperties = {
+      padding: "5px 10px",
+      borderRadius: RADII.PILL,
+      border: `1px solid ${COLOURS.HAIRLINE}`,
+      background: COLOURS.CARD,
+      fontSize: "12px",
+      fontWeight: 600,
+      color: COLOURS.NAVY,
+      cursor: "pointer",
+      outline: "none",
+    };
+
     return (
       <div>
         {wv("admin.visitors_dashboard") && renderVisitorDashboard()}
 
-        {/* Filters row */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "14px", alignItems: "flex-end" }}>
-          {/* Date presets */}
-          {["Today","Yesterday","This Week","This Month"].map((p) => (
-            <button key={p} onClick={() => visitorPreset(p)} style={{
-              padding: "5px 12px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`,
-              background: "white", color: COLOURS.SLATE, fontSize: "12px", fontWeight: 600, cursor: "pointer",
-            }}>{p}</button>
-          ))}
-          <DateInput value={visitorDateFrom} onChange={(e) => { setVisitorDateFrom(e.target.value); setVisitorPage(0); }} />
-          <span style={{ color: COLOURS.SLATE, alignSelf: "center" }}>→</span>
-          <DateInput value={visitorDateTo}   onChange={(e) => { setVisitorDateTo(e.target.value);   setVisitorPage(0); }} />
+        {/* ── Redesigned filter card ── */}
+        <div style={filterCardStyle}>
+          {/* Row 1: period tabs + month picker + custom date range */}
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+            {/* Segmented period tabs */}
+            <div style={tabGroupStyle}>
+              {["Today","Yesterday","This Week","This Month","Last Month"].map((p) => (
+                <button key={p} onClick={() => visitorPreset(p)} style={tabBtn(activePreset === p)}>{p}</button>
+              ))}
+            </div>
 
-          {/* Status */}
-          <select
-            value={visitorStatus}
-            onChange={(e) => { setVisitorStatus(e.target.value as typeof visitorStatus); setVisitorPage(0); }}
-            style={inputStyle}
-          >
-            <option value="">All statuses</option>
-            <option value="inside">Currently Inside</option>
-            <option value="checked_out">Checked Out</option>
-          </select>
+            {/* Divider */}
+            <div style={{ width: "1px", height: "20px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
 
-          {/* Dept filter */}
-          <select
-            value={visitorDeptFilter}
-            onChange={(e) => { setVisitorDeptFilter(e.target.value); setVisitorPage(0); }}
-            style={inputStyle}
-          >
-            <option value="">All departments</option>
-            {distinctDepts.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
+            {/* Month quick-jump */}
+            <select
+              style={monthSelectStyle}
+              value=""
+              onChange={(e) => {
+                const opt = visitorMonthOptions.find((o) => o.from === e.target.value);
+                if (opt) { setVisitorDateFrom(opt.from); setVisitorDateTo(opt.to); setVisitorPage(0); }
+              }}
+            >
+              <option value="" disabled>Jump to month…</option>
+              {visitorMonthOptions.map((o) => (
+                <option key={o.from} value={o.from}>{o.label}</option>
+              ))}
+            </select>
 
-          {/* Search */}
-          <input
-            type="text"
-            placeholder="Search name / mobile…"
-            value={visitorSearch}
-            onChange={(e) => { setVisitorSearch(e.target.value); setVisitorPage(0); }}
-            style={{ ...inputStyle, minWidth: "180px" }}
-            onKeyDown={(e) => e.key === "Enter" && loadVisitorList()}
-          />
-          <button onClick={() => loadVisitorList()} style={{ ...primaryButtonStyle, padding: "7px 16px" }}>Search</button>
-          {/* F13 — Export CSV (role-aware CNIC masking happens server-side) */}
-          <a
-            href={`/api/visitors/export?from=${visitorDateFrom}&to=${visitorDateTo}`}
-            download
-            style={{
-              padding: "7px 14px", borderRadius: RADII.PILL,
-              background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`,
-              color: COLOURS.SLATE, fontSize: "12px", fontWeight: 600,
-              textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "5px",
-            }}
-          >
-            ↓ Export CSV
-          </a>
+            {/* Custom date range pushed right */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "auto" }}>
+              <DateInput value={visitorDateFrom} onChange={(e) => { setVisitorDateFrom(e.target.value); setVisitorPage(0); }} />
+              <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>→</span>
+              <DateInput value={visitorDateTo}   onChange={(e) => { setVisitorDateTo(e.target.value);   setVisitorPage(0); }} />
+            </div>
+          </div>
+
+          {/* Row 2: dropdowns + search + actions */}
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+            {/* Status */}
+            <select
+              value={visitorStatus}
+              onChange={(e) => { setVisitorStatus(e.target.value as typeof visitorStatus); setVisitorPage(0); }}
+              style={{ ...inputStyle, minWidth: "140px" }}
+            >
+              <option value="">All statuses</option>
+              <option value="inside">Currently Inside</option>
+              <option value="checked_out">Checked Out</option>
+            </select>
+
+            {/* Dept filter */}
+            <select
+              value={visitorDeptFilter}
+              onChange={(e) => { setVisitorDeptFilter(e.target.value); setVisitorPage(0); }}
+              style={{ ...inputStyle, minWidth: "140px" }}
+            >
+              <option value="">All departments</option>
+              {distinctDepts.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+
+            {/* Search */}
+            <input
+              type="text"
+              placeholder="Search name / mobile…"
+              value={visitorSearch}
+              onChange={(e) => { setVisitorSearch(e.target.value); setVisitorPage(0); }}
+              style={{ ...inputStyle, flex: 1, minWidth: "180px" }}
+              onKeyDown={(e) => e.key === "Enter" && loadVisitorList()}
+            />
+            <button onClick={() => loadVisitorList()} style={{ ...primaryButtonStyle, padding: "7px 16px" }}>Search</button>
+
+            {/* Export CSV */}
+            <a
+              href={`/api/visitors/export?from=${visitorDateFrom}&to=${visitorDateTo}`}
+              download
+              style={{
+                padding: "6px 14px", borderRadius: RADII.PILL,
+                background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`,
+                color: COLOURS.SLATE, fontSize: "12px", fontWeight: 600,
+                textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "5px",
+                height: "32px", whiteSpace: "nowrap",
+              }}
+            >
+              ↓ Export CSV
+            </a>
+          </div>
         </div>
 
         {/* Table */}
