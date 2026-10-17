@@ -6,6 +6,7 @@ import { reconcile, matchBankPositionToCashFlow } from "../../../lib/pdf-parsers
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, getCompanyById } from "../../../lib/constants";
 import { requireAuth } from "../../../lib/api-auth";
 import { archiveSourceDocument } from "../../../lib/document-archive";
+import { cashSheetErrorStatus, isCashSheetRejection } from "../../../lib/cash-position-errors";
 
 // Replaces that (company, day)'s bucket rows on every save rather than
 // appending — a re-processed day should show that day's PDC schedule
@@ -236,9 +237,11 @@ export async function POST(request: NextRequest) {
       );
 
       if (cashError) {
+        // Trigger rejections (figures don't add up / chain break) are 422 with
+        // the trigger's own message — see migration 273 + lib/cash-position-errors.
         return Response.json(
-          { error: `Failed to save cash flow data for ${positionDate}: ` + cashError.message },
-          { status: 500 }
+          { error: isCashSheetRejection(cashError.message) ? cashError.message : `Failed to save cash flow data for ${positionDate}: ` + cashError.message },
+          { status: cashSheetErrorStatus(cashError.message) }
         );
       }
 

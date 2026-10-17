@@ -4,6 +4,7 @@ import { requireAuth } from "../../../lib/api-auth";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID } from "../../../lib/constants";
 import { isAdmin } from "../../../lib/admin-config";
 import { CEO_EMAIL, CEO2_EMAIL } from "../../../lib/permissions";
+import { isCashSheetRejection } from "../../../lib/cash-position-errors";
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 const RESTAURANT_COMPANIES = ["BRNH", "HD", "KKJ"];
@@ -259,7 +260,14 @@ export async function POST(request: NextRequest) {
 
     if (dcpErr) {
       console.error("daily_cash_position upsert failed:", dcpErr.message);
-      // Non-blocking — sheet is saved, just log the error
+      // 17/10/2026: a trigger rejection (migration 273 — figures don't add up
+      // or the chain breaks) must reach the user, not just the log. The sheet
+      // header + lines are kept so the PDF can be checked; the day's position
+      // is not written until a corrected sheet is uploaded.
+      if (isCashSheetRejection(dcpErr.message)) {
+        return Response.json({ error: dcpErr.message, sheet_saved: true, data: sheet }, { status: 422 });
+      }
+      // Other failures stay non-blocking — sheet is saved, just log the error
     }
 
     // Replace the day's PDC maturity buckets (feeds the Finance pages' PDC
