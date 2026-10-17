@@ -30,9 +30,12 @@ type Filters = {
   department: string;
   priority: string;
   assigned_to_email: string;
+  assigned_to_name: string;
   date_from: string;
   date_to: string;
 };
+
+type MemberOption = { name: string; email: string };
 
 const EMPTY_STATS: DashStats = {
   total_tasks: 0,
@@ -291,11 +294,6 @@ function KpiTile({
 
 // ── Filters ───────────────────────────────────────────────────────────────────
 
-const DEPARTMENTS = [
-  "Accounts & Finance","Admin","CEO Office","Customer Service","Finance & Tax",
-  "HR","Internal Audit","IT","Legal","Logistics","Marketing","Operations",
-  "Procurement","Retail","Sales","Unze Trading Operations","Warehouse",
-];
 const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
 
 function FilterBar({
@@ -303,12 +301,35 @@ function FilterBar({
   onChange,
   onReset,
   loading,
+  departments,
+  members,
+  onSelectMember,
 }: {
   filters: Filters;
   onChange: (key: keyof Filters, value: string) => void;
   onReset: () => void;
   loading: boolean;
+  departments: string[];
+  members: MemberOption[];
+  onSelectMember: (m: MemberOption | null) => void;
 }) {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const nameQuery = filters.assigned_to_name.toLowerCase();
+  const filtered = nameQuery.length >= 1
+    ? members.filter((m) => m.name.toLowerCase().includes(nameQuery)).slice(0, 12)
+    : [];
+
   const sel: React.CSSProperties = {
     padding: "6px 10px", fontSize: "13px",
     border: "1px solid var(--border-color)", borderRadius: "8px",
@@ -330,7 +351,7 @@ function FilterBar({
     >
       <select value={filters.department} onChange={(e) => onChange("department", e.target.value)} style={sel}>
         <option value="">All Departments</option>
-        {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+        {departments.map((d) => <option key={d} value={d}>{d}</option>)}
       </select>
 
       <select value={filters.priority} onChange={(e) => onChange("priority", e.target.value)} style={sel}>
@@ -338,13 +359,47 @@ function FilterBar({
         {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
       </select>
 
-      <input
-        type="email"
-        placeholder="Assigned to (email)…"
-        value={filters.assigned_to_email}
-        onChange={(e) => onChange("assigned_to_email", e.target.value)}
-        style={{ ...inp, minWidth: "180px" }}
-      />
+      {/* Person name search */}
+      <div ref={wrapRef} style={{ position: "relative", minWidth: "200px" }}>
+        <input
+          type="text"
+          placeholder="Search by person name…"
+          value={filters.assigned_to_name}
+          onChange={(e) => {
+            onChange("assigned_to_name", e.target.value);
+            if (e.target.value === "") onSelectMember(null);
+            setShowSuggestions(true);
+          }}
+          onFocus={() => { if (filters.assigned_to_name.length >= 1) setShowSuggestions(true); }}
+          style={{ ...inp, width: "100%" }}
+        />
+        {showSuggestions && filtered.length > 0 && (
+          <div
+            style={{
+              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+              backgroundColor: "var(--bg-card, #fff)", border: "1px solid var(--border-color)",
+              borderRadius: "8px", marginTop: "4px", maxHeight: "220px", overflowY: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+            }}
+          >
+            {filtered.map((m) => (
+              <div
+                key={m.email}
+                onClick={() => { onSelectMember(m); setShowSuggestions(false); }}
+                style={{
+                  padding: "8px 12px", cursor: "pointer", fontSize: "13px",
+                  borderBottom: "1px solid var(--border-light, var(--border-color))",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-hover, #f1f5f9)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+              >
+                <div style={{ fontWeight: 500, color: "var(--text-primary)" }}>{m.name}</div>
+                <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{m.email}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <input type="date" value={filters.date_from} onChange={(e) => onChange("date_from", e.target.value)} style={inp} title="From date" />
       <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>→</span>
@@ -418,10 +473,35 @@ function TaskDashboardInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({
-    department: "", priority: "", assigned_to_email: "", date_from: "", date_to: "",
+    department: "", priority: "", assigned_to_email: "", assigned_to_name: "", date_from: "", date_to: "",
   });
 
-  // Debounce email input
+  // Dynamic department list from DB
+  const [departments, setDepartments] = useState<string[]>([]);
+  // Active members for name search
+  const [members, setMembers] = useState<MemberOption[]>([]);
+
+  // Fetch departments & members once on mount via SECURITY DEFINER RPC
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.rpc("get_task_filter_options");
+      const opts = typeof data === "string" ? JSON.parse(data) : data;
+      if (opts) {
+        if (Array.isArray(opts.departments)) setDepartments(opts.departments);
+        if (Array.isArray(opts.members)) {
+          // Filter out store/test logins — show real people only
+          setMembers(
+            opts.members.filter(
+              (m: MemberOption) =>
+                !m.name.startsWith("Store login") && !m.name.startsWith("TEST ACCOUNT")
+            )
+          );
+        }
+      }
+    })();
+  }, []);
+
+  // Debounce email (set when user picks a person)
   const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedEmail, setDebouncedEmail] = useState("");
   useEffect(() => {
@@ -443,7 +523,9 @@ function TaskDashboardInner() {
         p_date_to: filters.date_to || null,
       });
       if (rpcErr) throw rpcErr;
-      setStats((data as DashStats) || EMPTY_STATS);
+      // Defensive: supabase-js may return json RPCs as a string
+      const parsed: DashStats = typeof data === "string" ? JSON.parse(data) : data;
+      setStats(parsed || EMPTY_STATS);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -456,7 +538,16 @@ function TaskDashboardInner() {
   const handleFilterChange = (key: keyof Filters, value: string) =>
     setFilters((prev) => ({ ...prev, [key]: value }));
   const resetFilters = () =>
-    setFilters({ department: "", priority: "", assigned_to_email: "", date_from: "", date_to: "" });
+    setFilters({ department: "", priority: "", assigned_to_email: "", assigned_to_name: "", date_from: "", date_to: "" });
+
+  // Called when user picks a member from the autocomplete
+  const handleSelectMember = (m: MemberOption | null) => {
+    if (m) {
+      setFilters((prev) => ({ ...prev, assigned_to_email: m.email, assigned_to_name: m.name }));
+    } else {
+      setFilters((prev) => ({ ...prev, assigned_to_email: "", assigned_to_name: "" }));
+    }
+  };
 
   // Permission gate
   const canView = userCtx ? isPrivileged(userCtx) || canSeeAllTasks(userCtx) : false;
@@ -524,7 +615,15 @@ function TaskDashboardInner() {
       `}</style>
 
       {/* Filters */}
-      <FilterBar filters={filters} onChange={handleFilterChange} onReset={resetFilters} loading={loading} />
+      <FilterBar
+          filters={filters}
+          onChange={handleFilterChange}
+          onReset={resetFilters}
+          loading={loading}
+          departments={departments}
+          members={members}
+          onSelectMember={handleSelectMember}
+        />
 
       {error && (
         <div style={{
