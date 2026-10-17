@@ -774,7 +774,6 @@ export default function AdminDataPage() {
   const [visitorStatus, setVisitorStatus]     = useState<"" | "inside" | "checked_out">("");
   const [visitorDeptFilter, setVisitorDeptFilter] = useState("");
   const [visitorPage, setVisitorPage]         = useState(0);
-  const [visitorDashView, setVisitorDashView] = useState<"kpi" | "league" | "heatmap" | "exceptions">("kpi");
   const [editingVisitor, setEditingVisitor]   = useState<VisitorRow | null>(null);
   const [savingVisitor, setSavingVisitor]     = useState(false);
   const [deleteVisitorId, setDeleteVisitorId] = useState<string | null>(null);
@@ -972,146 +971,257 @@ export default function AdminDataPage() {
   const DOW_LABELS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
   function renderVisitorDashboard() {
-    const dashBtnStyle = (v: typeof visitorDashView): React.CSSProperties => ({
-      padding: "6px 14px", borderRadius: RADII.PILL, border: "none", cursor: "pointer",
-      fontSize: "13px", fontWeight: 600,
-      backgroundColor: visitorDashView === v ? COLOURS.NAVY : "transparent",
-      color: visitorDashView === v ? "white" : COLOURS.SLATE,
-    });
+    // ── helpers ──────────────────────────────────────────────────────────────
+    const fmtDur = (mins: number | null | undefined) => {
+      if (!mins) return "—";
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    };
+
+    // dept bars
+    const deptMax = Math.max(1, ...visitorDeptRows.map((r) => r.total));
+
+    // heatmap — show hours 6-22 only; across days Sun-Sat
+    const PEAK_HOURS = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22];
+
+    // top 5 hosts
+    const topHosts = [...visitorHostRows].sort((a, b) => b.total - a.total).slice(0, 5);
+    const hostMax  = Math.max(1, ...topHosts.map((h) => h.total));
+
+    // card stripe colours
+    const C = {
+      navy:   COLOURS.NAVY,
+      green:  COLOURS.GREEN,
+      red:    COLOURS.RED,
+      amber:  COLOURS.AMBER,
+      blue:   COLOURS.BLUE,
+      slate:  COLOURS.SLATE,
+    };
+
+    const kpiCards = visitorKpi ? [
+      { label: "Total Visits",    value: visitorKpi.total,                              stripe: C.navy,  sub: "this period" },
+      { label: "Currently Inside",value: visitorKpi.currently_inside,                  stripe: C.green, sub: "right now" },
+      { label: "Overstays",       value: visitorKpi.overstay,                          stripe: visitorKpi.overstay > 0 ? C.red : C.green, sub: "need attention" },
+      { label: "Unique Visitors", value: visitorKpi.unique_visitors,                   stripe: C.blue,  sub: "distinct people" },
+      { label: "Avg Duration",    value: fmtDur(visitorKpi.avg_duration_mins),         stripe: C.navy,  sub: "per visit" },
+      { label: "Longest Stay",    value: fmtDur(visitorKpi.longest_stay_mins),         stripe: C.amber, sub: "single visit" },
+      { label: "Repeat Visitors", value: visitorKpi.repeat_visitors,                   stripe: visitorKpi.repeat_visitors > 0 ? C.amber : C.green, sub: "returned visitors" },
+      { label: "Active Alerts",   value: visitorExceptions.length,                     stripe: visitorExceptions.length > 0 ? C.red : C.green, sub: "flags today" },
+    ] : [];
+
+    // shared card style
+    const card: React.CSSProperties = {
+      background: COLOURS.CARD,
+      border: `1px solid ${COLOURS.HAIRLINE}`,
+      borderRadius: "12px",
+      padding: "16px",
+      marginBottom: "16px",
+    };
+    const sectionHead: React.CSSProperties = {
+      margin: "0 0 12px",
+      fontSize: "11px",
+      fontWeight: 700,
+      letterSpacing: "0.06em",
+      textTransform: "uppercase",
+      color: COLOURS.SLATE,
+    };
+
     return (
-      <div style={{ background: "white", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-          <p style={{ margin: 0, fontWeight: 700, color: COLOURS.NAVY }}>Visitor Analytics</p>
-          <div style={{ display: "flex", gap: "4px" }}>
-            {(["kpi","league","heatmap","exceptions"] as const).map((v) => (
-              <button key={v} onClick={() => setVisitorDashView(v)} style={dashBtnStyle(v)}>
-                {v === "kpi" ? "📊 KPIs" : v === "league" ? "🏆 League" : v === "heatmap" ? "🔥 Peak Hours" : "⚠️ Alerts"}
-              </button>
-            ))}
+      <div style={{ marginBottom: "20px" }}>
+
+        {/* ── Dashboard header ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", gap: "8px" }}>
+          <div>
+            <p style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: COLOURS.NAVY }}>Visitor Analytics</p>
+            <p style={{ margin: "2px 0 0", fontSize: "12px", color: COLOURS.SLATE }}>{visitorDateFrom} — {visitorDateTo}</p>
           </div>
+          {visitorExceptions.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", background: COLOURS.DANGER_SOFT, border: `1px solid ${COLOURS.RED}22`, borderRadius: "8px", padding: "6px 12px" }}>
+              <span style={{ fontSize: "14px" }}>⚠️</span>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED }}>{visitorExceptions.length} alert{visitorExceptions.length !== 1 ? "s" : ""}</span>
+            </div>
+          )}
         </div>
 
-        {/* KPI cards */}
-        {visitorDashView === "kpi" && visitorKpi && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px" }}>
-            {[
-              { label: "Total Visits",   value: visitorKpi.total,             colour: COLOURS.NAVY },
-              { label: "Inside Now",     value: visitorKpi.currently_inside,  colour: COLOURS.GREEN },
-              { label: "Overstay",       value: visitorKpi.overstay,          colour: visitorKpi.overstay > 0 ? COLOURS.RED : COLOURS.SLATE },
-              { label: "Unique Visitors",value: visitorKpi.unique_visitors,   colour: COLOURS.NAVY },
-              { label: "Avg Duration",   value: `${visitorKpi.avg_duration_mins}m`, colour: COLOURS.SLATE },
-              { label: "Longest Stay",   value: `${visitorKpi.longest_stay_mins}m`, colour: COLOURS.SLATE },
-              { label: "Repeat Visitors", value: visitorKpi.repeat_visitors, colour: visitorKpi.repeat_visitors > 0 ? COLOURS.AMBER : COLOURS.SLATE },
-            ].map(({ label, value, colour }) => (
-              <div key={label} style={{ textAlign: "center", padding: "12px 8px", background: COLOURS.CARD_ALT, borderRadius: "10px" }}>
-                <p style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: 800, color: colour }}>{value}</p>
-                <p style={{ margin: 0, fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>{label}</p>
+        {/* ── Row 1: 8 KPI cards ── */}
+        {kpiCards.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "10px", marginBottom: "16px" }}>
+            {kpiCards.map(({ label, value, stripe, sub }) => (
+              <div key={label} style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", overflow: "hidden" }}>
+                <div style={{ height: "4px", background: stripe }} />
+                <div style={{ padding: "12px 14px" }}>
+                  <p style={{ margin: "0 0 2px", fontSize: "26px", fontWeight: 800, color: stripe, lineHeight: 1 }}>{value}</p>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{label}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: COLOURS.SLATE }}>{sub}</p>
+                </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* League table */}
-        {visitorDashView === "league" && (
-          <div style={{ overflowX: "auto" }}>
-            <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE }}>BY DEPARTMENT</p>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${COLOURS.HAIRLINE}` }}>
-                  {["Department","Total","Inside","Avg (mins)"].map((h) => (
-                    <th key={h} style={{ padding: "6px 10px", textAlign: "left", color: COLOURS.SLATE, fontWeight: 600, fontSize: "11px" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {visitorDeptRows.map((row, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                    <td style={{ padding: "8px 10px", fontWeight: 600 }}>{row.department_name}</td>
-                    <td style={{ padding: "8px 10px" }}>{row.total}</td>
-                    <td style={{ padding: "8px 10px", color: row.inside > 0 ? COLOURS.GREEN : COLOURS.SLATE }}>{row.inside}</td>
-                    <td style={{ padding: "8px 10px", color: COLOURS.SLATE }}>{row.avg_mins ?? "—"}</td>
-                  </tr>
-                ))}
-                {visitorDeptRows.length === 0 && (
-                  <tr><td colSpan={4} style={{ padding: "16px 10px", textAlign: "center", color: COLOURS.SLATE }}>No data</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {/* ── Row 2: Dept efficiency table + Top Hosts ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: "12px", marginBottom: "16px" }}>
 
-        {/* Peak hours heat map */}
-        {visitorDashView === "heatmap" && (
-          <div style={{ overflowX: "auto" }}>
-            <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE }}>VISITS BY HOUR × DAY</p>
-            <table style={{ borderCollapse: "collapse", fontSize: "11px" }}>
-              <thead>
-                <tr>
-                  <th style={{ padding: "4px 6px", color: COLOURS.SLATE }}>Hour</th>
-                  {DOW_LABELS.map((d) => (
-                    <th key={d} style={{ padding: "4px 8px", color: COLOURS.SLATE }}>{d}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 24 }, (_, hr) => (
+          {/* Dept table */}
+          <div style={card}>
+            <p style={sectionHead}>Department Traffic &amp; Efficiency</p>
+            {visitorDeptRows.length === 0 ? (
+              <p style={{ color: COLOURS.SLATE, textAlign: "center", padding: "20px 0", margin: 0 }}>No data</p>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ borderBottom: `2px solid ${COLOURS.HAIRLINE}` }}>
+                    {["Department","Visits","Inside","Avg Duration","Traffic"].map((h) => (
+                      <th key={h} style={{ padding: "6px 8px", textAlign: "left", color: COLOURS.SLATE, fontWeight: 600, fontSize: "11px", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visitorDeptRows.map((row, i) => {
+                    const barPct = (row.total / deptMax) * 100;
+                    const avgHigh = row.avg_mins != null && row.avg_mins > 120;
+                    return (
+                      <tr key={i} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                        <td style={{ padding: "8px 8px", fontWeight: 600, color: COLOURS.NAVY }}>{row.department_name}</td>
+                        <td style={{ padding: "8px 8px", fontWeight: 700 }}>{row.total}</td>
+                        <td style={{ padding: "8px 8px" }}>
+                          {row.inside > 0
+                            ? <span style={{ background: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, borderRadius: "6px", padding: "2px 8px", fontWeight: 700, fontSize: "12px" }}>{row.inside}</span>
+                            : <span style={{ color: COLOURS.SLATE }}>0</span>}
+                        </td>
+                        <td style={{ padding: "8px 8px", color: avgHigh ? COLOURS.RED : COLOURS.SLATE, fontWeight: avgHigh ? 700 : 400 }}>
+                          {fmtDur(row.avg_mins)}
+                        </td>
+                        <td style={{ padding: "8px 8px", minWidth: "80px" }}>
+                          <div style={{ background: COLOURS.HAIRLINE, borderRadius: "4px", height: "8px", overflow: "hidden" }}>
+                            <div style={{ width: `${barPct}%`, height: "100%", background: avgHigh ? COLOURS.RED : COLOURS.BLUE, borderRadius: "4px", transition: "width 0.4s" }} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Top Hosts leaderboard */}
+          <div style={card}>
+            <p style={sectionHead}>Top Hosts</p>
+            {topHosts.length === 0 ? (
+              <p style={{ color: COLOURS.SLATE, textAlign: "center", padding: "20px 0", margin: 0 }}>No data</p>
+            ) : topHosts.map((h, i) => {
+              const barPct = (h.total / hostMax) * 100;
+              const medals = ["🥇","🥈","🥉"];
+              return (
+                <div key={i} style={{ marginBottom: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>
+                      {medals[i] ?? `#${i+1}`} {h.host_name}
+                    </span>
+                    <span style={{ fontSize: "13px", fontWeight: 800, color: COLOURS.BLUE }}>{h.total}</span>
+                  </div>
+                  <div style={{ background: COLOURS.HAIRLINE, borderRadius: "4px", height: "6px", overflow: "hidden" }}>
+                    <div style={{ width: `${barPct}%`, height: "100%", background: i === 0 ? COLOURS.NAVY : COLOURS.BLUE, borderRadius: "4px", transition: "width 0.4s" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Row 3: Arrival Heatmap ── */}
+        <div style={{ ...card, overflowX: "auto" }}>
+          <p style={sectionHead}>Peak Arrival Hours (visits by hour × day)</p>
+          <table style={{ borderCollapse: "collapse", fontSize: "11px", minWidth: "500px" }}>
+            <thead>
+              <tr>
+                <th style={{ padding: "4px 8px", color: COLOURS.SLATE, fontWeight: 600, textAlign: "left", minWidth: "52px" }}>Hour</th>
+                {DOW_LABELS.map((d) => (
+                  <th key={d} style={{ padding: "4px 10px", color: COLOURS.SLATE, fontWeight: 600, textAlign: "center", minWidth: "38px" }}>{d}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {PEAK_HOURS.map((hr) => {
+                const label = `${String(hr).padStart(2,"0")}:00`;
+                return (
                   <tr key={hr}>
-                    <td style={{ padding: "4px 6px", color: COLOURS.SLATE, fontWeight: 600 }}>{String(hr).padStart(2,"0")}:00</td>
+                    <td style={{ padding: "3px 8px", color: COLOURS.SLATE, fontWeight: 600, fontSize: "11px" }}>{label}</td>
                     {Array.from({ length: 7 }, (_, dow) => {
                       const cell = visitorHeatmap.find((c) => c.dow === dow && c.hour === hr);
                       const v    = cell?.visits ?? 0;
                       const alpha = v / heatMax;
                       return (
-                        <td key={dow} title={`${v} visits`} style={{
-                          padding: "4px 8px", textAlign: "center",
-                          background: v === 0 ? COLOURS.CARD_ALT : `rgba(15,123,95,${0.15 + alpha * 0.85})`,
-                          color: alpha > 0.6 ? "white" : COLOURS.NAVY,
+                        <td key={dow} title={`${v} visit${v !== 1 ? "s" : ""} — ${DOW_LABELS[dow]} ${label}`} style={{
+                          padding: "3px 10px", textAlign: "center",
+                          background: v === 0 ? COLOURS.CANVAS : `rgba(15,123,95,${0.12 + alpha * 0.88})`,
+                          color: alpha > 0.55 ? "white" : v > 0 ? COLOURS.NAVY : COLOURS.SLATE,
                           fontWeight: v > 0 ? 700 : 400,
-                          fontSize: "11px",
-                          minWidth: "32px",
-                        }}>{v || ""}</td>
+                          borderRadius: "4px",
+                          transition: "background 0.2s",
+                        }}>{v > 0 ? v : ""}</td>
                       );
                     })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                );
+              })}
+            </tbody>
+          </table>
+          <p style={{ margin: "10px 0 0", fontSize: "11px", color: COLOURS.SLATE }}>
+            Darker = more visits. Showing hours 06:00–22:00.
+          </p>
+        </div>
 
-        {/* Exceptions */}
-        {visitorDashView === "exceptions" && (
-          <div>
-            <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE }}>TODAY&apos;S ALERTS</p>
-            {visitorExceptions.length === 0 ? (
-              <p style={{ color: COLOURS.SLATE, fontSize: "14px", textAlign: "center", padding: "20px 0" }}>No alerts today ✓</p>
-            ) : visitorExceptions.map((ex) => (
-              <div key={ex.id} style={{
-                padding: "12px 14px", borderRadius: "10px", marginBottom: "8px",
-                background: ex.exception_type === "overstay" ? "#FEF2F2" : "#FFFBEB",
-                border: `1px solid ${ex.exception_type === "overstay" ? "#FECACA" : "#FDE68A"}`,
-                display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px",
-              }}>
-                <div>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: "14px" }}>
-                    {ex.exception_type === "overstay" ? "🕐" : ex.flag_type === "blacklist" ? "🚫" : "⭐"} {ex.visitor_name}
-                  </p>
-                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: COLOURS.SLATE }}>
-                    {ex.department_name} · {ex.host_name}
-                    {ex.exception_type === "overstay" && ` · ${ex.mins_inside}m inside`}
-                    {ex.flag_type && ` · ${ex.flag_type.toUpperCase()}`}
-                  </p>
-                </div>
-                {ex.time_out === null && (
-                  <button
-                    onClick={() => handleVisitorCheckout(ex.id)}
-                    style={{ padding: "6px 12px", borderRadius: RADII.PILL, border: "none", background: COLOURS.NAVY, color: "white", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
-                  >Check Out</button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        {/* ── Row 4: Active Alerts ── */}
+        <div style={card}>
+          <p style={sectionHead}>Active Alerts {visitorExceptions.length > 0 && `(${visitorExceptions.length})`}</p>
+          {visitorExceptions.length === 0 ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 0", color: COLOURS.GREEN }}>
+              <span style={{ fontSize: "18px" }}>✓</span>
+              <span style={{ fontSize: "14px", fontWeight: 600 }}>No alerts today — all clear</span>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: "10px" }}>
+              {visitorExceptions.map((ex) => {
+                const isOverstay = ex.exception_type === "overstay";
+                const isBL = ex.flag_type === "blacklist";
+                const bg    = isOverstay ? COLOURS.DANGER_SOFT : COLOURS.WARNING_SOFT;
+                const bdr   = isOverstay ? `${COLOURS.RED}44` : `${COLOURS.AMBER}44`;
+                const icon  = isOverstay ? "🕐" : isBL ? "🚫" : "⭐";
+                return (
+                  <div key={ex.id} style={{ padding: "12px 14px", borderRadius: "10px", background: bg, border: `1px solid ${bdr}`, display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: "14px", color: COLOURS.NAVY }}>{icon} {ex.visitor_name}</p>
+                        <p style={{ margin: "3px 0 0", fontSize: "12px", color: COLOURS.SLATE }}>
+                          {ex.department_name} · {ex.host_name}
+                        </p>
+                      </div>
+                      {isOverstay && (
+                        <span style={{ background: COLOURS.RED, color: "white", borderRadius: "6px", padding: "2px 8px", fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                          {fmtDur(ex.mins_inside)} inside
+                        </span>
+                      )}
+                      {!isOverstay && ex.flag_type && (
+                        <span style={{ background: COLOURS.AMBER, color: "white", borderRadius: "6px", padding: "2px 8px", fontSize: "11px", fontWeight: 700 }}>
+                          {ex.flag_type.toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    {ex.time_out === null && (
+                      <button
+                        onClick={() => handleVisitorCheckout(ex.id)}
+                        style={{ padding: "6px 12px", borderRadius: RADII.PILL, border: "none", background: COLOURS.NAVY, color: "white", fontSize: "12px", fontWeight: 600, cursor: "pointer", alignSelf: "flex-start" }}
+                      >Check Out</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
       </div>
     );
   }
