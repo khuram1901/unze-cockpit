@@ -1,24 +1,11 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
-import { isAdmin } from "../../../lib/admin-config";
+import { resolveGuaranteePerms } from "../../../lib/guarantee-access";
 
-async function requireGuaranteeFinancialsAccess(
-  supabase: ReturnType<typeof createServiceClient>,
-  email: string
-): Promise<true | Response> {
-  const lc = email.toLowerCase();
-  const isAdminByEmail = isAdmin(email);
-  const { data: m } = await supabase
-    .from("members")
-    .select("role, department")
-    .eq("email", lc)
-    .maybeSingle();
-  const role = m?.role ?? null;
-  const dept = m?.department ?? null;
-  const isAdminTier = isAdminByEmail || role === "Admin" || role === "CEO";
-  const allowed = isAdminTier || (role === "Manager" && dept === "Finance & Tax");
-  if (!allowed) return Response.json({ error: "Forbidden" }, { status: 403 });
+async function requireGuaranteeManageAccess(email: string): Promise<true | Response> {
+  const { canManage } = await resolveGuaranteePerms(email);
+  if (!canManage) return Response.json({ error: "Forbidden" }, { status: 403 });
   return true;
 }
 
@@ -27,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  const access = await requireGuaranteeFinancialsAccess(supabase, auth.email);
+  const access = await requireGuaranteeManageAccess(auth.email);
   if (access !== true) return access;
 
   const { data, error } = await supabase
@@ -43,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  const access = await requireGuaranteeFinancialsAccess(supabase, auth.email);
+  const access = await requireGuaranteeManageAccess(auth.email);
   if (access !== true) return access;
 
   const body = await request.json().catch(() => ({}));
@@ -67,7 +54,7 @@ export async function PATCH(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  const access = await requireGuaranteeFinancialsAccess(supabase, auth.email);
+  const access = await requireGuaranteeManageAccess(auth.email);
   if (access !== true) return access;
 
   const body = await request.json().catch(() => ({}));
@@ -93,7 +80,7 @@ export async function DELETE(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  const access = await requireGuaranteeFinancialsAccess(supabase, auth.email);
+  const access = await requireGuaranteeManageAccess(auth.email);
   if (access !== true) return access;
 
   const body = await request.json().catch(() => ({}));

@@ -1,23 +1,34 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
-import { isAdmin } from "../../../lib/admin-config";
+import { resolveGuaranteePerms } from "../../../lib/guarantee-access";
 
-// Mirrors canViewGuarantees() from permissions.ts — Admin/CEO + Finance/Ops managers
-async function resolveGuaranteePerms(supabase: ReturnType<typeof createServiceClient>, email: string) {
-  const lc = email.toLowerCase();
-  const isAdminByEmail = isAdmin(email);
-  const { data: m } = await supabase
-    .from("members")
-    .select("role, department")
-    .eq("email", lc)
-    .maybeSingle();
-  const role = m?.role ?? null;
-  const dept = m?.department ?? null;
-  const isAdminTier = isAdminByEmail || role === "Admin" || role === "CEO";
-  const canView = isAdminTier || (role === "Manager" && (dept === "Finance & Tax" || dept === "Unze Trading Operations"));
-  const canViewFinancials = isAdminTier || (role === "Manager" && dept === "Finance & Tax");
-  return { canView, canViewFinancials };
+const FINANCIAL_GUARANTEE_KEYS = ["amount", "cash_margin_pct", "cash_margin_amount", "bank_charges", "linked_bill_amount"];
+
+type SummaryPayload = {
+  facilities?: unknown[]; banks?: unknown[];
+  guarantees?: Record<string, unknown>[];
+  totals?: Record<string, unknown>;
+};
+
+function stripFinancials(data: SummaryPayload | null) {
+  if (!data) return data;
+  const guarantees = (data.guarantees ?? []).map((g) => {
+    const copy: Record<string, unknown> = { ...g };
+    for (const k of FINANCIAL_GUARANTEE_KEYS) delete copy[k];
+    return copy;
+  });
+  const t = data.totals ?? {};
+  return {
+    facilities: [],
+    banks: [],
+    guarantees,
+    totals: {
+      active_count: t.active_count ?? 0,
+      overdue_count: t.overdue_count ?? 0,
+      due_soon_count: t.due_soon_count ?? 0,
+    },
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -25,12 +36,15 @@ export async function GET(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  const { canView } = await resolveGuaranteePerms(supabase, auth.email);
+  const { canView, canViewFinancials } = await resolveGuaranteePerms(auth.email);
   if (!canView) return Response.json({ error: "Forbidden" }, { status: 403 });
 
   const { data, error } = await supabase.rpc("get_guarantee_summary");
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
+  // Chase-only users (no financials) get counts, names and dates — the PKR
+  // figures are removed here, not just hidden by the page. 17/10/2026.
+  if (!canViewFinancials) return Response.json(stripFinancials(data));
   return Response.json(data);
 }
 
@@ -71,8 +85,8 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  const { canViewFinancials } = await resolveGuaranteePerms(supabase, auth.email);
-  if (!canViewFinancials) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const { canManage } = await resolveGuaranteePerms(auth.email);
+  if (!canManage) return Response.json({ error: "Forbidden" }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   const {
     facility_id, guarantee_type, guarantee_number, bank_name,
@@ -121,8 +135,8 @@ export async function PATCH(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  const { canViewFinancials } = await resolveGuaranteePerms(supabase, auth.email);
-  if (!canViewFinancials) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const { canManage } = await resolveGuaranteePerms(auth.email);
+  if (!canManage) return Response.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const { id, action, ...fields } = body;
@@ -234,8 +248,8 @@ export async function DELETE(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  const { canViewFinancials } = await resolveGuaranteePerms(supabase, auth.email);
-  if (!canViewFinancials) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const { canManage } = await resolveGuaranteePerms(auth.email);
+  if (!canManage) return Response.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const { id } = body;

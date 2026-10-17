@@ -855,7 +855,7 @@ export default function GuaranteesPage() {
               sub={totals.overdue_count > 0 ? `${totals.overdue_count} overdue` : totals.due_soon_count > 0 ? `${totals.due_soon_count} due soon` : "All OK"}
             />
             <CountCard label="Total facility seized" value={pkr(totals.total_amount_active)} color={COLOURS.NAVY} sub="Face value of active guarantees" />
-            <CountCard label="Cash margin stuck" value={pkr(totals.total_cash_margin_stuck)} color={COLOURS.AMBER} sub="5% held by banks as collateral" />
+            <CountCard label="Cash margin stuck" value={pkr(totals.total_cash_margin_stuck)} color={COLOURS.AMBER} sub="Held by banks as collateral" />
             <CountCard label="Bank charges paid" value={pkr(totals.total_bank_charges)} color={COLOURS.NAVY} sub="All-time issuance charges" />
           </div>
         )}
