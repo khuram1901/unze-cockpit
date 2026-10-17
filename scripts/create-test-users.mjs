@@ -243,10 +243,11 @@ async function cmdCreate() {
       const listResp = await adminFetch(`/users?email=${encodeURIComponent(u.email)}`);
       const existing = listResp.users?.find(x => x.email === u.email);
       if (existing) {
-        // Update metadata only (don't re-set password unless needed)
+        // Always reset password so it stays in sync with .test-user-pw
         await adminFetch(`/users/${existing.id}`, {
           method: 'PUT',
           body: JSON.stringify({
+            password: pw,
             app_metadata: { test_user: true, must_change_password: false },
             user_metadata: { label: u.label },
           }),

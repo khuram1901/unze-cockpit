@@ -86,6 +86,10 @@
     {
       "path": "/api/notifications/task-overdue",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/guarantee-alerts",
+      "schedule": "0 4 * * *"
     }
   ]
 }
