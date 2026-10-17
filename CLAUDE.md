@@ -230,3 +230,47 @@ In Claude web, if the local folder is not connected, use the uploaded Project Co
 ## Claude Web Context Rule
 
 In Claude web, if the local folder is not connected, use the uploaded Project Context files first and do not claim to have read source files directly. Ask me to provide files or switch to Claude Code only when exact source edits are needed.
+
+---
+
+## Test users and post-deploy testing
+
+Three permanent test accounts exist for verifying every feature change before and after deploy.
+
+| Email | Role | Purpose |
+|---|---|---|
+| test.member@unze.co.uk | Member | No widgets — verifies blocked access / redirects |
+| test.manager@unze.co.uk | Manager | Verifies conditional widget access (grant/revoke) |
+| test.ceo@unze.co.uk | Admin | Full CEO access — verifies the happy path |
+
+**Rules (non-negotiable):**
+- `app_metadata.test_user = true` on all three — never remove this flag
+- `notify_email: false`, `notify_whatsapp: false` — notifications are permanently disabled
+- These accounts must NEVER appear in headcounts, KPIs, dashboards, Visitors host list, payroll, HR list, or any report
+- Never change toggles for real users during testing — only test.member and test.manager get widget overrides
+- Always reset overrides after every test run: `node scripts/create-test-users.mjs reset`
+- Never edit or import real business data (P&L, retail sales, opening balances, visitors) during tests
+- Password lives in Vercel env var `TEST_USER_PASSWORD` (Production + Preview) — never print it anywhere
+- Local password file `.test-user-pw` is gitignored — delete it after pasting into Vercel
+
+**Script commands (run from project root):**
+```bash
+node scripts/create-test-users.mjs create               # create / re-create all 3 accounts
+node scripts/create-test-users.mjs reset                # clear all test widget overrides
+node scripts/create-test-users.mjs grant <widget> <email>   # enable a widget for testing
+node scripts/create-test-users.mjs revoke <widget> <email>  # disable a widget
+node scripts/create-test-users.mjs cleanup              # delete test-created data
+node scripts/create-test-users.mjs status               # show current state of all 3 accounts
+```
+
+**Post-deploy test workflow (run after every feature push):**
+1. Test on Vercel preview URL first; then on pulse.unze.co.uk after production deploy
+2. Log in as all three accounts:
+   - **CEO:** Feature works end-to-end
+   - **Manager (toggle ON):** `grant <widget> test.manager@unze.co.uk` → feature visible
+   - **Manager (toggle OFF):** `revoke <widget> test.manager@unze.co.uk` → blocked / 403
+   - **Member:** No toggle — feature hidden / redirects / APIs return 403
+3. Smoke-test: /home, /finance/imperial, /finance/imperial-pnl, Admin Operations (all tabs), /members, plus any changed pages
+4. Clean up: `node scripts/create-test-users.mjs reset` → verify overrides = 0
+5. Report: pass/fail table per account + screenshots of any failures
+6. If production breaks: promote rollback immediately, log rollback commit ID in CHANGELOG.md
