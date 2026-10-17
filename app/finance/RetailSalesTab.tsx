@@ -151,11 +151,15 @@ export default function RetailSalesTab({ companyId }: { companyId: string }) {
   useEffect(() => { void loadRows(); }, [loadRows]);
 
   // ── Month chip row (last 4 months + current future month) ─────────────────
+  // Sep 2026 is the first month with real sales data; hide Jul/Aug.
+  const DATA_START = { year: 2026, month: 9 };
   const monthChips: { year: number; month: number }[] = [];
   for (let i = 3; i >= 0; i--) {
     let m = now.month - i;
     let y = now.year;
     if (m <= 0) { m += 12; y -= 1; }
+    // Skip months before Sep 2026 — no real data exists
+    if (y < DATA_START.year || (y === DATA_START.year && m < DATA_START.month)) continue;
     monthChips.push({ year: y, month: m });
   }
   // add next month (future, disabled)
