@@ -17,7 +17,7 @@ async function canAccess(
     .eq("email", auth.email)
     .single();
   if (!member) return false;
-  if (["admin", "ceo"].includes(member.role)) return true;
+  if (["admin", "ceo"].includes(member.role.toLowerCase())) return true;
   const { data: ov } = await supabase
     .from("member_widget_overrides")
     .select("visible")

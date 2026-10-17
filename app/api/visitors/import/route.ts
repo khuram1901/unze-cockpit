@@ -6,7 +6,7 @@ import { isAdmin } from "../../../lib/admin-config";
 async function isAdminMember(auth: { email: string }, supabase: ReturnType<typeof createServiceClient>) {
   if (isAdmin(auth.email.toLowerCase())) return true;
   const { data: member } = await supabase.from("members").select("role").eq("email", auth.email).single();
-  return member && ["admin", "ceo"].includes(member.role);
+  return member && ["admin", "ceo"].includes(member.role.toLowerCase());
 }
 
 /** POST /api/visitors/import
