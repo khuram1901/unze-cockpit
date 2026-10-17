@@ -413,7 +413,7 @@ function Card({ title, children, style }: { title: string; children: React.React
 
 function TaskDashboardInner() {
   const isMobile = useMobile();
-  const { userCtx } = useUserCtx();
+  const { ctx: userCtx } = useUserCtx();
   const [stats, setStats] = useState<DashStats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
