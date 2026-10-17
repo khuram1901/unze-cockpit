@@ -781,6 +781,14 @@ export default function AdminDataPage() {
   const [deleteReason, setDeleteReason]       = useState("");
   const visitorPageSize = 50;
 
+  // F10 — Settings panel state
+  type PurposeThreshold = { keyword: string; threshold_mins: number };
+  type VisitorSettings  = { overstay_threshold_mins: number; office_open_hour: number; office_close_hour: number; weekly_digest_email: string; purpose_thresholds: PurposeThreshold[] };
+  const [visitorSettings, setVisitorSettings]         = useState<VisitorSettings | null>(null);
+  const [settingsSaving, setSettingsSaving]           = useState(false);
+  const [settingsNewKw, setSettingsNewKw]             = useState("");
+  const [settingsNewMins, setSettingsNewMins]         = useState("");
+
   async function loadVisitorList() {
     setLoadingVisitors(true);
     try {
@@ -855,11 +863,54 @@ export default function AdminDataPage() {
     } finally { setSavingVisitor(false); }
   }
 
+  // F10 — load visitor settings (admin only)
+  async function loadVisitorSettings() {
+    const res  = await authFetch("/api/visitors/settings");
+    const data = await res.json();
+    setVisitorSettings(data);
+  }
+
+  async function saveVisitorGlobalSettings() {
+    if (!visitorSettings) return;
+    setSettingsSaving(true);
+    try {
+      await authFetch("/api/visitors/settings", {
+        method: "PATCH",
+        body: JSON.stringify({
+          overstay_threshold_mins: visitorSettings.overstay_threshold_mins,
+          office_open_hour:        visitorSettings.office_open_hour,
+          office_close_hour:       visitorSettings.office_close_hour,
+          weekly_digest_email:     visitorSettings.weekly_digest_email,
+        }),
+      });
+      showToast("Settings saved");
+    } finally { setSettingsSaving(false); }
+  }
+
+  async function addPurposeThreshold() {
+    const kw   = settingsNewKw.trim();
+    const mins = parseInt(settingsNewMins, 10);
+    if (!kw || isNaN(mins) || mins < 1) return;
+    await authFetch("/api/visitors/settings", {
+      method: "POST",
+      body: JSON.stringify({ keyword: kw, threshold_mins: mins }),
+    });
+    setSettingsNewKw("");
+    setSettingsNewMins("");
+    loadVisitorSettings();
+  }
+
+  async function deletePurposeThreshold(keyword: string) {
+    await authFetch(`/api/visitors/settings?keyword=${encodeURIComponent(keyword)}`, { method: "DELETE" });
+    loadVisitorSettings();
+  }
+
   // Load visitors when tab becomes active
   useEffect(() => {
     if (activeTab === "visitors" && !checking) {
       loadVisitorList();
       loadVisitorKpi();
+      if (ctx && isAdminTier(ctx)) loadVisitorSettings();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, checking, visitorDateFrom, visitorDateTo, visitorPage]);
@@ -1187,6 +1238,108 @@ export default function AdminDataPage() {
               style={{ padding: "5px 12px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer" }}
             >Next ›</button>
           </div>
+        )}
+
+        {/* F10 — Settings panel (admin only) */}
+        {ctx && isAdminTier(ctx) && (
+          <details style={{ marginTop: "28px" }}>
+            <summary style={{ fontWeight: 700, color: COLOURS.SLATE, cursor: "pointer", padding: "10px 0", fontSize: "14px" }}>
+              ⚙️ Visitor Settings
+            </summary>
+            <div style={{ background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "20px", marginTop: "8px" }}>
+              {!visitorSettings ? (
+                <p style={{ margin: 0, color: COLOURS.SLATE, fontSize: "13px" }}>Loading…</p>
+              ) : (
+                <>
+                  {/* Global defaults */}
+                  <p style={{ margin: "0 0 14px", fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY, letterSpacing: "0.04em", textTransform: "uppercase" }}>Global Defaults</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px" }}>DEFAULT OVERSTAY (MINS)</label>
+                      <input type="number" min={1} value={visitorSettings.overstay_threshold_mins}
+                        onChange={(e) => setVisitorSettings({ ...visitorSettings, overstay_threshold_mins: parseInt(e.target.value) || 0 })}
+                        style={{ ...inputStyle, width: "90px" }} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px" }}>OFFICE OPENS (HOUR)</label>
+                      <input type="number" min={0} max={23} value={visitorSettings.office_open_hour}
+                        onChange={(e) => setVisitorSettings({ ...visitorSettings, office_open_hour: parseInt(e.target.value) || 0 })}
+                        style={{ ...inputStyle, width: "80px" }} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px" }}>OFFICE CLOSES (HOUR)</label>
+                      <input type="number" min={0} max={23} value={visitorSettings.office_close_hour}
+                        onChange={(e) => setVisitorSettings({ ...visitorSettings, office_close_hour: parseInt(e.target.value) || 0 })}
+                        style={{ ...inputStyle, width: "80px" }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: "200px" }}>
+                      <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px" }}>WEEKLY DIGEST EMAIL</label>
+                      <input type="email" value={visitorSettings.weekly_digest_email}
+                        onChange={(e) => setVisitorSettings({ ...visitorSettings, weekly_digest_email: e.target.value })}
+                        style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                    </div>
+                  </div>
+                  <button onClick={saveVisitorGlobalSettings} disabled={settingsSaving}
+                    style={{ ...primaryButtonStyle, padding: "8px 20px", marginBottom: "24px", opacity: settingsSaving ? 0.6 : 1 }}>
+                    {settingsSaving ? "Saving…" : "Save Settings"}
+                  </button>
+
+                  {/* Divider */}
+                  <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, marginBottom: "16px" }} />
+
+                  {/* Per-purpose thresholds */}
+                  <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY, letterSpacing: "0.04em", textTransform: "uppercase" }}>Per-Purpose Thresholds</p>
+                  <p style={{ margin: "0 0 14px", fontSize: "12px", color: COLOURS.SLATE }}>Longest keyword match wins; falls back to the default above.</p>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", marginBottom: "14px" }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                        <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 600, color: COLOURS.SLATE, fontSize: "11px" }}>KEYWORD</th>
+                        <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 600, color: COLOURS.SLATE, fontSize: "11px" }}>THRESHOLD (MINS)</th>
+                        <th style={{ width: "60px" }} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visitorSettings.purpose_thresholds.map((t) => (
+                        <tr key={t.keyword} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                          <td style={{ padding: "7px 8px" }}>{t.keyword}</td>
+                          <td style={{ padding: "7px 8px" }}>{t.threshold_mins} m</td>
+                          <td style={{ padding: "7px 8px", textAlign: "right" }}>
+                            <button onClick={() => deletePurposeThreshold(t.keyword)}
+                              style={{ padding: "3px 8px", borderRadius: "5px", border: `1px solid #FECACA`, background: "#FEF2F2", color: COLOURS.RED, cursor: "pointer", fontSize: "11px" }}>
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {visitorSettings.purpose_thresholds.length === 0 && (
+                        <tr><td colSpan={3} style={{ padding: "10px 8px", color: COLOURS.SLATE, fontSize: "12px" }}>No custom thresholds yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                  {/* Add threshold row */}
+                  <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", flexWrap: "wrap" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px" }}>KEYWORD</label>
+                      <input type="text" placeholder="e.g. Delivery" value={settingsNewKw}
+                        onChange={(e) => setSettingsNewKw(e.target.value)}
+                        style={{ ...inputStyle, width: "150px" }} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px" }}>MINS</label>
+                      <input type="number" min={1} placeholder="30" value={settingsNewMins}
+                        onChange={(e) => setSettingsNewMins(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && addPurposeThreshold()}
+                        style={{ ...inputStyle, width: "80px" }} />
+                    </div>
+                    <button onClick={addPurposeThreshold} disabled={!settingsNewKw.trim() || !settingsNewMins}
+                      style={{ ...primaryButtonStyle, padding: "8px 16px", opacity: (!settingsNewKw.trim() || !settingsNewMins) ? 0.5 : 1 }}>
+                      + Add
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </details>
         )}
 
         {/* Historical Import panel */}
