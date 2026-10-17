@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO, daysAgoISO } from "../lib/dateUtils";
+import { formatPKR } from "../lib/pkrFormatter";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, SectionTitle, useToast, useConfirm, cardGrid, kpiGrid, fixedCols } from "../lib/SharedUI";
@@ -56,8 +57,21 @@ const { NAVY, SLATE, BORDER, GREEN, RED, BLUE, AMBER, HAIRLINE, CARD, CARD_ALT, 
 const MONO = "var(--font-mono, 'JetBrains Mono', monospace)";
 const DISPLAY = "var(--font-display, 'Inter Tight', sans-serif)";
 
+// Chart axis: compact PKR with sign, e.g. -12.2M / 450K — handles negatives
+// (the old inline formatter fell through to raw digits below zero).
+function axisPKR(v: number): string {
+  const a = Math.abs(v); const sign = v < 0 ? "-" : "";
+  if (a >= 1000000) return `${sign}${(a / 1000000).toFixed(1)}M`;
+  if (a >= 1000) return `${sign}${(a / 1000).toFixed(0)}K`;
+  return String(v);
+}
+// Chart x-axis: DD/MM (rule 1 — never MM-DD)
+function axisDate(iso: string): string {
+  return formatDateUK(iso).slice(0, 5);
+}
+
 function fmt(n: number) {
-  return n.toLocaleString();
+  return n.toLocaleString("en-GB");
 }
 
 /* ─── Controlled inline actual-amount editor ─────────────────── */
@@ -451,7 +465,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     `${formatDateUK(b.next_date)} opening PKR ${fmt(b.next_opening)} doesn't match ${formatDateUK(b.prev_date)} closing PKR ${fmt(b.prev_closing)} — out by PKR ${fmt(Math.abs(b.difference))}`
   );
   const hasBreaks = breakAlerts.length > 0;
-  const hasAlerts = alerts.length > 0 || hasBreaks;
 
   return (
     <div>
@@ -469,38 +482,44 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         </div>
       )}
 
-      {/* ── ALERT BANNER ── */}
-      {hasAlerts && (
+      {/* ── CONTINUITY BANNER (red) — only real chain breaks ── */}
+      {hasBreaks && (
         <div style={{
-          border: `1px solid ${HAIRLINE}`,
-          borderLeft: `3px solid ${hasBreaks || staleDays > 1 ? RED : AMBER}`,
-          borderRadius: "10px", padding: "12px 16px", marginBottom: "14px",
-          backgroundColor: hasBreaks || staleDays > 1 ? DANGER_SOFT : WARNING_SOFT,
-          display: "flex", alignItems: "flex-start", gap: "10px",
+          border: `1px solid ${HAIRLINE}`, borderLeft: `3px solid ${RED}`,
+          borderRadius: "10px", padding: "12px 16px", marginBottom: "10px",
+          backgroundColor: DANGER_SOFT, display: "flex", alignItems: "flex-start", gap: "10px",
         }}>
           <span style={{ fontSize: "18px", flexShrink: 0 }}>⚠</span>
           <div>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: hasBreaks || staleDays > 1 ? RED : AMBER }}>
-              {hasBreaks ? "Cash sheet continuity check failed" : "Setup needed"}
+            <div style={{ fontSize: "13px", fontWeight: 700, color: RED }}>Cash sheet continuity check failed</div>
+            <div style={{ fontSize: "12px", color: RED, marginTop: "4px" }}>
+              {breakAlerts.slice(0, 5).map((line, i) => (
+                <div key={i} style={{ marginTop: i === 0 ? 0 : "2px", fontFamily: MONO }}>{line}</div>
+              ))}
+              {breakAlerts.length > 5 && (
+                <div style={{ marginTop: "2px", fontWeight: 600 }}>…and {breakAlerts.length - 5} more break{breakAlerts.length - 5 === 1 ? "" : "s"}</div>
+              )}
+              <div style={{ marginTop: "4px", color: NAVY }}>
+                The sheet may be corrupted or a figure entered wrong — check the source file and re-upload.
+              </div>
             </div>
-            {alerts.length > 0 && (
-              <div style={{ fontSize: "12px", color: hasBreaks || staleDays > 1 ? RED : AMBER, marginTop: "1px" }}>
-                {alerts.join(" · ")}
-              </div>
-            )}
-            {hasBreaks && (
-              <div style={{ fontSize: "12px", color: RED, marginTop: "4px" }}>
-                {breakAlerts.slice(0, 5).map((line, i) => (
-                  <div key={i} style={{ marginTop: i === 0 ? 0 : "2px", fontFamily: MONO }}>{line}</div>
-                ))}
-                {breakAlerts.length > 5 && (
-                  <div style={{ marginTop: "2px", fontWeight: 600 }}>…and {breakAlerts.length - 5} more break{breakAlerts.length - 5 === 1 ? "" : "s"}</div>
-                )}
-                <div style={{ marginTop: "4px", color: NAVY }}>
-                  The sheet may be corrupted or a figure entered wrong — check the source file and re-upload.
-                </div>
-              </div>
-            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── SETUP / STALENESS BANNER (amber) — housekeeping, not a data error ── */}
+      {alerts.length > 0 && (
+        <div style={{
+          border: `1px solid ${HAIRLINE}`, borderLeft: `3px solid ${AMBER}`,
+          borderRadius: "10px", padding: "12px 16px", marginBottom: "14px",
+          backgroundColor: WARNING_SOFT, display: "flex", alignItems: "flex-start", gap: "10px",
+        }}>
+          <span style={{ fontSize: "18px", flexShrink: 0 }}>ℹ</span>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: AMBER }}>
+              {staleDays > 1 && positions.length > 0 ? "Cash data needs updating" : "Setup needed"}
+            </div>
+            <div style={{ fontSize: "12px", color: AMBER, marginTop: "1px" }}>{alerts.join(" · ")}</div>
           </div>
         </div>
       )}
@@ -517,20 +536,20 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       >
         <SummaryCard
           label="Opening Balance"
-          value={opening ? `PKR ${fmt(opening.opening_amount)}` : "Not set"}
+          value={opening ? formatPKR(opening.opening_amount) : "Not set"}
           sub={opening ? `as of ${formatDateUK(opening.as_of_date)}` : "Click edit to set"}
           onEdit={canEditAll ? openOpeningModal : undefined}
         />
         <SummaryCard
           label="Planned Receivables"
-          value={plan ? `PKR ${fmt(plan.tentative_receivables)}` : "Not set"}
+          value={plan ? formatPKR(plan.tentative_receivables) : "Not set"}
           sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
           valueColor={GREEN}
           onEdit={canEditAll ? openPlanModal : undefined}
         />
         <SummaryCard
           label="Planned Payouts"
-          value={plan ? `PKR ${fmt(plan.tentative_payouts)}` : "Not set"}
+          value={plan ? formatPKR(plan.tentative_payouts) : "Not set"}
           sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
           valueColor={RED}
           onEdit={canEditAll ? openPlanModal : undefined}
@@ -544,7 +563,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         {wv("finance.cash_in_hand", true) && (
           <SummaryCard
             label="Cash in Hand"
-            value={latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}
+            value={latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}
             sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
             isHero
           />
@@ -552,7 +571,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         {wv("finance.pdc_outstanding", true) && (
           <SummaryCard
             label="PDC Outstanding"
-            value={latestPosition ? `PKR ${fmt(latestPosition.post_dated_total)}` : "—"}
+            value={latestPosition ? formatPKR(latestPosition.post_dated_total) : "—"}
             sub="Issued, not yet cleared — see outlook below"
             valueColor={AMBER}
           />
@@ -604,13 +623,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: CARD, marginBottom: "14px" }}>
             <SectionTitle title="PDC Outlook — Next 8 Weeks" style={{ margin: "0 0 4px" }} />
             <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "6px" }}>
-              Starting from today&apos;s cash in hand ({latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}), assuming every scheduled PDC clears on time and nothing else changes.
+              Starting from today&apos;s cash in hand ({latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}), assuming every scheduled PDC clears on time and nothing else changes.
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={pdcChartData} margin={{ top: 24, right: 16, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
                 <XAxis dataKey="xLabel" tick={<PdcXTick />} interval={0} height={36} />
-                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => Math.abs(v) >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)} width={52} />
+                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} width={52} />
                 <Tooltip
                   formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]}
                   labelFormatter={(_, payload) => payload?.[0]?.payload?.period || ""}
@@ -857,10 +876,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               Cash Balance — Last 30 Days
             </div>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={[...positions].reverse().map((p) => ({ date: p.position_date.slice(5), closing: p.closing_balance, net: p.closing_after_post_dated }))}>
+              <LineChart data={[...positions].reverse().map((p) => ({ date: axisDate(p.position_date), closing: p.closing_balance, net: p.closing_after_post_dated }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
-                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} />
                 <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
                 <Legend iconType="plainline" wrapperStyle={{ fontSize: "12px" }} />
                 <Line type="monotone" dataKey="closing" stroke={BLUE} strokeWidth={2} dot={{ r: 3 }} name="Closing Balance" />
@@ -874,10 +893,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               Daily Receipts vs Payments
             </div>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={[...positions].reverse().map((p) => ({ date: p.position_date.slice(5), receipts: p.total_receipts, payments: p.total_payments }))}>
+              <BarChart data={[...positions].reverse().map((p) => ({ date: axisDate(p.position_date), receipts: p.total_receipts, payments: p.total_payments }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
-                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} />
                 <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
                 <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
                 <Bar dataKey="receipts" fill={GREEN} name="Money In" radius={[3, 3, 0, 0]} />
@@ -992,22 +1011,22 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                         )}
                       </td>
                       <td style={{ ...td, color: mismatch ? RED : undefined, fontWeight: mismatch ? 600 : undefined }}>
-                        {fmt(p.opening_balance)}
+                        {formatPKR(p.opening_balance)}
                       </td>
                       <td style={{ ...td, color: GREEN, fontWeight: 600 }}>
-                        {fmt(p.total_receipts)}
+                        {formatPKR(p.total_receipts)}
                       </td>
                       <td style={{ ...td, color: RED, fontWeight: 600 }}>
-                        {fmt(p.total_payments)}
+                        {formatPKR(p.total_payments)}
                       </td>
                       <td style={{ ...td, fontWeight: 600, color: NAVY }}>
-                        {fmt(p.closing_balance)}
+                        {formatPKR(p.closing_balance)}
                       </td>
                       <td style={{ ...td, color: SLATE }}>
-                        {fmt(p.post_dated_total)}
+                        {formatPKR(p.post_dated_total)}
                       </td>
                       <td style={{ ...td, fontWeight: 600, color: p.closing_after_post_dated < 0 ? RED : GREEN }}>
-                        {fmt(p.closing_after_post_dated)}
+                        {formatPKR(p.closing_after_post_dated)}
                       </td>
                     </tr>
                   );
@@ -1059,7 +1078,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                   ].map(({ label, value, color }) => (
                     <div key={label} style={{ border: "1px solid #EEF0F3", borderRadius: "10px", padding: "12px", textAlign: "center" }}>
                       <div style={{ fontSize: "11px", color: SLATE, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>{label}</div>
-                      <div style={{ fontSize: "15px", fontWeight: 700, color }}>{fmt(value)}</div>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color }}>{formatPKR(value)}</div>
                     </div>
                   ))}
                 </div>
@@ -1078,7 +1097,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                           {csDetail.receipts.map((r, i) => (
                             <tr key={i} style={{ borderBottom: i < csDetail.receipts.length - 1 ? "1px solid #EEF0F3" : "none" }}>
                               <td style={{ padding: "8px 12px", color: NAVY }}>{r.description}</td>
-                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: GREEN, whiteSpace: "nowrap" }}>{fmt(r.amount_pkr)}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: GREEN, whiteSpace: "nowrap" }}>{formatPKR(r.amount_pkr)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1101,7 +1120,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                           {csDetail.payments.map((p, i) => (
                             <tr key={i} style={{ borderBottom: i < csDetail.payments.length - 1 ? "1px solid #EEF0F3" : "none" }}>
                               <td style={{ padding: "8px 12px", color: NAVY }}>{p.description}</td>
-                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: RED, whiteSpace: "nowrap" }}>{fmt(p.amount_pkr)}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: RED, whiteSpace: "nowrap" }}>{formatPKR(p.amount_pkr)}</td>
                             </tr>
                           ))}
                         </tbody>

@@ -82,5 +82,13 @@ export async function GET(request: NextRequest) {
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
-  return Response.json({ rows: data ?? [] });
+  // Month footer totals come from the DB (golden rule) — same RLS as the rows
+  // because the function is SECURITY INVOKER. Migration 275.
+  const { data: totals, error: totalsErr } = await userClient.rpc("get_daily_sales_month_totals", {
+    p_store_id: storeId,
+    p_month_start: monthStart,
+  });
+  if (totalsErr) return Response.json({ error: totalsErr.message }, { status: 500 });
+
+  return Response.json({ rows: data ?? [], totals: totals ?? null });
 }

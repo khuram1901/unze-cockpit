@@ -4,6 +4,19 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.6 — 2026-10-17 (minor bump)
+
+**Imperial Footwear finance page audit + fix**
+
+- 24/09/2026 IFPL cash position corrected from the stored PDF (parser had read payments total as receipts, opening/payments as 0) — continuity chain clean.
+- Migration 273: `daily_cash_position_guard()` trigger — rejects sheets whose figures don't add up or whose opening/closing don't match the neighbouring days (±100). Covers all six upload paths. API returns 422 with the trigger's message (`lib/cash-position-errors.ts`).
+- Migration 274: finance tables (`cash_opening_balance`, `monthly_cash_plan`, `monthly_budgets`, `daily_cash_position`) now separate view from edit (`can_edit_company_finance()`); `can_see_company_finance()` honours `finance_company_scope` properly (Abbasi's Imperial page was empty) and refuses PA explicitly.
+- Migration 275: `get_daily_sales_month_totals()` — Retail Sales footer totals computed in Postgres instead of JS.
+- Finance Overview: chart x-axis DD/MM (was MM-DD), axis formatter handles negatives, `formatPKR` on cards/table/drill-down; red banner = continuity breaks only, amber = setup/staleness.
+- Removed dead `app/api/finance/check-drive/route 2.ts`.
+
+---
+
 ## v4.5 — 2026-10-17 (minor bump)
 
 **Bank Facilities page audit + fix (PR #34)**
