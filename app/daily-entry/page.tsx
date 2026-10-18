@@ -413,6 +413,9 @@ export default function DailyEntryPage() {
     if (!generator_id || !refuel_date || !present_hours || !rate_per_litre || !qty_litres) {
       showToast("Please fill all required fields.", "error"); return;
     }
+    if (previous_hours && parseFloat(present_hours) < parseFloat(previous_hours)) {
+      showToast("Present hours must be ≥ previous hours.", "error"); return;
+    }
     setSubmittingGenFuel(true);
     const res = await authFetch("/api/admin/generators?type=fuel", {
       method: "POST",
@@ -1546,11 +1549,14 @@ export default function DailyEntryPage() {
                   <select value={genFuel.generator_id}
                     onChange={(e) => setGenFuel({ ...genFuel, generator_id: e.target.value })}
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}>
-                    {/* One option per location; value = first generator at that location */}
-                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g])).entries()).map(([locId, g]) => (
-                      <option key={locId} value={g.generator_id}>
-                        {g.location_name}
-                      </option>
+                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g.location_name])).entries()).map(([locId, locName]) => (
+                      <optgroup key={locId} label={locName}>
+                        {genMeta.filter((g) => g.location_id === locId).map((g) => (
+                          <option key={g.generator_id} value={g.generator_id}>
+                            {g.kva} KVA {g.model}{g.label ? ` (${g.label})` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 )}
@@ -1613,15 +1619,44 @@ export default function DailyEntryPage() {
                 </Field>
               </div>
 
-              {/* Computed amount */}
-              {genFuel.rate_per_litre && genFuel.qty_litres && (
-                <div style={{ marginTop: "10px", padding: "10px 14px", backgroundColor: "#F0FDF4", borderRadius: "8px", border: `1px solid ${COLOURS.GREEN}22` }}>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.GREEN }}>
-                    PKR {(parseFloat(genFuel.rate_per_litre) * parseFloat(genFuel.qty_litres)).toLocaleString("en-PK", { maximumFractionDigits: 0 })}
-                  </span>
-                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "6px" }}>total amount</span>
-                </div>
-              )}
+              {/* Computed amount + live KPI preview */}
+              {genFuel.rate_per_litre && genFuel.qty_litres && (() => {
+                const qty    = parseFloat(genFuel.qty_litres)    || 0;
+                const rate   = parseFloat(genFuel.rate_per_litre) || 0;
+                const total  = qty * rate;
+                const prev   = parseFloat(genFuel.previous_hours)  || 0;
+                const pres   = parseFloat(genFuel.present_hours)   || 0;
+                const hrs    = pres > prev ? pres - prev : null;
+                const lph    = hrs && qty  > 0 ? qty  / hrs : null;
+                const cph    = hrs && total > 0 ? total / hrs : null;
+                return (
+                  <div style={{ marginTop: "10px", padding: "10px 14px", backgroundColor: "#F0FDF4", borderRadius: "8px", border: `1px solid ${COLOURS.GREEN}22` }}>
+                    <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" as const, alignItems: "center" }}>
+                      <span>
+                        <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.GREEN }}>
+                          PKR {total.toLocaleString("en-PK", { maximumFractionDigits: 0 })}
+                        </span>
+                        <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "6px" }}>total</span>
+                      </span>
+                      {hrs !== null && (
+                        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                          <strong style={{ color: COLOURS.NAVY }}>{hrs.toFixed(1)}</strong> hrs run
+                        </span>
+                      )}
+                      {lph !== null && (
+                        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                          <strong style={{ color: COLOURS.NAVY }}>{lph.toFixed(2)}</strong> L/hr
+                        </span>
+                      )}
+                      {cph !== null && (
+                        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                          <strong style={{ color: COLOURS.NAVY }}>PKR {Math.round(cph).toLocaleString("en-PK")}</strong>/hr
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div style={{ marginTop: "12px" }}>
                 <Field label="Remarks (optional)">
@@ -1654,11 +1689,14 @@ export default function DailyEntryPage() {
                   <select value={genMaint.generator_id}
                     onChange={(e) => setGenMaint({ ...genMaint, generator_id: e.target.value })}
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}>
-                    {/* One option per location; value = first generator at that location */}
-                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g])).entries()).map(([locId, g]) => (
-                      <option key={locId} value={g.generator_id}>
-                        {g.location_name}
-                      </option>
+                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g.location_name])).entries()).map(([locId, locName]) => (
+                      <optgroup key={locId} label={locName}>
+                        {genMeta.filter((g) => g.location_id === locId).map((g) => (
+                          <option key={g.generator_id} value={g.generator_id}>
+                            {g.kva} KVA {g.model}{g.label ? ` (${g.label})` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 )}
