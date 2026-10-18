@@ -884,6 +884,7 @@ export default function AdminDataPage() {
   const xMonthsAgo   = (n: number) => { const d = new Date(); d.setMonth(d.getMonth() - n); return d.toISOString().slice(0, 10); };
   const startOfYear  = () => `${new Date().getFullYear()}-01-01`;
   const [analyticsPeriod, setAnalyticsPeriod] = useState<"month" | "q3" | "ytd" | "custom">("month");
+  const [analyticsLocFilter, setAnalyticsLocFilter] = useState<string>("all");
   const [analyticsFrom, setAnalyticsFrom]     = useState<string>(firstOfMonth());
   const [analyticsTo, setAnalyticsTo]         = useState<string>(TODAY);
 
@@ -1579,8 +1580,18 @@ export default function AdminDataPage() {
             </div>
 
             {/* ── Per-Location Metric Cards ─────────────────────────────── */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:"14px" }}>
-              {[...analyticsRows].sort((a,b) => a.efficiency_rank - b.efficiency_rank).map((r,i) => {
+            {/* Location filter */}
+            <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap", marginBottom:"14px" }}>
+              <span style={{ fontSize:"11px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", color:COLOURS.SLATE }}>Location</span>
+              <button onClick={() => setAnalyticsLocFilter("all")} style={{ padding:"5px 14px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer", background:analyticsLocFilter==="all"?COLOURS.NAVY:"transparent", color:analyticsLocFilter==="all"?"white":COLOURS.SLATE, border:`1px solid ${analyticsLocFilter==="all"?COLOURS.NAVY:COLOURS.HAIRLINE}` }}>All ({analyticsRows.length})</button>
+              {[...analyticsRows].sort((a,b) => a.efficiency_rank - b.efficiency_rank).map(r => (
+                <button key={r.location_id} onClick={() => setAnalyticsLocFilter(analyticsLocFilter===r.location_id?"all":r.location_id)} style={{ padding:"5px 14px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer", background:analyticsLocFilter===r.location_id?COLOURS.NAVY:"transparent", color:analyticsLocFilter===r.location_id?"white":COLOURS.SLATE, border:`1px solid ${analyticsLocFilter===r.location_id?COLOURS.NAVY:COLOURS.HAIRLINE}` }}>
+                  {r.location_name}
+                </button>
+              ))}
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:"14px" }}>
+              {[...analyticsRows].sort((a,b) => a.efficiency_rank - b.efficiency_rank).filter(r => analyticsLocFilter==="all" || r.location_id===analyticsLocFilter).map((r,i) => {
                 const totalCost = r.total_fuel_cost + r.total_maint_cost;
                 const fuelRatio = totalCost > 0 ? (r.total_fuel_cost / totalCost * 100) : 0;
                 const maintRatio = totalCost > 0 ? (r.total_maint_cost / totalCost * 100) : 0;
