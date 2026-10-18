@@ -133,6 +133,8 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "admin_ops.visitors",       label: "Visitors tab",       page: "Admin Operations", tip: "Visitor log — daily check-ins, durations, overstay alerts, and analytics" },
   { key: "admin_ops.visitor_entry",  label: "Visitor Entry form", page: "Admin Operations", tip: "Mobile-first visitor check-in form (hidden from nav; share link directly)" },
   { key: "admin.visitors_dashboard", label: "Visitors Dashboard", page: "Admin Operations", tip: "KPI cards, dept/host league table, peak-hours heat map, and exceptions" },
+  { key: "admin_ops.generators",       label: "Generators tab",     page: "Admin Operations", tip: "Generator fleet — diesel log, maintenance records, analytics and master settings" },
+  { key: "admin_ops.generators_entry", label: "Generator Entry form", page: "Admin Operations", tip: "Fuel and maintenance data entry form on /daily-entry — off by default; turn on to grant a staff member logging access" },
 
   // ── Banking (app/banking/page.tsx) ───────────────────────────────────
   { key: "banking.eobi_ss",    label: "EOBI & SS Payments tab",  page: "Banking", tip: "Monthly EOBI and Social Security payment tracking across all entities" },
