@@ -94,10 +94,11 @@ type GenFuelRow = {
 
 type GenMaintRow = {
   id: string; generator_label: string; location_name: string;
-  service_date: string;
+  maintenance_date: string;
   engine_oil: number; oil_filter: number; fuel_filter: number; air_filter: number;
-  radiator_service: number; periodic_maintenance: number; other_mechanical: number; others: number;
-  total_cost: number; remarks: string | null; entered_by: string | null;
+  radiator_service: number; periodic_maintenance: number; other_mechanical_work: number; others: number;
+  total_cost: number; entered_by: string | null;
+  is_deleted: boolean; deleted_reason: string | null;
 };
 
 type GenSummaryRow = {
@@ -1198,7 +1199,7 @@ export default function AdminDataPage() {
     const MAINT_COLS: [string, keyof GenMaintRow][] = [
       ["Engine Oil", "engine_oil"], ["Oil Filter", "oil_filter"], ["Fuel Filter", "fuel_filter"],
       ["Air Filter", "air_filter"], ["Radiator",   "radiator_service"], ["Periodic", "periodic_maintenance"],
-      ["Other Mech", "other_mechanical"], ["Others", "others"],
+      ["Other Mech", "other_mechanical_work"], ["Others", "others"],
     ];
 
     const maintView = (
@@ -1220,14 +1221,13 @@ export default function AdminDataPage() {
                   <th style={TH}>Location</th>
                   {MAINT_COLS.map(([h]) => <th key={h} style={TH}>{h}</th>)}
                   <th style={TH}>Total</th>
-                  <th style={TH}>Remarks</th>
                   <th style={TH}></th>
                 </tr>
               </thead>
               <tbody>
                 {genMaintRows.map(r => (
                   <tr key={r.id}>
-                    <td style={TD}>{formatDateUK(r.service_date)}</td>
+                    <td style={TD}>{formatDateUK(r.maintenance_date)}</td>
                     <td style={TD}>{r.generator_label}</td>
                     <td style={TD}>{r.location_name}</td>
                     {MAINT_COLS.map(([, key]) => (
@@ -1236,7 +1236,6 @@ export default function AdminDataPage() {
                       </td>
                     ))}
                     <td style={{ ...TD, fontWeight: 700 }}>{PKR(r.total_cost)}</td>
-                    <td style={{ ...TD, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis" }}>{r.remarks ?? "—"}</td>
                     <td style={TD}>
                       {ctx && isAdminTier(ctx) && (
                         <button onClick={() => setEditingGenMaint(r)}
@@ -1758,12 +1757,12 @@ export default function AdminDataPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <label style={{ gridColumn: "1/-1" }}>
                   <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Service Date</span>
-                  <DateInput value={editingGenMaint.service_date} onChange={e => setEditingGenMaint(r => r && ({ ...r, service_date: e.target.value }))} />
+                  <DateInput value={editingGenMaint.maintenance_date} onChange={e => setEditingGenMaint(r => r && ({ ...r, maintenance_date: e.target.value }))} />
                 </label>
                 {[
                   ["Engine Oil","engine_oil"], ["Oil Filter","oil_filter"], ["Fuel Filter","fuel_filter"],
                   ["Air Filter","air_filter"], ["Radiator","radiator_service"], ["Periodic Maint","periodic_maintenance"],
-                  ["Other Mech","other_mechanical"], ["Others","others"],
+                  ["Other Mech","other_mechanical_work"], ["Others","others"],
                 ].map(([label, key]) => (
                   <label key={key}>
                     <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
