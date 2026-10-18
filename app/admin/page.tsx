@@ -957,7 +957,7 @@ export default function AdminDataPage() {
       setLoadingAnalytics(true);
       setAnalyticsError(null);
       try {
-        const r = await fetch(`/api/admin/generators?type=analytics&from=${from}&to=${to}`);
+        const r = await authFetch(`/api/admin/generators?type=analytics&from=${from}&to=${to}`);
         const j = await r.json();
         if (!r.ok) throw new Error(j.error ?? "Failed");
         setAnalyticsRows(j.data ?? []);
