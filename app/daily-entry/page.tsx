@@ -1549,15 +1549,13 @@ export default function DailyEntryPage() {
                   <select value={genFuel.generator_id}
                     onChange={(e) => setGenFuel({ ...genFuel, generator_id: e.target.value })}
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}>
-                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g.location_name])).entries()).map(([locId, locName]) => (
-                      <optgroup key={locId} label={locName}>
-                        {genMeta.filter((g) => g.location_id === locId).map((g) => (
-                          <option key={g.generator_id} value={g.generator_id}>
-                            {g.kva} KVA {g.model}{g.label ? ` (${g.label})` : ""}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
+                    {genMeta.map((g) => {
+                      const siblings = genMeta.filter((x) => x.location_id === g.location_id);
+                      const label = siblings.length > 1
+                        ? `${g.location_name} — ${g.kva} KVA ${g.model}${g.label ? ` (${g.label})` : ""}`
+                        : g.location_name;
+                      return <option key={g.generator_id} value={g.generator_id}>{label}</option>;
+                    })}
                   </select>
                 )}
               </Field>
@@ -1689,15 +1687,13 @@ export default function DailyEntryPage() {
                   <select value={genMaint.generator_id}
                     onChange={(e) => setGenMaint({ ...genMaint, generator_id: e.target.value })}
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}>
-                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g.location_name])).entries()).map(([locId, locName]) => (
-                      <optgroup key={locId} label={locName}>
-                        {genMeta.filter((g) => g.location_id === locId).map((g) => (
-                          <option key={g.generator_id} value={g.generator_id}>
-                            {g.kva} KVA {g.model}{g.label ? ` (${g.label})` : ""}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
+                    {genMeta.map((g) => {
+                      const siblings = genMeta.filter((x) => x.location_id === g.location_id);
+                      const label = siblings.length > 1
+                        ? `${g.location_name} — ${g.kva} KVA ${g.model}${g.label ? ` (${g.label})` : ""}`
+                        : g.location_name;
+                      return <option key={g.generator_id} value={g.generator_id}>{label}</option>;
+                    })}
                   </select>
                 )}
               </Field>
