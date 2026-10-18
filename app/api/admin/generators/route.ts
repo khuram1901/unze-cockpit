@@ -42,7 +42,25 @@ export async function GET(request: NextRequest) {
   if (type === "meta") {
     const { data, error } = await sb.rpc("get_generators_meta");
     if (error) return Response.json({ error: error.message }, { status: 500 });
-    return Response.json({ data });
+    const rows = (data || []) as Array<{
+      location_id: string; location_name: string;
+      generator_id: string; kva: number; model: string; label: string | null;
+    }>;
+    const locMap = new Map<string, { id: string; name: string; generators: Array<{ id: string; label: string; kva: number; model: string }> }>();
+    for (const r of rows) {
+      if (!locMap.has(r.location_id)) {
+        locMap.set(r.location_id, { id: r.location_id, name: r.location_name, generators: [] });
+      }
+      const loc = locMap.get(r.location_id)!;
+      const genNum = loc.generators.length + 1;
+      loc.generators.push({
+        id: r.generator_id,
+        kva: r.kva,
+        model: r.model,
+        label: r.label || `${r.kva} kVA ${r.model} (Gen ${genNum})`,
+      });
+    }
+    return Response.json({ data: Array.from(locMap.values()) });
   }
 
   // ── last_refuel: previous hours for a generator ───────────────────────────
