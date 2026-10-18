@@ -1177,18 +1177,31 @@ export default function AdminDataPage() {
     );
 
     // ── Master / settings sub-tab ──────────────────────────────────────────
+    // Group generators by location for card display
+    const masterByLocation = genMaster.reduce<Record<string, { locName: string; gens: GenMasterRow[] }>>((acc, g) => {
+      if (!acc[g.location_id]) acc[g.location_id] = { locName: g.location_name, gens: [] };
+      acc[g.location_id].gens.push(g);
+      return acc;
+    }, {});
+
     const masterView = (
       <div>
+        {/* Header row */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          <p style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>Generator Master List</p>
+          <div>
+            <p style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>Generator Master List</p>
+            <p style={{ margin: "2px 0 0", fontSize: "11px", color: COLOURS.SLATE }}>
+              ⚡ Changes here sync automatically to the Daily Entry page
+            </p>
+          </div>
           {ctx && isAdminTier(ctx) && (
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => { setShowGenThresholds(v => !v); }}
-                style={{ padding: "7px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
+                style={{ padding: "6px 12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "12px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
                 ⚙ Thresholds
               </button>
               <button onClick={() => { setEditingGenMaster(null); setGenMasterForm({ location_id:"", kva:"", model:"", label:"", is_active:true }); setShowGenMasterForm(true); }}
-                style={{ padding: "7px 14px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                style={{ padding: "6px 12px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
                 + Add Generator
               </button>
             </div>
@@ -1197,9 +1210,9 @@ export default function AdminDataPage() {
 
         {/* Thresholds panel */}
         {showGenThresholds && ctx && isAdminTier(ctx) && (
-          <div style={{ background: "#FFFBEB", border: `1px solid #FDE68A`, borderRadius: "12px", padding: "20px", marginBottom: "20px" }}>
-            <p style={{ margin: "0 0 14px", fontSize: "13px", fontWeight: 700, color: COLOURS.AMBER }}>⚙ Alert Thresholds</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "12px" }}>
+          <div style={{ background: "#FFFBEB", border: `1px solid #FDE68A`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+            <p style={{ margin: "0 0 12px", fontSize: "12px", fontWeight: 700, color: COLOURS.AMBER }}>⚙ Alert Thresholds</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
               {[
                 { label: "Unusual Consumption %", key: "unusual_pct", hint: "flag if L/hr varies by this %" },
                 { label: "Service Interval (hrs)", key: "service_hours", hint: "recommended service hours" },
@@ -1207,17 +1220,16 @@ export default function AdminDataPage() {
                 { label: "Red (days since refuel)", key: "days_red", hint: "shows red alert" },
               ].map(f => (
                 <label key={f.key}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <span style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     {f.label}
-                    <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, marginLeft: "4px" }}>({f.hint})</span>
                   </span>
                   <input type="number" min="0" value={genThreshForm[f.key as keyof typeof genThreshForm]}
                     onChange={e => setGenThreshForm(t => ({ ...t, [f.key]: e.target.value }))}
-                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }} />
+                    style={{ width: "100%", padding: "6px 8px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12px", boxSizing: "border-box" }} />
                 </label>
               ))}
             </div>
-            <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+            <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
               <button disabled={savingGenThresh} onClick={async () => {
                 setSavingGenThresh(true);
                 try {
@@ -1228,59 +1240,72 @@ export default function AdminDataPage() {
                   if (res.ok) { showToast("Thresholds saved"); setShowGenThresholds(false); }
                   else { const j = await res.json(); showToast(j.error || "Failed to save", "error"); }
                 } finally { setSavingGenThresh(false); }
-              }} style={{ padding: "8px 18px", backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: savingGenThresh ? "default" : "pointer", opacity: savingGenThresh ? 0.7 : 1 }}>
-                {savingGenThresh ? "Saving…" : "Save Thresholds"}
+              }} style={{ padding: "6px 14px", backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "12px", cursor: savingGenThresh ? "default" : "pointer", opacity: savingGenThresh ? 0.7 : 1 }}>
+                {savingGenThresh ? "Saving…" : "Save"}
               </button>
               <button onClick={() => setShowGenThresholds(false)}
-                style={{ padding: "8px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
+                style={{ padding: "6px 12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "12px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
                 Cancel
               </button>
             </div>
           </div>
         )}
 
-        {/* Generator master table */}
-        <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", overflowX: "auto" }}>
-          {genMaster.length === 0 ? (
-            <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No generators set up yet.</p>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  {["Generator","Location","KVA","Model","Status",""].map(h => <th key={h} style={TH}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {genMaster.map(g => (
-                  <tr key={g.id}>
-                    <td style={TD}>{g.label || "—"}</td>
-                    <td style={TD}>{g.location_name}</td>
-                    <td style={TD}>{g.kva}</td>
-                    <td style={TD}>{g.model}</td>
-                    <td style={TD}>
-                      <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
-                        backgroundColor: g.is_active ? "#F0FDF4" : "#F9FAFB",
-                        color: g.is_active ? COLOURS.GREEN : COLOURS.SLATE }}>
-                        {g.is_active ? "Active" : "Inactive"}
+        {/* Generator cards grouped by location */}
+        {genMaster.length === 0 ? (
+          <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "24px", textAlign: "center" }}>
+            <p style={{ color: COLOURS.SLATE, fontSize: "13px", margin: 0 }}>No generators set up yet. Click + Add Generator to begin.</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {Object.entries(masterByLocation).sort(([,a],[,b]) => a.locName.localeCompare(b.locName)).map(([locId, { locName, gens }]) => (
+              <div key={locId} style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "12px 16px" }}>
+                {/* Location header */}
+                <p style={{ margin: "0 0 10px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>
+                  📍 {locName}
+                </p>
+                {/* Generator mini-cards */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                  {gens.map(g => (
+                    <div key={g.id} style={{
+                      display: "flex", alignItems: "center", gap: "8px",
+                      padding: "6px 10px", borderRadius: "8px",
+                      border: `1px solid ${g.is_active ? COLOURS.HAIRLINE : "#E2E8F0"}`,
+                      background: g.is_active ? "white" : "#F8FAFC",
+                      opacity: g.is_active ? 1 : 0.6,
+                    }}>
+                      <span style={{ fontSize: "16px" }}>⚡</span>
+                      <div>
+                        <p style={{ margin: 0, fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>
+                          {g.label || `${g.kva} kVA`}
+                        </p>
+                        <p style={{ margin: 0, fontSize: "11px", color: COLOURS.SLATE }}>
+                          {g.kva} kVA · {g.model}
+                        </p>
+                      </div>
+                      <span style={{
+                        fontSize: "10px", fontWeight: 600, padding: "1px 6px", borderRadius: "20px",
+                        backgroundColor: g.is_active ? "#F0FDF4" : "#F1F5F9",
+                        color: g.is_active ? COLOURS.GREEN : COLOURS.SLATE,
+                      }}>
+                        {g.is_active ? "✓" : "off"}
                       </span>
-                    </td>
-                    <td style={TD}>
                       {ctx && isAdminTier(ctx) && (
                         <button onClick={() => {
                           setEditingGenMaster(g);
                           setGenMasterForm({ location_id: g.location_id, kva: String(g.kva), model: g.model, label: g.label ?? "", is_active: g.is_active });
                           setShowGenMasterForm(true);
-                        }} style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
-                          Edit
+                        }} style={{ fontSize: "11px", padding: "2px 6px", borderRadius: "4px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.SLATE }}>
+                          ✎
                         </button>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
 
