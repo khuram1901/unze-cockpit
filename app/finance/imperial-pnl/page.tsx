@@ -12,7 +12,7 @@
 // data quality strip. All aggregation in Postgres RPCs (migration 144).
 // ─────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ResponsiveContainer, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, ReferenceLine } from "recharts";
 import AuthWrapper from "../../lib/AuthWrapper";
 import { authFetch, supabase } from "../../lib/supabase";
@@ -605,6 +605,11 @@ export default function ImperialPnlPage() {
   // as-is; when none exists yet it is generated once automatically, so the
   // story always matches the period on screen. Regenerate replaces it.
   const [autoGenKey, setAutoGenKey] = useState("");
+  // The period/scope currently on screen — a generate request that finishes
+  // after the user has moved on must not paint its result over the new view.
+  const viewKey = `${monthFrom}|${monthTo}|${channelFilter}|${branchFilter}`;
+  const viewKeyRef = useRef(viewKey);
+  viewKeyRef.current = viewKey;
   useEffect(() => {
     if (!monthFrom || !monthTo) return;
     let active = true;
@@ -705,6 +710,7 @@ export default function ImperialPnlPage() {
   }
 
   async function generateInsights() {
+    const key = viewKeyRef.current;
     setGenerating(true);
     setInsightError("");
     try {
@@ -715,13 +721,17 @@ export default function ImperialPnlPage() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Failed to generate commentary");
+      // Saved server-side under its own period/scope; only show it if the
+      // user is still looking at that period/scope.
+      if (viewKeyRef.current !== key) return;
       setInsights((body.insights || []) as Insight[]);
       setActions((body.actions || []) as string[]);
       setGeneratedAt(body.generated_at || new Date().toISOString());
     } catch (err) {
-      setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
+      if (viewKeyRef.current === key) setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
+    } finally {
+      if (viewKeyRef.current === key) setGenerating(false);
     }
-    setGenerating(false);
   }
 
   if (checking) return null;
