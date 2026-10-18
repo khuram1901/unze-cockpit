@@ -941,6 +941,10 @@ export default function AdminDataPage() {
       }}>{label}</button>
     );
 
+    const selectedLocName = genLocFilter
+      ? (allLocations.find(l => l.id === genLocFilter)?.name ?? "")
+      : "";
+
     const filterBar = (
       <div style={{ background: "#FFFFFF", border: "1px solid #EEF0F3", borderRadius: "12px", padding: "16px", marginBottom: "20px" }}>
         {/* Row 1: Location (prominent) + Generator sub-filter */}
