@@ -780,6 +780,9 @@ export default function AdminDataPage() {
   const [deleteReason, setDeleteReason]       = useState("");
   const visitorPageSize = 50;
 
+  // Dashboard view switcher
+  const [dashView, setDashView] = useState<"kpi" | "league" | "peak" | "alerts">("kpi");
+
   // F10 — Settings panel state
   type PurposeThreshold = { keyword: string; threshold_mins: number };
   type VisitorSettings  = { overstay_threshold_mins: number; office_open_hour: number; office_close_hour: number; weekly_digest_email: string; purpose_thresholds: PurposeThreshold[] };
@@ -791,6 +794,10 @@ export default function AdminDataPage() {
   const [visitorImportFile, setVisitorImportFile]     = useState<File | null>(null);
   const [visitorImporting, setVisitorImporting]       = useState(false);
   const [visitorImportResult, setVisitorImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+  // P2-C: preview before confirm
+  type VisitorImportPreviewRow = { visitor_name: string; mobile: string; visit_date: string; time_in: string; time_out: string; purpose: string; host_name: string };
+  const [visitorImportPreview, setVisitorImportPreview] = useState<VisitorImportPreviewRow[] | null>(null);
+  const [visitorImportRowCount, setVisitorImportRowCount] = useState(0);
 
   async function loadVisitorList() {
     setLoadingVisitors(true);
@@ -908,6 +915,33 @@ export default function AdminDataPage() {
     loadVisitorSettings();
   }
 
+  async function handleVisitorPreview() {
+    if (!visitorImportFile) return;
+    setVisitorImportResult(null);
+    const name = visitorImportFile.name.toLowerCase();
+    if (name.endsWith(".csv")) {
+      try {
+        const text = await visitorImportFile.text();
+        const lines = text.split("\n").filter((l) => l.trim());
+        const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+        const dataRows = lines.slice(1);
+        const firstFive = dataRows.slice(0, 5).map((line) => {
+          const cells = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+          return Object.fromEntries(headers.map((h, i) => [h, cells[i] ?? ""])) as unknown as VisitorImportPreviewRow;
+        });
+        setVisitorImportPreview(firstFive);
+        setVisitorImportRowCount(dataRows.length);
+      } catch {
+        setVisitorImportPreview([]);
+        setVisitorImportRowCount(0);
+      }
+    } else {
+      // Excel — cannot parse client-side without a library; show file info only
+      setVisitorImportPreview([]);
+      setVisitorImportRowCount(-1);
+    }
+  }
+
   async function handleVisitorImport() {
     if (!visitorImportFile) return;
     setVisitorImporting(true);
@@ -918,6 +952,8 @@ export default function AdminDataPage() {
     const json = await res.json();
     setVisitorImportResult(json);
     setVisitorImporting(false);
+    setVisitorImportPreview(null);
+    setVisitorImportRowCount(0);
     if (json.imported > 0) loadVisitorList();
   }
 
@@ -1066,8 +1102,24 @@ export default function AdminDataPage() {
           )}
         </div>
 
+        {/* ── View switcher ── */}
+        <div style={{ display: "flex", gap: "6px", marginBottom: "16px", flexWrap: "wrap" }}>
+          {([ ["kpi", "📊 KPI"], ["league", "🏆 Dept & Hosts"], ["peak", "🕐 Peak Hours"], ["alerts", "⚠️ Alerts"] ] as const).map(([v, label]) => (
+            <button
+              key={v}
+              onClick={() => setDashView(v)}
+              style={{
+                padding: "6px 14px", borderRadius: "20px", border: `1px solid ${dashView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                background: dashView === v ? COLOURS.NAVY : COLOURS.CARD,
+                color: dashView === v ? "white" : COLOURS.SLATE,
+                fontSize: "12px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+              }}
+            >{label}</button>
+          ))}
+        </div>
+
         {/* ── Row 1: 8 KPI cards ── */}
-        {kpiCards.length > 0 && (
+        {dashView === "kpi" && kpiCards.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "10px", marginBottom: "16px" }}>
             {kpiCards.map(({ label, value, stripe, sub }) => (
               <div key={label} style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", overflow: "hidden" }}>
@@ -1083,7 +1135,7 @@ export default function AdminDataPage() {
         )}
 
         {/* ── Row 2: Dept efficiency table + Top Hosts ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: "12px", marginBottom: "16px" }}>
+        {dashView === "league" && <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: "12px", marginBottom: "16px" }}>
 
           {/* Dept table */}
           <div style={card}>
@@ -1151,10 +1203,10 @@ export default function AdminDataPage() {
               );
             })}
           </div>
-        </div>
+        </div>}
 
         {/* ── Row 3: Arrival Heatmap ── */}
-        <div style={{ ...card, overflowX: "auto" }}>
+        {dashView === "peak" && <div style={{ ...card, overflowX: "auto" }}>
           <p style={sectionHead}>Peak Arrival Hours (visits by hour × day)</p>
           <table style={{ borderCollapse: "collapse", fontSize: "11px", minWidth: "500px" }}>
             <thead>
@@ -1194,10 +1246,10 @@ export default function AdminDataPage() {
           <p style={{ margin: "10px 0 0", fontSize: "11px", color: COLOURS.SLATE }}>
             Darker = more visits. Showing hours 06:00–22:00.
           </p>
-        </div>
+        </div>}
 
         {/* ── Row 4: Active Alerts ── */}
-        <div style={card}>
+        {dashView === "alerts" && <div style={card}>
           <p style={sectionHead}>Active Alerts {visitorExceptions.length > 0 && `(${visitorExceptions.length})`}</p>
           {visitorExceptions.length === 0 ? (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 0", color: COLOURS.GREEN }}>
@@ -1243,7 +1295,7 @@ export default function AdminDataPage() {
               })}
             </div>
           )}
-        </div>
+        </div>}
 
       </div>
     );
@@ -1402,17 +1454,17 @@ export default function AdminDataPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", minWidth: "800px" }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${COLOURS.HAIRLINE}`, background: COLOURS.CARD_ALT }}>
-                {["Date","Time In","Time Out","Duration","Visitor","Mobile","Department","Meeting","Purpose","Status","Actions"].map((h) => (
+                {["Date","Time In","Time Out","Duration","Visitor","Mobile","CNIC","Department","Host","Purpose","Status","Actions"].map((h) => (
                   <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: COLOURS.SLATE, fontSize: "11px", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loadingVisitors && (
-                <tr><td colSpan={11}><SkeletonRows count={8} /></td></tr>
+                <tr><td colSpan={12}><SkeletonRows count={8} /></td></tr>
               )}
               {!loadingVisitors && visitorRows.length === 0 && (
-                <tr><td colSpan={11} style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No records found</td></tr>
+                <tr><td colSpan={12} style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No records found</td></tr>
               )}
               {!loadingVisitors && visitorRows.map((row) => (
                 <tr key={row.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
@@ -1426,7 +1478,7 @@ export default function AdminDataPage() {
                       : <span style={{ color: COLOURS.GREEN, fontWeight: 700 }}>Inside</span>}
                   </td>
                   <td style={{ padding: "8px 10px" }}>
-                    {row.duration_mins != null ? `${row.duration_mins}m` : row.is_inside ? "—" : "—"}
+                    {row.duration_mins != null ? (Math.floor(row.duration_mins / 60) > 0 ? `${Math.floor(row.duration_mins / 60)}h ${row.duration_mins % 60}m` : `${row.duration_mins}m`) : "—"}
                   </td>
                   <td style={{ padding: "8px 10px", fontWeight: 600 }}>
                     {row.visitor_name}
@@ -1434,6 +1486,7 @@ export default function AdminDataPage() {
                     {row.flag_type === "vip"       && <span style={{ marginLeft: "4px", fontSize: "10px", color: COLOURS.AMBER }}>⭐</span>}
                   </td>
                   <td style={{ padding: "8px 10px", color: COLOURS.SLATE }}>{row.mobile_masked}</td>
+                  <td style={{ padding: "8px 10px", color: COLOURS.SLATE, fontFamily: "monospace", fontSize: "12px" }}>{row.cnic_masked ?? "—"}</td>
                   <td style={{ padding: "8px 10px" }}>{row.department_name}</td>
                   <td style={{ padding: "8px 10px" }}>{row.host_name}</td>
                   <td style={{ padding: "8px 10px" }}>{row.purpose === "Other" ? row.purpose_other || "Other" : row.purpose}</td>
@@ -1623,21 +1676,82 @@ export default function AdminDataPage() {
                 }}>
                   Choose File
                   <input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }}
-                    onChange={(e) => { setVisitorImportFile(e.target.files?.[0] ?? null); setVisitorImportResult(null); }} />
+                    onChange={(e) => {
+                      setVisitorImportFile(e.target.files?.[0] ?? null);
+                      setVisitorImportResult(null);
+                      setVisitorImportPreview(null);
+                      setVisitorImportRowCount(0);
+                    }} />
                 </label>
                 {visitorImportFile && (
                   <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
                     {visitorImportFile.name} · {(visitorImportFile.size / 1024).toFixed(1)} KB
                   </span>
                 )}
-                <button
-                  onClick={handleVisitorImport}
-                  disabled={!visitorImportFile || visitorImporting}
-                  style={{ ...primaryButtonStyle, padding: "7px 18px", opacity: (!visitorImportFile || visitorImporting) ? 0.5 : 1 }}
-                >
-                  {visitorImporting ? "Importing…" : "Import"}
-                </button>
+                {visitorImportFile && visitorImportPreview === null && (
+                  <button
+                    onClick={handleVisitorPreview}
+                    style={{ ...primaryButtonStyle, padding: "7px 18px", background: COLOURS.SLATE }}
+                  >
+                    Preview
+                  </button>
+                )}
               </div>
+
+              {/* Preview section */}
+              {visitorImportPreview !== null && (
+                <div style={{ marginTop: "14px" }}>
+                  <div style={{ borderRadius: "8px", padding: "12px 14px", marginBottom: "12px", background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px" }}>
+                      {visitorImportRowCount === -1
+                        ? "Excel file ready — row count will be shown after import."
+                        : `${visitorImportRowCount} data row${visitorImportRowCount !== 1 ? "s" : ""} found. Duplicates (same mobile + time-in) will be skipped.`}
+                    </div>
+                    {visitorImportPreview.length > 0 && (
+                      <div style={{ overflowX: "auto", marginTop: "8px" }}>
+                        <table style={{ borderCollapse: "collapse", fontSize: "11px", width: "100%" }}>
+                          <thead>
+                            <tr>
+                              {(["visitor_name","mobile","visit_date","time_in","time_out","host_name","purpose"] as const).map((h) => (
+                                <th key={h} style={{ padding: "4px 8px", background: COLOURS.NAVY, color: "white", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visitorImportPreview.map((row, i) => (
+                              <tr key={i} style={{ background: i % 2 === 0 ? "white" : "#F8FAFC" }}>
+                                {(["visitor_name","mobile","visit_date","time_in","time_out","host_name","purpose"] as const).map((h) => (
+                                  <td key={h} style={{ padding: "4px 8px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, whiteSpace: "nowrap" }}>{row[h] ?? "—"}</td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {visitorImportRowCount > 5 && (
+                          <p style={{ margin: "6px 0 0", fontSize: "11px", color: COLOURS.SLATE }}>
+                            …and {visitorImportRowCount - 5} more row{visitorImportRowCount - 5 !== 1 ? "s" : ""}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <button
+                      onClick={() => { setVisitorImportPreview(null); setVisitorImportRowCount(0); }}
+                      style={{ padding: "7px 18px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", color: COLOURS.SLATE, fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleVisitorImport}
+                      disabled={visitorImporting}
+                      style={{ ...primaryButtonStyle, padding: "7px 18px", opacity: visitorImporting ? 0.5 : 1 }}
+                    >
+                      {visitorImporting ? "Importing…" : "Confirm Import"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </details>
         )}

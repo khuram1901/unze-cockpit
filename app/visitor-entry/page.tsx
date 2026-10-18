@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import DateInput from "../lib/DateInput";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import { formatDateUK } from "../lib/dateUtils";
 
 // ── Colours ──────────────────────────────────────────────────────────────────
 const C = {
@@ -462,13 +463,13 @@ export default function VisitorEntryPage() {
   // ── Confirm screen ────────────────────────────────────────────────────────
   if (screen === "confirm") {
     const rows: [string, string][] = [
-      ["Date",          form.date],
+      ["Date",          formatDateUK(form.date)],
       ["Time In",       form.time_in],
       ["Visitor Name",  form.visitor_name],
       ["CNIC",          displayCnic(normaliseCnic(form.cnic))],
       ["Mobile",        normaliseMobile(form.mobile)],
       ["Department",    form.department || "—"],
-      ["Meeting",       form.host_name],
+      ["Host",          form.host_name],
       ["Purpose",       form.purpose === "Other" ? `Other: ${form.purpose_other}` : form.purpose],
       ["Comments",      form.comments || "—"],
     ];
