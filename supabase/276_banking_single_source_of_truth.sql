@@ -52,9 +52,19 @@ language sql security definer set search_path = public as $$
   where c.short_code = p_company order by b.next_date desc;
 $$;
 
--- 4. EOBI payments: direct reads only for admin tier / banking / admin-ops users
-alter policy auth_read on public.admin_eobi_payments
-  using (is_admin_tier() or coalesce(perm_override('can_access_banking'), false) or coalesce(perm_override('can_access_admin_ops'), false));
+-- 4. EOBI payments: direct reads only for admin tier / banking / admin-ops users.
+--    Via a SECURITY DEFINER predicate — perm_override() is not executable by
+--    the authenticated role, so calling it straight from the policy raised
+--    "permission denied" instead of filtering (found in the 18/10 re-audit).
+create or replace function public.can_read_eobi_payments()
+returns boolean language sql stable security definer set search_path = public as $$
+  select is_admin_tier()
+      or coalesce(perm_override('can_access_banking'), false)
+      or coalesce(perm_override('can_access_admin_ops'), false);
+$$;
+revoke execute on function public.can_read_eobi_payments() from anon, public;
+grant execute on function public.can_read_eobi_payments() to authenticated;
+alter policy auth_read on public.admin_eobi_payments using (can_read_eobi_payments());
 
 -- 5. Line sums and counts in the database (Banking list + detail)
 create or replace view public.cash_sheet_uploads_with_totals as
@@ -76,6 +86,7 @@ commit;
 -- begin;
 -- drop view if exists public.cash_sheet_uploads_with_totals;
 -- alter policy auth_read on public.admin_eobi_payments using (true);
+-- drop function if exists public.can_read_eobi_payments();
 -- -- cash_sheet_continuity(): restore the lag()-over-cash_sheet_uploads body from migration history
 -- drop trigger if exists cash_sheet_uploads_mirror_trg on public.daily_cash_position;
 -- drop function if exists public.cash_sheet_uploads_mirror_from_position();

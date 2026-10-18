@@ -128,8 +128,8 @@ function netColour(net: number): string {
 }
 
 function shortDate(dateStr: string): string {
-  // "2026-07-07" → "7 Jul"
-  return formatDateUK(dateStr).slice(0, 6).trim().replace(/^0/, "");
+  // "2026-10-15" → "15/10" (DD/MM — the year is in the month picker)
+  return formatDateUK(dateStr).slice(0, 5);
 }
 
 function uniqueKey(): string {
