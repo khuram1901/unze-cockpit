@@ -19,7 +19,10 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public AS $$
   SELECT EXISTS (
     SELECT 1 FROM members m WHERE lower(m.email) = lower(auth.email())
-      AND (m.role IN ('CEO','Admin') OR m.admin_entry = true)
+      AND (
+        m.role IN ('CEO','Admin')
+        OR (m.role IN ('Manager','Member') AND m.department = 'Admin')
+      )
   );
 $$;
 
