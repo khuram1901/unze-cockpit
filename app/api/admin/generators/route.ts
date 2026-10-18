@@ -17,6 +17,7 @@
  */
 
 import { NextRequest } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
@@ -27,6 +28,17 @@ async function isAdmin(_email: string): Promise<boolean> {
   const { data } = await sb.rpc("is_generator_admin");
   return !!data;
 }
+
+/** Creates a Supabase client that carries the user's JWT so auth.email() works inside RPCs. */
+function createUserClient(request: NextRequest) {
+  const authHeader = request.headers.get("authorization") ?? "";
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+}
+
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -122,7 +134,9 @@ export async function POST(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") ?? "fuel";
   const body = await request.json();
-  const sb = createServiceClient();
+  // User-context client: carries the caller's JWT so auth.email() works inside entry RPCs
+  const userSb = createUserClient(request);
+  const sb = createServiceClient(); // service client for admin-only ops
 
   // ── fuel entry ────────────────────────────────────────────────────────────
   if (type === "fuel") {
@@ -130,8 +144,8 @@ export async function POST(request: NextRequest) {
     if (!generator_id || !refuel_date || !present_hours || !rate_per_litre || !qty_litres) {
       return Response.json({ error: "generator_id, refuel_date, present_hours, rate_per_litre, qty_litres are required" }, { status: 400 });
     }
-    // RPC uses auth.email() internally — do NOT pass p_entered_by
-    const { error } = await sb.rpc("insert_generator_fuel", {
+    // RPC uses auth.email() internally — must use userSb (user JWT), NOT service client
+    const { error } = await userSb.rpc("insert_generator_fuel", {
       p_generator_id:   generator_id,
       p_refuel_date:    refuel_date,
       p_previous_hours: previous_hours != null ? parseFloat(previous_hours) : null,
@@ -156,8 +170,8 @@ export async function POST(request: NextRequest) {
     if (!generator_id || !service_date) {
       return Response.json({ error: "generator_id and service_date are required" }, { status: 400 });
     }
-    // RPC uses auth.email() internally — do NOT pass p_entered_by
-    const { error } = await sb.rpc("insert_generator_maintenance", {
+    // RPC uses auth.email() internally — must use userSb (user JWT), NOT service client
+    const { error } = await userSb.rpc("insert_generator_maintenance", {
       p_generator_id:          generator_id,
       p_maintenance_date:      service_date,
       p_engine_oil:            parseFloat(engine_oil || "0"),
