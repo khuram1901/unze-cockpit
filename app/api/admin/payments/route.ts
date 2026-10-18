@@ -1,23 +1,19 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
-import { isAdmin } from "../../../lib/admin-config";
+import { hasEobiAccess } from "../../../lib/banking-access";
 
 
-async function checkCanManage(auth: { email: string }, supabase: ReturnType<typeof createServiceClient>) {
-  if (isAdmin(auth.email.toLowerCase())) return true;
-  const { data: member } = await supabase.from("members").select("id").eq("email", auth.email).single();
-  if (!member) return false;
-  const { data: perm } = await supabase.from("member_permissions")
-    .select("can_access_admin_ops, can_access_banking")
-    .eq("member_id", member.id).single();
-  return perm?.can_access_admin_ops === true || perm?.can_access_banking === true;
-}
 
 // GET — payment calendar for a year: ?year=2026
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
+  // 18/10/2026: this GET had no access check — any signed-in user could pull
+  // the full EOBI / Social Security payment calendar with amounts.
+  if (!(await hasEobiAccess(auth.email))) {
+    return Response.json({ error: "Not authorised" }, { status: 403 });
+  }
 
   const { searchParams } = new URL(request.url);
   const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()), 10);
@@ -34,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  if (!(await checkCanManage(auth, supabase))) {
+  if (!(await hasEobiAccess(auth.email))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 

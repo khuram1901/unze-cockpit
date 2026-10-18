@@ -1,61 +1,14 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { hasBankingAccess, hasCashSheetReadAccess } from "../../../lib/banking-access";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID } from "../../../lib/constants";
-import { isAdmin } from "../../../lib/admin-config";
-import { CEO_EMAIL, CEO2_EMAIL } from "../../../lib/permissions";
 import { isCashSheetRejection } from "../../../lib/cash-position-errors";
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
-const RESTAURANT_COMPANIES = ["BRNH", "HD", "KKJ"];
 
-async function checkBankingAccess(
-  email: string,
-  supabase: ReturnType<typeof createServiceClient>,
-): Promise<boolean> {
-  if (isAdmin(email.toLowerCase())) return true;
-  // CEO accounts have full banking access via role, not via member_permissions row
-  const CEO_EMAILS = [CEO_EMAIL, CEO2_EMAIL].map((e) => e.toLowerCase());
-  if (CEO_EMAILS.includes(email.toLowerCase())) return true;
-  const { data: member } = await supabase
-    .from("members")
-    .select("id")
-    .eq("email", email)
-    .single();
-  if (!member) return false;
-  const { data: perm } = await supabase
-    .from("member_permissions")
-    .select("can_access_banking")
-    .eq("member_id", member.id)
-    .single();
-  return perm?.can_access_banking === true;
-}
 
 // Read-only access: banking users + restaurant-pnl users (for BRNH/HD/KKJ only)
-async function checkReadAccess(
-  email: string,
-  supabase: ReturnType<typeof createServiceClient>,
-  company?: string,
-): Promise<boolean> {
-  if (isAdmin(email.toLowerCase())) return true;
-  // CEO accounts have full finance read access via role, not via member_permissions row
-  const CEO_EMAILS = [CEO_EMAIL, CEO2_EMAIL].map((e) => e.toLowerCase());
-  if (CEO_EMAILS.includes(email.toLowerCase())) return true;
-  const { data: member } = await supabase
-    .from("members")
-    .select("id")
-    .eq("email", email)
-    .single();
-  if (!member) return false;
-  const { data: perm } = await supabase
-    .from("member_permissions")
-    .select("can_access_banking, can_view_restaurants_pnl")
-    .eq("member_id", member.id)
-    .single();
-  if (perm?.can_access_banking === true) return true;
-  if (perm?.can_view_restaurants_pnl === true && company && RESTAURANT_COMPANIES.includes(company)) return true;
-  return false;
-}
 
 // ── GET /api/banking/cash-sheets?company=IFPL&month=2026-07 ──────────────────
 
@@ -69,7 +22,7 @@ export async function GET(request: NextRequest) {
   const company = searchParams.get("company") || "UTPL";
   const month = searchParams.get("month"); // e.g. "2026-07"
 
-  if (!(await checkReadAccess(auth.email, supabase, company))) {
+  if (!(await hasCashSheetReadAccess(auth.email, company))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
@@ -129,7 +82,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  if (!(await checkBankingAccess(auth.email, supabase))) {
+  if (!(await hasBankingAccess(auth.email))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 

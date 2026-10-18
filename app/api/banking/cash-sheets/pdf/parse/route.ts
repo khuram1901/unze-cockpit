@@ -1,29 +1,11 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../../lib/supabase-server";
 import { requireAuth } from "../../../../../lib/api-auth";
+import { hasBankingAccess } from "../../../../../lib/banking-access";
 import { parseCashFlowPDF } from "../../../../../lib/pdf-parsers/cash-flow-parser";
-import { isAdmin } from "../../../../../lib/admin-config";
 
 // ── Auth helper (same as ../route.ts) ────────────────────────────────────────
 
-async function checkBankingAccess(
-  email: string,
-  supabase: ReturnType<typeof createServiceClient>,
-): Promise<boolean> {
-  if (isAdmin(email.toLowerCase())) return true;
-  const { data: member } = await supabase
-    .from("members")
-    .select("id")
-    .eq("email", email)
-    .single();
-  if (!member) return false;
-  const { data: perm } = await supabase
-    .from("member_permissions")
-    .select("can_access_banking")
-    .eq("member_id", member.id)
-    .single();
-  return perm?.can_access_banking === true;
-}
 
 // ── POST /api/banking/cash-sheets/pdf/parse ──────────────────────────────────
 // Parses a cash sheet PDF that is ALREADY in Supabase Storage (uploaded by the
@@ -39,7 +21,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  if (!(await checkBankingAccess(auth.email, supabase))) {
+  if (!(await hasBankingAccess(auth.email))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
