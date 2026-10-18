@@ -1058,14 +1058,14 @@ export default function AdminDataPage() {
     };
 
     const kpiCards = visitorKpi ? [
-      { label: "Total Visits",    value: visitorKpi.total,                              stripe: C.navy,  sub: "this period" },
-      { label: "Currently Inside",value: visitorKpi.currently_inside,                  stripe: C.green, sub: "right now" },
-      { label: "Overstays",       value: visitorKpi.overstay,                          stripe: visitorKpi.overstay > 0 ? C.red : C.green, sub: "need attention" },
-      { label: "Unique Visitors", value: visitorKpi.unique_visitors,                   stripe: C.blue,  sub: "distinct people" },
-      { label: "Avg Duration",    value: fmtDur(visitorKpi.avg_duration_mins),         stripe: C.navy,  sub: "per visit" },
-      { label: "Longest Stay",    value: fmtDur(visitorKpi.longest_stay_mins),         stripe: C.amber, sub: "single visit" },
-      { label: "Repeat Visitors", value: visitorKpi.repeat_visitors,                   stripe: visitorKpi.repeat_visitors > 0 ? C.amber : C.green, sub: "returned visitors" },
-      { label: "Active Alerts",   value: visitorExceptions.length,                     stripe: visitorExceptions.length > 0 ? C.red : C.green, sub: "flags today" },
+      { label: "Total Visits",    value: visitorKpi.total,                              stripe: C.navy,  sub: "this period",       filterStatus: "" as "" | "inside" | "checked_out",  alertsView: false },
+      { label: "Currently Inside",value: visitorKpi.currently_inside,                  stripe: C.green, sub: "right now",          filterStatus: "inside" as "inside",                 alertsView: false },
+      { label: "Overstays",       value: visitorKpi.overstay,                          stripe: visitorKpi.overstay > 0 ? C.red : C.green, sub: "need attention", filterStatus: "inside" as "inside", alertsView: false },
+      { label: "Unique Visitors", value: visitorKpi.unique_visitors,                   stripe: C.blue,  sub: "distinct people",    filterStatus: "" as "",                             alertsView: false },
+      { label: "Avg Duration",    value: fmtDur(visitorKpi.avg_duration_mins),         stripe: C.navy,  sub: "per visit",          filterStatus: null,                                 alertsView: false },
+      { label: "Longest Stay",    value: fmtDur(visitorKpi.longest_stay_mins),         stripe: C.amber, sub: "single visit",       filterStatus: null,                                 alertsView: false },
+      { label: "Repeat Visitors", value: visitorKpi.repeat_visitors,                   stripe: visitorKpi.repeat_visitors > 0 ? C.amber : C.green, sub: "returned visitors", filterStatus: null, alertsView: false },
+      { label: "Active Alerts",   value: visitorExceptions.length,                     stripe: visitorExceptions.length > 0 ? C.red : C.green, sub: "flags today", filterStatus: null, alertsView: true },
     ] : [];
 
     // shared card style
@@ -1121,16 +1121,44 @@ export default function AdminDataPage() {
         {/* ── Row 1: 8 KPI cards ── */}
         {dashView === "kpi" && kpiCards.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "10px", marginBottom: "16px" }}>
-            {kpiCards.map(({ label, value, stripe, sub }) => (
-              <div key={label} style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", overflow: "hidden" }}>
-                <div style={{ height: "4px", background: stripe }} />
-                <div style={{ padding: "12px 14px" }}>
-                  <p style={{ margin: "0 0 2px", fontSize: "26px", fontWeight: 800, color: stripe, lineHeight: 1 }}>{value}</p>
-                  <p style={{ margin: "4px 0 0", fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{label}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: COLOURS.SLATE }}>{sub}</p>
+            {kpiCards.map(({ label, value, stripe, sub, filterStatus, alertsView }) => {
+              const isClickable = filterStatus !== null || alertsView;
+              const isActive = filterStatus !== null && !alertsView && visitorStatus === filterStatus;
+              const handleClick = () => {
+                if (alertsView) { setDashView("alerts"); return; }
+                if (filterStatus === null) return;
+                setVisitorStatus(filterStatus);
+                setVisitorPage(0);
+                // Bypass stale-closure issue: build params directly with new value
+                setLoadingVisitors(true);
+                const p = new URLSearchParams({ date_from: visitorDateFrom, date_to: visitorDateTo, limit: String(visitorPageSize), offset: "0" });
+                if (visitorSearch) p.set("search", visitorSearch);
+                if (filterStatus)  p.set("status", filterStatus);
+                if (visitorDeptFilter) p.set("department", visitorDeptFilter);
+                authFetch(`/api/visitors/list?${p}`).then(r => r.json()).then(d => { setVisitorRows(d.rows ?? []); setVisitorTotal(d.total ?? 0); }).finally(() => setLoadingVisitors(false));
+              };
+              return (
+                <div
+                  key={label}
+                  onClick={isClickable ? handleClick : undefined}
+                  style={{
+                    background: isActive ? COLOURS.NAVY : COLOURS.CARD,
+                    border: `2px solid ${isActive ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                    borderRadius: "12px",
+                    overflow: "hidden",
+                    cursor: isClickable ? "pointer" : "default",
+                    transition: "border-color 0.15s, background 0.15s",
+                  }}
+                >
+                  <div style={{ height: "4px", background: stripe }} />
+                  <div style={{ padding: "12px 14px" }}>
+                    <p style={{ margin: "0 0 2px", fontSize: "26px", fontWeight: 800, color: isActive ? "white" : stripe, lineHeight: 1 }}>{value}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "12px", fontWeight: 700, color: isActive ? "rgba(255,255,255,0.9)" : COLOURS.NAVY }}>{label}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: "11px", color: isActive ? "rgba(255,255,255,0.65)" : COLOURS.SLATE }}>{sub}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -1361,90 +1389,70 @@ export default function AdminDataPage() {
       <div>
         {wv("admin.visitors_dashboard") && renderVisitorDashboard()}
 
-        {/* ── Redesigned filter card ── */}
-        <div style={filterCardStyle}>
-          {/* Row 1: period tabs + month picker + custom date range */}
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-            {/* Segmented period tabs */}
-            <div style={tabGroupStyle}>
+        {/* ── Filter bar (single scrollable row) ── */}
+        <div style={{ ...filterCardStyle, padding: "10px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", overflowX: "auto", whiteSpace: "nowrap" }}>
+            {/* Period tabs */}
+            <div style={{ ...tabGroupStyle, flexShrink: 0 }}>
               {["Today","Yesterday","This Week","This Month","Last Month"].map((p) => (
-                <button key={p} onClick={() => visitorPreset(p)} style={tabBtn(activePreset === p)}>{p}</button>
+                <button key={p} onClick={() => visitorPreset(p)} style={{ ...tabBtn(activePreset === p), padding: "5px 10px", fontSize: "11px" }}>{p}</button>
               ))}
             </div>
 
-            {/* Divider */}
-            <div style={{ width: "1px", height: "20px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
+            <div style={{ width: "1px", height: "20px", background: COLOURS.HAIRLINE, flexShrink: 0 }} />
 
-            {/* Month quick-jump */}
-            <select
-              style={monthSelectStyle}
-              value=""
-              onChange={(e) => {
-                const opt = visitorMonthOptions.find((o) => o.from === e.target.value);
-                if (opt) { setVisitorDateFrom(opt.from); setVisitorDateTo(opt.to); setVisitorPage(0); }
-              }}
-            >
-              <option value="" disabled>Jump to month…</option>
-              {visitorMonthOptions.map((o) => (
-                <option key={o.from} value={o.from}>{o.label}</option>
-              ))}
-            </select>
+            {/* Custom date range */}
+            <DateInput value={visitorDateFrom} onChange={(e) => { setVisitorDateFrom(e.target.value); setVisitorPage(0); }} />
+            <span style={{ color: COLOURS.SLATE, fontSize: "12px", flexShrink: 0 }}>→</span>
+            <DateInput value={visitorDateTo}   onChange={(e) => { setVisitorDateTo(e.target.value);   setVisitorPage(0); }} />
 
-            {/* Custom date range pushed right */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "auto" }}>
-              <DateInput value={visitorDateFrom} onChange={(e) => { setVisitorDateFrom(e.target.value); setVisitorPage(0); }} />
-              <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>→</span>
-              <DateInput value={visitorDateTo}   onChange={(e) => { setVisitorDateTo(e.target.value);   setVisitorPage(0); }} />
-            </div>
-          </div>
+            <div style={{ width: "1px", height: "20px", background: COLOURS.HAIRLINE, flexShrink: 0 }} />
 
-          {/* Row 2: dropdowns + search + actions */}
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
             {/* Status */}
             <select
               value={visitorStatus}
               onChange={(e) => { setVisitorStatus(e.target.value as typeof visitorStatus); setVisitorPage(0); }}
-              style={{ ...inputStyle, minWidth: "140px" }}
+              style={{ ...inputStyle, fontSize: "12px", padding: "5px 8px", minWidth: "unset", width: "110px", flexShrink: 0 }}
             >
-              <option value="">All statuses</option>
-              <option value="inside">Currently Inside</option>
+              <option value="">All Status</option>
+              <option value="inside">Inside</option>
               <option value="checked_out">Checked Out</option>
             </select>
 
-            {/* Dept filter */}
+            {/* Dept */}
             <select
               value={visitorDeptFilter}
               onChange={(e) => { setVisitorDeptFilter(e.target.value); setVisitorPage(0); }}
-              style={{ ...inputStyle, minWidth: "140px" }}
+              style={{ ...inputStyle, fontSize: "12px", padding: "5px 8px", minWidth: "unset", width: "110px", flexShrink: 0 }}
             >
-              <option value="">All departments</option>
+              <option value="">All Depts</option>
               {distinctDepts.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
 
             {/* Search */}
             <input
               type="text"
-              placeholder="Search name / mobile…"
+              placeholder="Search…"
               value={visitorSearch}
               onChange={(e) => { setVisitorSearch(e.target.value); setVisitorPage(0); }}
-              style={{ ...inputStyle, flex: 1, minWidth: "180px" }}
+              style={{ ...inputStyle, fontSize: "12px", padding: "5px 8px", width: "140px", flexShrink: 0 }}
               onKeyDown={(e) => e.key === "Enter" && loadVisitorList()}
             />
-            <button onClick={() => loadVisitorList()} style={{ ...primaryButtonStyle, padding: "7px 16px" }}>Search</button>
+            <button onClick={() => loadVisitorList()} style={{ ...primaryButtonStyle, padding: "5px 12px", fontSize: "12px", flexShrink: 0 }}>Search</button>
 
             {/* Export CSV */}
             <a
               href={`/api/visitors/export?from=${visitorDateFrom}&to=${visitorDateTo}`}
               download
               style={{
-                padding: "6px 14px", borderRadius: RADII.PILL,
+                padding: "5px 10px", borderRadius: RADII.PILL,
                 background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`,
-                color: COLOURS.SLATE, fontSize: "12px", fontWeight: 600,
-                textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "5px",
-                height: "32px", whiteSpace: "nowrap",
+                color: COLOURS.SLATE, fontSize: "11px", fontWeight: 600,
+                textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px",
+                whiteSpace: "nowrap", flexShrink: 0,
               }}
             >
-              ↓ Export CSV
+              ↓ CSV
             </a>
           </div>
         </div>
