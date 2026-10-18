@@ -610,6 +610,9 @@ export default function ImperialPnlPage() {
   const viewKey = `${monthFrom}|${monthTo}|${channelFilter}|${branchFilter}`;
   const viewKeyRef = useRef(viewKey);
   viewKeyRef.current = viewKey;
+  // Period/scope keys with a generate request in flight — the "Analysing…"
+  // state belongs to the view, not to whichever request happens to be running.
+  const inflightRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!monthFrom || !monthTo) return;
     let active = true;
@@ -622,6 +625,7 @@ export default function ImperialPnlPage() {
       setGeneratedAt(row?.generated_at || null);
       setInsightError("");
       const key = `${monthFrom}|${monthTo}|${channelFilter}|${branchFilter}`;
+      setGenerating(inflightRef.current.has(key));
       if (!row && autoGenKey !== key) {
         setAutoGenKey(key);
         generateInsights();
@@ -711,6 +715,8 @@ export default function ImperialPnlPage() {
 
   async function generateInsights() {
     const key = viewKeyRef.current;
+    if (inflightRef.current.has(key)) return;
+    inflightRef.current.add(key);
     setGenerating(true);
     setInsightError("");
     try {
@@ -730,7 +736,8 @@ export default function ImperialPnlPage() {
     } catch (err) {
       if (viewKeyRef.current === key) setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
     } finally {
-      if (viewKeyRef.current === key) setGenerating(false);
+      inflightRef.current.delete(key);
+      setGenerating(inflightRef.current.has(viewKeyRef.current));
     }
   }
 
