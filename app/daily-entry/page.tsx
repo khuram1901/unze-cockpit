@@ -1569,7 +1569,7 @@ export default function DailyEntryPage() {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginTop: "12px" }}>
-                <Field label={genFuelPrevEditable ? "Previous Hours (enter once)" : "Previous Hours"}>
+                <Field label={genFuelPrevEditable ? "Opening Hours (set once)" : "Opening Hours"}>
                   <input type="number" step="0.1" min="0" placeholder="e.g. 1240.5"
                     value={genFuel.previous_hours}
                     readOnly={!genFuelPrevEditable}
