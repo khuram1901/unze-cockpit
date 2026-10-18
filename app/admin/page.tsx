@@ -1466,20 +1466,35 @@ export default function AdminDataPage() {
             />
             <button onClick={() => loadVisitorList()} style={{ ...primaryButtonStyle, padding: "5px 12px", fontSize: "12px", flexShrink: 0 }}>Search</button>
 
-            {/* Export CSV */}
-            <a
-              href={`/api/visitors/export?from=${visitorDateFrom}&to=${visitorDateTo}`}
-              download
+            {/* Export Excel */}
+            <button
+              onClick={async () => {
+                const p = new URLSearchParams({ from: visitorDateFrom, to: visitorDateTo });
+                if (visitorStatus)     p.set("status", visitorStatus);
+                if (visitorDeptFilter) p.set("dept",   visitorDeptFilter);
+                if (visitorSearch)     p.set("search", visitorSearch);
+                try {
+                  const res = await authFetch(`/api/visitors/export?${p}`);
+                  if (!res.ok) { showToast("Export failed"); return; }
+                  const blob = await res.blob();
+                  const url  = URL.createObjectURL(blob);
+                  const a    = document.createElement("a");
+                  a.href     = url;
+                  a.download = `visitor-log-${visitorDateFrom}-to-${visitorDateTo}.xlsx`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch { showToast("Export failed"); }
+              }}
               style={{
                 padding: "5px 10px", borderRadius: RADII.PILL,
                 background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`,
                 color: COLOURS.SLATE, fontSize: "11px", fontWeight: 600,
-                textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px",
+                cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px",
                 whiteSpace: "nowrap", flexShrink: 0,
               }}
             >
-              ↓ CSV
-            </a>
+              ↓ Excel
+            </button>
           </div>
         </div>
 
@@ -1504,8 +1519,8 @@ export default function AdminDataPage() {
                 <tr key={row.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
                   {/* Check In: date + time stacked */}
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
-                    <div style={{ fontWeight: 600, fontSize: "12px", color: COLOURS.NAVY }}>{formatDateUK(row.visit_date)}</div>
-                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>
+                    <div style={{ fontWeight: 600, fontSize: "13px" }}>{formatDateUK(row.visit_date)}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
                       {new Date(row.time_in).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" })}
                     </div>
                   </td>
@@ -1513,15 +1528,15 @@ export default function AdminDataPage() {
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
                     {row.time_out ? (
                       <>
-                        <div style={{ fontSize: "12px", color: COLOURS.NAVY }}>
+                        <div style={{ fontSize: "13px" }}>
                           {new Date(row.time_out).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" })}
                         </div>
-                        <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
                           {row.duration_mins != null ? (Math.floor(row.duration_mins / 60) > 0 ? `${Math.floor(row.duration_mins / 60)}h ${row.duration_mins % 60}m` : `${row.duration_mins}m`) : "—"}
                         </div>
                       </>
                     ) : (
-                      <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.GREEN }}>● Inside</span>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.GREEN }}>● Inside</span>
                     )}
                   </td>
                   {/* Visitor: name + mobile stacked */}
