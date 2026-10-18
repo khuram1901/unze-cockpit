@@ -4,6 +4,18 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.9 — 2026-10-18 (patch)
+
+**Visitors: returning visitor banner fix (CNIC lookup race condition)**
+
+- Fixed "↩ Returning visitor" banner disappearing after CNIC autofill.
+- Root cause: CNIC lookup autofilled the mobile field, triggering a second mobile-debounce lookup 800 ms later. That lookup sent `+` unencoded (`mobile=+923…`), `URLSearchParams` decoded it as a space, the RPC returned `found: false`, and `setReturningVisitor(null)` cleared the banner.
+- Fix 1: `encodeURIComponent()` on mobile param so `+` sends as `%2B`.
+- Fix 2: Mobile debounce now skips when a 13-digit CNIC is already in the form — CNIC lookup already ran.
+- Commit: `0bf742a`. Rollback: `55471f3`.
+
+---
+
 ## v4.8 — 2026-10-18 (minor bump)
 
 **Imperial P&L page audit + fix — Supabase computes everything; stores de-duplicated; RPCs locked down**
