@@ -208,6 +208,18 @@ export function canViewIfplPnl(u: UserCtx) {
   return isAdminTier(u);
 }
 
+// ── Unze Trading P&L (named access) ───────────────────────────────
+// Khuram, 18/10/2026: strictly Khuram, Kamran, Sania and Shakeel. Admin/CEO
+// roles pass by default; everyone else only via the Access Matrix toggle
+// (member_permissions.can_view_unze_pnl, migration 279). PA never. The
+// database enforces the same rule (can_view_unze_pnl_db) on every RPC.
+export function canViewUnzePnl(u: UserCtx) {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_unze_pnl");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+
 // ── Group HR dashboard (CEO view — payroll across all companies) ──
 // Same model as canViewIfplPnl: PA blocked unconditionally (rule 6 —
 // payroll is financial data), Admin/CEO roles by default, everyone else

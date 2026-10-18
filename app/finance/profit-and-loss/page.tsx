@@ -23,7 +23,7 @@ import AuthWrapper from "../../lib/AuthWrapper";
 import { authFetch, supabase } from "../../lib/supabase";
 import { COLOURS, RADII, cardStyle, PageHeader, SkeletonRows } from "../../lib/SharedUI";
 import { useRequireCapability } from "../../lib/useRouteGuard";
-import { canEditFinance, financeCompanies, widgetVisible } from "../../lib/permissions";
+import { canEditFinance, canViewUnzePnl, widgetVisible } from "../../lib/permissions";
 import { useUserCtx } from "../../lib/useUserCtx";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
@@ -40,11 +40,28 @@ type KpiRow = {
   non_operating: number;
   net_profit_final: number;
 };
-type ScoreRow = { plant: string; gross_sale: number; gross_profit: number; net_profit: number };
 type PlantTrendRow = { month: string; plant: string; gross_sale: number; gross_profit: number };
-type OverheadRow = { month: string; plant: string; account_group: string; amount: number };
-type CostRow = { month: string; bucket: string; amount: number };
 type ValidationRow = { month: string; file_name: string; status: string; checks_passed: number; checks_failed: number; uploaded_at: string };
+// utpl_plants() — plant list lives in the database (Smart Meters added 18/10/2026).
+type PlantRow = { code: string; label: string; is_cost_centre: boolean; has_data: boolean; first_month: string | null; last_month: string | null };
+// utpl_period_summary() — every figure the cards show for the selected plant + period.
+type Attention = { severity: "good" | "watch" | "urgent"; kind: string; title: string; detail: string };
+type Summary = {
+  totals: { months: number; sales: number; cogs: number; gp: number; opex: number; np: number; avg_sales: number | null; gm_pct: number | null; np_pct: number | null };
+  latest: KpiRow | null; prev: KpiRow | null;
+  avg_sales_before_latest: number | null; avg_margin_before_latest: number | null; latest_margin_pct: number | null;
+  loss_streak: number; loss_streak_total: number;
+  scoreboard: { plant: string; label: string; months: number; sales: number; gp: number; np: number; margin_pct: number | null; share_pct: number | null; zero_latest: boolean }[];
+  ho: { np: number; pct_of_sales: number | null };
+  cost_structure: { month: string; bucket: string; amount: number; pct_of_sales: number | null }[];
+  expense_watch: { group: string; amount: number; delta: number | null }[];
+  attention: Attention[];
+};
+type Coverage = {
+  first_month: string | null; last_month: string | null; current_month: string; months: string[];
+  rejected: { month: string; uploaded_at: string; reason: string }[]; warnings: { month: string; checks: string[] }[]; missing: string[]; last_upload_at: string | null;
+};
+type TrueProfitRow = { plant: string; label: string; gross_sale: number; net_profit: number; ho_share: number; true_profit: number; true_margin_pct: number | null; alloc_basis: string };
 type CheckRow = { name: string; expected: number; reported: number; diff: number; passed: boolean };
 type Insight = { title: string; detail: string; severity: "good" | "watch" | "urgent" };
 type RestatedItem = { scope: string; line: string; old_value: number; new_value: number };
@@ -125,8 +142,21 @@ const chgLabel = (cur: number, prev: number | null | undefined): { text: string;
   return { text: (p >= 0 ? "▲ " : "▼ ") + Math.abs(p).toFixed(1) + "%", up: p >= 0 };
 };
 
-const PLANTS = ["All", "FEDMIC", "MEPCO", "PESCO", "HO"];
-const PRESETS = ["1M", "3M", "6M", "12M", "All", "Custom"] as const;
+// Period presets (Khuram, 18/10/2026 — same model as the Imperial P&L):
+// Month = current calendar month, Quarter = current FISCAL quarter (Jul–Sep,
+// Oct–Dec, Jan–Mar, Apr–Jun), YTD = 1 January → today, fiscal years via Custom.
+const PRESETS = ["Month", "Quarter", "YTD", "Custom"] as const;
+const fiscalQuarterStart = (m: string) => {
+  const [y, mo] = m.split("-").map(Number);
+  const qStartMonth = [7, 10, 1, 4].find((q) => mo >= q && mo <= q + 2) as number;
+  return `${y}-${String(qStartMonth).padStart(2, "0")}-01`;
+};
+const addMonths = (m: string, n: number) => {
+  const [y, mo] = m.split("-").map(Number);
+  return new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 10);
+};
+// Headline cards carry the currency so a figure can never be mistaken for millions.
+const fmtPKRFull = (n: number | null | undefined) => (n === null || n === undefined || Number.isNaN(n) ? "—" : `PKR ${fmtM(n)}`);
 type Preset = typeof PRESETS[number];
 
 const COST_BUCKETS = ["Production / COGS", "Admin", "Selling & distribution", "Finance costs", "Other expenses"];
@@ -438,13 +468,15 @@ const BS_NOTES: Record<string, { title: string; description: string }> = {
 };
 
 export default function ProfitAndLossPage() {
-  const { checking } = useRequireCapability("finance");
+  const { checking } = useRequireCapability("unze_pnl");
   const { ctx } = useUserCtx();
   const isMobile = useMobile();
 
-  const scope = ctx ? financeCompanies(ctx) : "none";
-  const hasUnze = scope === "both" || scope === "UTPL";
-  const canUploadUnze = ctx ? canEditFinance(ctx) : false;
+  // Access (Khuram, 18/10/2026): strictly Khuram, Kamran, Sania and Shakeel —
+  // Admin/CEO by role, everyone else only via the Access Matrix toggle
+  // `can_view_unze_pnl`. The database enforces the same rule on every RPC.
+  const hasUnze = ctx ? canViewUnzePnl(ctx) : false;
+  const canUploadUnze = ctx ? canViewUnzePnl(ctx) && canEditFinance(ctx) : false;
   const show = (key: string) => !ctx || widgetVisible(ctx, key, true);
   const companyId = UTPL_COMPANY_ID;
 
@@ -455,16 +487,17 @@ export default function ProfitAndLossPage() {
   const [loading, setLoading] = useState(true);
   const [allMonths, setAllMonths] = useState<string[]>([]);
   const [kpiRows, setKpiRows] = useState<KpiRow[]>([]);
-  const [scoreRows, setScoreRows] = useState<ScoreRow[]>([]);
   const [plantTrend, setPlantTrend] = useState<PlantTrendRow[]>([]);
-  const [overheadRows, setOverheadRows] = useState<OverheadRow[]>([]);
-  const [costRows, setCostRows] = useState<CostRow[]>([]);
   const [validationRows, setValidationRows] = useState<ValidationRow[]>([]);
   const [newFlags, setNewFlags] = useState<{ plant: string; account_group: string; amount: number }[]>([]);
   const [rpcsMissing, setRpcsMissing] = useState(false);
+  const [plants, setPlants] = useState<PlantRow[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [coverage, setCoverage] = useState<Coverage | null>(null);
+  const [trueProfit, setTrueProfit] = useState<TrueProfitRow[]>([]);
 
   const [plantFilter, setPlantFilter] = useState("All");
-  const [preset, setPreset] = useState<Preset>("12M");
+  const [preset, setPreset] = useState<Preset>("YTD");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
 
@@ -483,10 +516,13 @@ export default function ProfitAndLossPage() {
   const [pnlRefresh, setPnlRefresh] = useState(0);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadResults, setUploadResults] = useState<{ fileName: string; accepted: boolean; summary: string; checks: CheckRow[]; auditIssues: string[]; restated: RestatedItem[] }[]>([]);
+  const [uploadResults, setUploadResults] = useState<{ fileName: string; month?: string; accepted: boolean; summary: string; checks: CheckRow[]; auditIssues: string[]; restated: RestatedItem[]; previous_status?: "accepted" | "rejected" | null; previous_uploaded_at?: string | null }[]>([]);
 
   // ── Balance Sheet state ──────────────────────────────────────────────
   const [bsMonths, setBsMonths] = useState<string[]>([]);
+  const [bsPlant, setBsPlant] = useState("Company");
+  const [bsMonthRows, setBsMonthRows] = useState<{ month: string; plant: string }[]>([]);
+  const [bsUploadPlant, setBsUploadPlant] = useState("Company");
   const [bsMonth, setBsMonth] = useState<string>("");
   const [bsData, setBsData] = useState<BsRow | null>(null);
   const [bsPrev, setBsPrev] = useState<BsRow | null>(null);
@@ -512,58 +548,105 @@ export default function ProfitAndLossPage() {
   } | null>(null);
 
   // ── PNL: load month list ─────────────────────────────────────────────
-  const { monthFrom, monthTo } = useMemo(() => {
-    if (allMonths.length === 0) return { monthFrom: "", monthTo: "" };
+  // Month = current calendar month, Quarter = current fiscal quarter, YTD =
+  // 1 January → today; when the current period has no data yet the preset
+  // falls back to the latest month that does and says so (periodNote).
+  const { monthFrom, monthTo, periodNote } = useMemo(() => {
+    if (allMonths.length === 0 || !coverage) return { monthFrom: "", monthTo: "", periodNote: "" };
+    const first = allMonths[0];
     const last = allMonths[allMonths.length - 1];
-    if (preset === "Custom") {
-      return { monthFrom: customFrom || allMonths[0], monthTo: customTo || last };
+    const cur = coverage.current_month;
+    const has = (m: string) => allMonths.includes(m);
+    const clamp = (m: string) => (m < first ? first : m > last ? last : m);
+    const gapNote = () => {
+      const rejected = coverage.rejected.map((r) => MONTH_LABEL(r.month));
+      const missing = coverage.missing.map(MONTH_LABEL);
+      const parts: string[] = [];
+      if (rejected.length) parts.push(`${rejected.join(", ")} ${rejected.length > 1 ? "were" : "was"} rejected`);
+      if (missing.length) parts.push(`${missing.join(", ")} not uploaded yet`);
+      return parts.length ? ` (${parts.join("; ")})` : "";
+    };
+    if (preset === "Custom") return { monthFrom: customFrom || first, monthTo: customTo || last, periodNote: "" };
+    if (preset === "Month") {
+      if (has(cur)) return { monthFrom: cur, monthTo: cur, periodNote: "" };
+      return { monthFrom: last, monthTo: last, periodNote: `${MONTH_LABEL(cur)} has no data yet — showing ${MONTH_LABEL(last)}, the latest month available${gapNote()}.` };
     }
-    const n = preset === "1M" ? 1 : preset === "3M" ? 3 : preset === "6M" ? 6 : preset === "12M" ? 12 : allMonths.length;
-    return { monthFrom: allMonths[Math.max(0, allMonths.length - n)], monthTo: last };
-  }, [allMonths, preset, customFrom, customTo]);
+    if (preset === "Quarter") {
+      const qs = fiscalQuarterStart(cur);
+      const qe = addMonths(qs, 2);
+      const inQ = allMonths.filter((m) => m >= qs && m <= qe);
+      if (inQ.length > 0) {
+        const note = inQ.length < 3 ? `Quarter ${MONTH_LABEL(qs)}–${MONTH_LABEL(qe)}: ${inQ.length} of 3 months loaded${gapNote()}.` : "";
+        return { monthFrom: inQ[0], monthTo: inQ[inQ.length - 1], periodNote: note };
+      }
+      const lqs = fiscalQuarterStart(last);
+      const lq = allMonths.filter((m) => m >= lqs && m <= addMonths(lqs, 2));
+      return { monthFrom: lq[0], monthTo: lq[lq.length - 1], periodNote: `No data yet for the current quarter (${MONTH_LABEL(qs)}–${MONTH_LABEL(qe)}) — showing the latest quarter with data, ${MONTH_LABEL(lq[0])}–${MONTH_LABEL(lq[lq.length - 1])}${gapNote()}.` };
+    }
+    const jan = `${cur.slice(0, 4)}-01-01`;
+    const from = clamp(jan);
+    const to = clamp(cur);
+    const note = to < cur ? `Year to date: ${MONTH_LABEL(from)}–${MONTH_LABEL(to)} — nothing loaded after ${MONTH_LABEL(to)} yet${gapNote()}.` : "";
+    return { monthFrom: from, monthTo: to, periodNote: note };
+  }, [allMonths, coverage, preset, customFrom, customTo]);
 
   useEffect(() => {
     let active = true;
     async function loadAll() {
       if (!hasUnze) { if (active) setLoading(false); return; }
       setLoading(true);
-      const { data } = await supabase.rpc("pnl_kpi_summary", { p_company_id: companyId, p_from: "2000-01-01", p_to: "2100-01-01" });
+      const [covRes, plantRes] = await Promise.all([
+        supabase.rpc("utpl_data_coverage", { p_company_id: companyId }),
+        supabase.rpc("utpl_plants", { p_company_id: companyId }),
+      ]);
       if (!active) return;
-      const rows = (data || []) as KpiRow[];
-      setAllMonths(rows.map((r) => r.month));
+      if (!covRes.error && covRes.data) {
+        const cov = covRes.data as Coverage;
+        setCoverage(cov);
+        setAllMonths(cov.months || []);
+      }
+      if (!plantRes.error) setPlants((plantRes.data || []) as PlantRow[]);
+      setRpcsMissing(!!covRes.error);
       setLoading(false);
     }
     loadAll();
     return () => { active = false; };
-  }, [companyId, hasUnze]);
+  }, [companyId, hasUnze, pnlRefresh]);
 
   useEffect(() => {
     if (!hasUnze || !monthFrom || !monthTo) return;
     let active = true;
     async function load() {
-      const [kpiRes, scoreRes, trendRes, ohRes, costRes, valRes, flagsRes] = await Promise.all([
+      const [kpiRes, sumRes, trendRes, tpRes, valRes, flagsRes] = await Promise.all([
         supabase.rpc("pnl_kpi_summary_plant", { p_company_id: companyId, p_from: monthFrom, p_to: monthTo, p_plant: plantFilter }),
-        supabase.rpc("pnl_plant_scoreboard", { p_company_id: companyId, p_from: monthFrom, p_to: monthTo }),
+        supabase.rpc("utpl_period_summary", { p_company_id: companyId, p_from: monthFrom, p_to: monthTo, p_plant: plantFilter }),
         supabase.rpc("pnl_plant_margin_trend", { p_company_id: companyId, p_from: monthFrom, p_to: monthTo }),
-        supabase.rpc("pnl_overheads_breakdown", { p_company_id: companyId, p_plant: plantFilter === "All" ? "All plants" : plantFilter, p_from: monthFrom, p_to: monthTo, p_allocate_ho: false }),
-        supabase.rpc("pnl_cost_structure", { p_company_id: companyId, p_from: monthFrom, p_to: monthTo, p_plant: plantFilter }),
+        supabase.rpc("utpl_plant_true_profit", { p_company_id: companyId, p_from: monthFrom, p_to: monthTo }),
         supabase.rpc("pnl_validation_summary", { p_company_id: companyId }),
         supabase.rpc("pnl_new_account_flags", { p_company_id: companyId, p_month: monthTo }),
       ]);
       if (!active) return;
       setKpiRows((kpiRes.data || []) as KpiRow[]);
-      setScoreRows((scoreRes.data || []) as ScoreRow[]);
+      setSummary((sumRes.data as Summary) || null);
       setPlantTrend((trendRes.data || []) as PlantTrendRow[]);
-      setOverheadRows((ohRes.data || []) as OverheadRow[]);
-      setCostRows((costRes.data || []) as CostRow[]);
+      setTrueProfit((tpRes.data || []) as TrueProfitRow[]);
       setValidationRows((valRes.data || []) as ValidationRow[]);
       setNewFlags((flagsRes.data || []) as { plant: string; account_group: string; amount: number }[]);
-      setRpcsMissing(!!(kpiRes.error || scoreRes.error || costRes.error));
+      setRpcsMissing(!!(kpiRes.error || sumRes.error));
     }
     load();
     return () => { active = false; };
   }, [companyId, hasUnze, monthFrom, monthTo, plantFilter, pnlRefresh]);
 
+  // AI commentary for this exact period + plant. A saved analysis is shown
+  // as-is; when none exists it is generated once automatically so the story
+  // always matches the period on screen. A result is only painted if the
+  // user is still looking at the period/plant it was requested for.
+  const viewKey = `${monthFrom}|${monthTo}|${plantFilter}`;
+  const viewKeyRef = useRef(viewKey);
+  viewKeyRef.current = viewKey;
+  const inflightRef = useRef<Set<string>>(new Set());
+  const [autoGenKey, setAutoGenKey] = useState("");
   useEffect(() => {
     if (!hasUnze || !monthFrom || !monthTo) return;
     let active = true;
@@ -575,9 +658,16 @@ export default function ProfitAndLossPage() {
       setActions((row?.actions || []) as string[]);
       setGeneratedAt(row?.generated_at || null);
       setInsightError("");
+      const key = `${monthFrom}|${monthTo}|${plantFilter}`;
+      setGenerating(inflightRef.current.has(key));
+      if (!row && autoGenKey !== key) {
+        setAutoGenKey(key);
+        generateInsights();
+      }
     }
     loadSaved();
     return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUnze, monthFrom, monthTo, plantFilter]);
 
   // ── BS: load available months ────────────────────────────────────────
@@ -585,15 +675,19 @@ export default function ProfitAndLossPage() {
     if (!hasUnze) return;
     let active = true;
     async function loadBsMonths() {
-      const { data } = await supabase.rpc("get_balance_sheet_months", { p_company_id: companyId });
+      // Balance sheets are held per plant (migration 279): "Company" is the
+      // consolidated statement, plant codes (e.g. SMART METERS) their own.
+      const { data } = await supabase.rpc("utpl_balance_sheet_months", { p_company_id: companyId });
       if (!active) return;
-      const months = ((data || []) as { month: string }[]).map((r) => r.month);
+      const rows = ((data || []) as { month: string; plant: string }[]);
+      setBsMonthRows(rows);
+      const months = rows.filter((r) => r.plant === bsPlant).map((r) => r.month);
       setBsMonths(months);
-      if (months.length > 0) setBsMonth(months[months.length - 1]);
+      setBsMonth(months.length > 0 ? months[months.length - 1] : "");
     }
     loadBsMonths();
     return () => { active = false; };
-  }, [companyId, hasUnze]);
+  }, [companyId, hasUnze, bsPlant, bsRefresh]);
 
   // ── BS: load data for selected month ────────────────────────────────
   useEffect(() => {
@@ -602,8 +696,8 @@ export default function ProfitAndLossPage() {
     async function loadBs() {
       setBsLoading(true);
       const [bsRes, notesRes] = await Promise.all([
-        supabase.rpc("get_balance_sheet", { p_company_id: companyId, p_month: bsMonth }),
-        supabase.rpc("get_balance_sheet_notes", { p_company_id: companyId, p_month: bsMonth }),
+        supabase.rpc("utpl_balance_sheet", { p_company_id: companyId, p_month: bsMonth, p_plant: bsPlant }),
+        supabase.rpc("utpl_balance_sheet_notes", { p_company_id: companyId, p_month: bsMonth, p_plant: bsPlant }),
       ]);
       if (!active) return;
       // Postgres `numeric` can serialise as a string — coerce monetary fields
@@ -624,7 +718,7 @@ export default function ProfitAndLossPage() {
     }
     loadBs();
     return () => { active = false; };
-  }, [companyId, hasUnze, bsMonth, bsRefresh]);
+  }, [companyId, hasUnze, bsMonth, bsPlant, bsRefresh]);
 
   async function handleBsUpload() {
     if (!bsUploadFile) return;
@@ -633,6 +727,7 @@ export default function ProfitAndLossPage() {
     try {
       const form = new FormData();
       form.append("file", bsUploadFile);
+      form.append("plant", bsUploadPlant);
       // Month is auto-detected server-side from the sheet title + filename
       const res = await authFetch("/api/finance/bs-upload", { method: "POST", body: form });
       let body: typeof bsUploadResult;
@@ -640,12 +735,10 @@ export default function ProfitAndLossPage() {
       setBsUploadResult(body);
       if (body?.accepted) {
         setBsUploadFile(null);
-        // Refresh months list, then force a data reload even if the selected
-        // month is unchanged (the common re-upload-same-month case).
-        const { data } = await supabase.rpc("get_balance_sheet_months", { p_company_id: companyId });
-        const months = ((data || []) as { month: string }[]).map((r) => r.month);
-        setBsMonths(months);
-        setBsMonth(body.month || months[months.length - 1] || bsMonth);
+        // Switch to the plant just uploaded; the month list reloads and the
+        // data reloads even if the selected month is unchanged.
+        setBsPlant(bsUploadPlant);
+        if (body.month) setBsMonth(body.month);
         setBsRefresh((n) => n + 1);
       }
     } catch (e) {
@@ -666,21 +759,18 @@ export default function ProfitAndLossPage() {
         formData.append("file", file);
         try {
           const res = await authFetch("/api/pnl/upload-unze", { method: "POST", body: formData });
-          let body: { accepted?: boolean; summary?: string; error?: string; checks?: CheckRow[]; auditIssues?: string[]; restated?: RestatedItem[] };
+          let body: { accepted?: boolean; month?: string; summary?: string; error?: string; checks?: CheckRow[]; auditIssues?: string[]; restated?: RestatedItem[]; previous_status?: "accepted" | "rejected" | null; previous_uploaded_at?: string | null };
           try { body = await res.json(); } catch { body = { accepted: false, error: `Upload failed (HTTP ${res.status})` }; }
           if (body.accepted) anyAccepted = true;
-          setUploadResults((prev) => [...prev, { fileName: file.name, accepted: !!body.accepted, summary: body.summary || body.error || "Unknown error", checks: body.checks || [], auditIssues: body.auditIssues || [], restated: body.restated || [] }]);
+          setUploadResults((prev) => [...prev, { fileName: file.name, month: body.month, accepted: !!body.accepted, summary: body.summary || body.error || "Unknown error", checks: body.checks || [], auditIssues: body.auditIssues || [], restated: body.restated || [], previous_status: body.previous_status ?? null, previous_uploaded_at: body.previous_uploaded_at ?? null }]);
         } catch (e) {
           setUploadResults((prev) => [...prev, { fileName: file.name, accepted: false, summary: "Upload failed: " + (e instanceof Error ? e.message : "network error"), checks: [], auditIssues: [], restated: [] }]);
         }
       }
       setUploadFiles([]);
       if (anyAccepted) {
-        const { data } = await supabase.rpc("pnl_kpi_summary", { p_company_id: companyId, p_from: "2000-01-01", p_to: "2100-01-01" });
-        const rows = (data || []) as KpiRow[];
-        setAllMonths(rows.map((r) => r.month));
-        // Reload detail data + stale caches even when the month list is
-        // unchanged (re-upload of an existing month).
+        // Reload coverage, plants and every card — a re-upload of an existing
+        // month changes figures without changing the month list.
         setPnlRefresh((n) => n + 1);
         setRestatements(null);
       }
@@ -690,6 +780,9 @@ export default function ProfitAndLossPage() {
   }
 
   async function generateInsights() {
+    const key = viewKeyRef.current;
+    if (inflightRef.current.has(key)) return;
+    inflightRef.current.add(key);
     setGenerating(true);
     setInsightError("");
     try {
@@ -700,13 +793,16 @@ export default function ProfitAndLossPage() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Failed to generate commentary");
+      if (viewKeyRef.current !== key) return;
       setInsights((body.insights || []) as Insight[]);
       setActions((body.actions || []) as string[]);
       setGeneratedAt(body.generated_at || new Date().toISOString());
     } catch (err) {
-      setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
+      if (viewKeyRef.current === key) setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
+    } finally {
+      inflightRef.current.delete(key);
+      setGenerating(inflightRef.current.has(viewKeyRef.current));
     }
-    setGenerating(false);
   }
 
   async function toggleRestatements() {
@@ -720,31 +816,21 @@ export default function ProfitAndLossPage() {
 
   if (checking) return null;
 
-  /* ── PNL derived data (shaping only) ── */
+  /* ── PNL derived data — every figure comes from utpl_period_summary /
+     utpl_plant_true_profit; this block only renames and shapes. ── */
   const isHo = plantFilter === "HO";
-  const latest = kpiRows[kpiRows.length - 1];
-  const prev = kpiRows[kpiRows.length - 2];
-  const priorRows = kpiRows.slice(0, -1);
-  const avgSales = priorRows.length ? priorRows.reduce((s, r) => s + r.gross_sale, 0) / priorRows.length : 0;
-  const avgMargin = priorRows.length ? (priorRows.reduce((s, r) => s + (r.gross_sale ? r.gross_profit / r.gross_sale : 0), 0) / priorRows.length) * 100 : 0;
-  const latestMargin = latest && latest.gross_sale ? (latest.gross_profit / latest.gross_sale) * 100 : null;
+  const plantLabel = (code: string) => plants.find((p) => p.code === code)?.label ?? code;
+  const latest = summary?.latest ?? null;
+  const prev = summary?.prev ?? null;
+  const avgSales = summary?.avg_sales_before_latest ?? 0;
+  const latestMargin = summary?.latest_margin_pct ?? null;
   const prevMargin = prev && prev.gross_sale ? (prev.gross_profit / prev.gross_sale) * 100 : null;
-  const periodSales = kpiRows.reduce((s, r) => s + r.gross_sale, 0);
-  const periodGp = kpiRows.reduce((s, r) => s + r.gross_profit, 0);
-  const periodOpex = kpiRows.reduce((s, r) => s + Math.abs(r.operating_expenses), 0);
-  const periodNp = kpiRows.reduce((s, r) => s + r.net_profit_final, 0);
-
-  let lossStreak = 0;
-  for (let i = kpiRows.length - 1; i >= 0; i--) {
-    if (kpiRows[i].net_profit_final < 0) lossStreak++;
-    else break;
-  }
-  const attention: string[] = [];
-  const scopeLabel = plantFilter === "All" ? "" : ` (${plantFilter})`;
-  if (lossStreak >= 2) attention.push(`${lossStreak} consecutive loss months${scopeLabel}, ${fmtM(kpiRows.slice(-lossStreak).reduce((s, r) => s + r.net_profit_final, 0))} cumulative`);
-  else if (latest && latest.net_profit_final < 0) attention.push(`${MONTH_LABEL(latest.month)} was loss-making${scopeLabel} (${fmtM(latest.net_profit_final)})`);
-  if (!isHo && latest && avgSales > 0 && latest.gross_sale < avgSales * 0.7) attention.push(`${MONTH_LABEL(latest.month)} sales ${fmtM(latest.gross_sale)}, ${fmtPct(((avgSales - latest.gross_sale) / avgSales) * 100)} below the period average`);
-  if (!isHo && latestMargin !== null && priorRows.length >= 2 && latestMargin < avgMargin - 5) attention.push(`Gross margin ${fmtPct(latestMargin)} vs ${fmtPct(avgMargin)} period average`);
+  const periodSales = summary?.totals.sales ?? 0;
+  const periodGp = summary?.totals.gp ?? 0;
+  const periodOpex = summary?.totals.opex ?? 0;
+  const periodNp = summary?.totals.np ?? 0;
+  const periodMonths = summary?.totals.months ?? 0;
+  const attention: Attention[] = summary?.attention ?? [];
 
   const comboData = kpiRows.map((r) => ({
     month: MONTH_LABEL(r.month),
@@ -779,23 +865,21 @@ export default function ProfitAndLossPage() {
     waterfall.push({ name: "Net", base: np >= 0 ? 0 : np, delta: Math.abs(np), colour: np >= 0 ? COLOURS.GREEN : COLOURS.RED, total: true });
   }
 
-  const salesByMonth: Record<string, number> = {};
-  kpiRows.forEach((r) => { salesByMonth[r.month] = r.gross_sale; });
+  // Cost structure — % of sales (or PKR m for HO) per month, pre-computed in SQL.
+  const costRows = summary?.cost_structure ?? [];
   const costMonths = [...new Set(costRows.map((r) => r.month))].sort();
   const costChartData = costMonths.map((m) => {
     const row: Record<string, number | string> = { month: MONTH_LABEL(m) };
-    const sales = salesByMonth[m] || 0;
     COST_BUCKETS.forEach((b) => {
-      const amt = costRows.filter((r) => r.month === m && r.bucket === b).reduce((s, r) => s + r.amount, 0);
-      row[b] = isHo ? toM(amt) : sales > 0 ? Math.round((amt / sales) * 1000) / 10 : 0;
+      const rec = costRows.find((r) => r.month === m && r.bucket === b);
+      row[b] = !rec ? 0 : isHo ? toM(rec.amount) : (rec.pct_of_sales ?? 0);
     });
     return row;
   });
 
-  const productionPlants = scoreRows.filter((r) => r.plant !== "HO").sort((a, b) => b.gross_sale - a.gross_sale);
-  const hoRow = scoreRows.find((r) => r.plant === "HO");
-  const maxPlantSales = Math.max(1, ...productionPlants.map((r) => r.gross_sale));
-  const totalPlantSales = productionPlants.reduce((s, r) => s + r.gross_sale, 0);
+  const productionPlants = summary?.scoreboard ?? [];
+  const hoRow = summary?.ho ?? null;
+  const maxPlantSales = Math.max(1, ...productionPlants.map((r) => r.sales));
   const sparkFor = (plant: string) => {
     const months = [...new Set(plantTrend.filter((r) => r.plant === plant).map((r) => r.month))].sort();
     return months.map((m) => {
@@ -810,23 +894,15 @@ export default function ProfitAndLossPage() {
     return { bg: COLOURS.DANGER_SOFT, fg: COLOURS.RED, label: fmtPct(pct) };
   };
 
-  const ohMonths = [...new Set(overheadRows.map((r) => r.month))].sort();
-  const ohGroups = [...new Set(overheadRows.map((r) => r.account_group))];
-  const curM = ohMonths[ohMonths.length - 1];
-  const prevM = ohMonths.length >= 2 ? ohMonths[ohMonths.length - 2] : null;
-  const expenseWatch = ohGroups
-    .map((g) => {
-      const cur = overheadRows.filter((r) => r.account_group === g && r.month === curM).reduce((s, r) => s + r.amount, 0);
-      const before = prevM === null ? null : overheadRows.filter((r) => r.account_group === g && r.month === prevM).reduce((s, r) => s + r.amount, 0);
-      return { group: g, amount: cur, delta: before === null ? null : cur - before };
-    })
-    .filter((r) => r.amount > 0)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 6);
+  const curM = latest?.month ?? null;
+  const prevM = prev?.month ?? null;
+  const expenseWatch = summary?.expense_watch ?? [];
   const maxWatch = Math.max(1, ...expenseWatch.map((r) => r.amount));
 
-  const allValidated = validationRows.length > 0 && validationRows.every((v) => v.status === "accepted" && v.checks_failed === 0);
-  const badMonths = validationRows.filter((v) => v.status !== "accepted" || v.checks_failed > 0);
+  const rejectedMonths = coverage?.rejected ?? [];
+  const warnedMonths = coverage?.warnings ?? [];
+  const missingMonths = coverage?.missing ?? [];
+  const allValidated = validationRows.length > 0 && rejectedMonths.length === 0 && warnedMonths.length === 0;
 
   const severityColour = (s: Insight["severity"]) => s === "good" ? COLOURS.GREEN : s === "watch" ? COLOURS.AMBER : COLOURS.RED;
   const severitySoft = (s: Insight["severity"]) => s === "good" ? COLOURS.SUCCESS_SOFT : s === "watch" ? COLOURS.WARNING_SOFT : COLOURS.DANGER_SOFT;
@@ -870,6 +946,13 @@ export default function ProfitAndLossPage() {
               onChange={(e) => { setBsUploadFile(e.target.files?.[0] || null); setBsUploadResult(null); }}
               style={{ fontSize: "13px" }}
             />
+          </div>
+          <div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "4px", fontWeight: 600 }}>STATEMENT FOR</div>
+            <select value={bsUploadPlant} onChange={(e) => setBsUploadPlant(e.target.value)} style={{ padding: "5px 9px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "12px" }}>
+              <option value="Company">Whole company</option>
+              {plants.filter((p) => !p.is_cost_centre).map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
+            </select>
           </div>
           <button
             onClick={handleBsUpload}
@@ -1016,7 +1099,9 @@ export default function ProfitAndLossPage() {
                     {uploadResults.map((r, idx) => (
                       <div key={idx} style={{ marginTop: "10px", padding: "10px 14px", borderRadius: RADII.SM, background: r.accepted ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT }}>
                         <div style={{ fontSize: "13px", fontWeight: 700, color: r.accepted ? COLOURS.GREEN : COLOURS.RED }}>
-                          {r.fileName} — {r.accepted ? "Accepted — " : "Rejected — "}{r.summary}
+                          {r.fileName}{r.month ? ` (${MONTH_LABEL(r.month)})` : ""} — {r.accepted
+                            ? r.previous_status === "rejected" ? "✓ Data fixed — the earlier rejected upload for this month is replaced: " : r.previous_status === "accepted" ? "✓ Replaced previous figures" + (r.previous_uploaded_at ? ` (uploaded ${formatDateUK(r.previous_uploaded_at.slice(0, 10))})` : "") + ": " : "Accepted — "
+                            : "✗ Rejected — nothing saved for this month" + (r.previous_status === "accepted" ? " (previously accepted figures remain in use)" : "") + ": "}{r.summary}
                         </div>
                         {!r.accepted && (
                           <div style={{ fontSize: "12px", color: COLOURS.RED, lineHeight: 1.6, marginTop: "4px" }}>
@@ -1055,8 +1140,11 @@ export default function ProfitAndLossPage() {
                     <div style={{ ...cardStyle, padding: "10px 14px", marginBottom: "10px", position: "sticky", top: 0, zIndex: 10 }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "7px", alignItems: "center" }}>
                         <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>PLANT</span>
-                        {PLANTS.map((p) => (
-                          <button key={p} style={chipBtn(plantFilter === p)} onClick={() => setPlantFilter(p)}>{p}</button>
+                        <button style={chipBtn(plantFilter === "All")} onClick={() => setPlantFilter("All")}>All</button>
+                        {plants.map((p) => (
+                          <button key={p.code} style={{ ...chipBtn(plantFilter === p.code), opacity: p.has_data ? 1 : 0.55 }} onClick={() => setPlantFilter(p.code)} title={p.has_data ? `${MONTH_LABEL(p.first_month as string)} – ${MONTH_LABEL(p.last_month as string)}` : "No P&L data uploaded for this plant yet"}>
+                            {p.label}
+                          </button>
                         ))}
                         <span style={{ width: "1px", height: "18px", background: COLOURS.HAIRLINE, margin: "0 3px" }} />
                         <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>PERIOD</span>
@@ -1084,24 +1172,46 @@ export default function ProfitAndLossPage() {
                         )}
                       </div>
                       <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "5px" }}>
-                        Showing {plantFilter === "All" ? "all plants + HO" : plantFilter} · {MONTH_LABEL(monthFrom)} to {MONTH_LABEL(monthTo)} — every card obeys these filters
+                        Showing {plantFilter === "All" ? "all plants + HO" : plantLabel(plantFilter)} · {monthFrom === monthTo ? MONTH_LABEL(monthFrom) : `${MONTH_LABEL(monthFrom)} to ${MONTH_LABEL(monthTo)}`} — every card obeys these filters
                       </div>
+                      {periodNote && (
+                        <div style={{ fontSize: "11px", color: COLOURS.AMBER, fontWeight: 600, marginTop: "3px" }}>⚠ {periodNote}</div>
+                      )}
                     </div>
 
                     {rpcsMissing && (
                       <div style={{ ...cardStyle, marginBottom: "10px", background: COLOURS.WARNING_SOFT }}>
                         <p style={{ fontSize: "13px", color: COLOURS.AMBER, fontWeight: 600 }}>
-                          Migration 143_pnl_ceo_view_v2.sql hasn&apos;t been applied — apply it in the Supabase SQL Editor and reload.
+                          The P&amp;L functions could not be reached (migration 279) — apply it in the Supabase SQL Editor and reload.
                         </p>
                       </div>
                     )}
 
                     {/* ── Attention banner ── */}
-                    {show("unze_pnl.attention_banner") && attention.length > 0 && (
-                      <div style={{ ...cardStyle, marginBottom: "10px", background: COLOURS.DANGER_SOFT, border: `1px solid ${COLOURS.RED}` }}>
-                        <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.RED, marginBottom: "3px" }}>Needs your attention</div>
-                        <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{attention.join(" · ")}</div>
-                      </div>
+                    {show("unze_pnl.attention_banner") && (
+                      attention.length > 0 ? (
+                        <div style={{ ...cardStyle, marginBottom: "10px", background: attention.some((a) => a.severity === "urgent") ? COLOURS.DANGER_SOFT : COLOURS.WARNING_SOFT, border: `1px solid ${attention.some((a) => a.severity === "urgent") ? COLOURS.RED : COLOURS.AMBER}` }}>
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: attention.some((a) => a.severity === "urgent") ? COLOURS.RED : COLOURS.AMBER, marginBottom: "6px" }}>
+                            Needs your attention — {attention.length} item{attention.length > 1 ? "s" : ""} for {plantFilter === "All" ? "Unze Trading" : plantLabel(plantFilter)}, {monthFrom === monthTo ? MONTH_LABEL(monthFrom) : `${MONTH_LABEL(monthFrom)}–${MONTH_LABEL(monthTo)}`}
+                          </div>
+                          <div style={{ display: "grid", gap: "5px" }}>
+                            {attention.map((a, i) => (
+                              <div key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "12px", lineHeight: 1.5 }}>
+                                <span style={{ flexShrink: 0, marginTop: "4px", width: "8px", height: "8px", borderRadius: "50%", background: a.severity === "urgent" ? COLOURS.RED : COLOURS.AMBER }} />
+                                <div>
+                                  <span style={{ fontWeight: 700, color: a.severity === "urgent" ? COLOURS.RED : COLOURS.INK_700 }}>{a.title}</span>
+                                  <span style={{ color: COLOURS.INK_700 }}> — {a.detail}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : summary ? (
+                        <div style={{ ...cardStyle, marginBottom: "10px", background: COLOURS.SUCCESS_SOFT, border: `1px solid ${COLOURS.GREEN}`, padding: "8px 14px" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.GREEN }}>✓ Nothing needs attention</span>
+                          <span style={{ fontSize: "12px", color: COLOURS.INK_700 }}> — every month loaded, no loss streak, sales and margin in line with the period average.</span>
+                        </div>
+                      ) : null
                     )}
 
                     {/* ── KPI cards ── */}
@@ -1109,27 +1219,27 @@ export default function ProfitAndLossPage() {
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px", marginBottom: "10px" }}>
                         <div style={{ ...cardStyle, padding: "10px 12px" }}>
                           <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Sales — {MONTH_LABEL(latest.month)} (latest month)</div>
-                          <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>{fmtM(latest.gross_sale)}</div>
+                          <div style={{ fontSize: "20px", fontWeight: 700, color: COLOURS.NAVY, whiteSpace: "nowrap" }}>{fmtPKRFull(latest.gross_sale)}</div>
                           {latest.gross_sale === 0 ? (
-                            <div style={{ fontSize: "11px", color: COLOURS.AMBER, fontWeight: 600 }}>No sales recorded this month{plantFilter !== "All" ? ` for ${plantFilter}` : ""}</div>
+                            <div style={{ fontSize: "11px", color: COLOURS.AMBER, fontWeight: 600 }}>No sales recorded this month{plantFilter !== "All" ? ` for ${plantLabel(plantFilter)}` : ""}</div>
                           ) : prev && (
                             <div style={{ fontSize: "11px", color: latest.gross_sale >= prev.gross_sale ? COLOURS.GREEN : COLOURS.RED }}>
                               {latest.gross_sale >= prev.gross_sale ? "▲" : "▼"} {fmtM(Math.abs(latest.gross_sale - prev.gross_sale))} vs {MONTH_LABEL(prev.month)}
                             </div>
                           )}
-                          <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Period: {fmtM(periodSales)}{avgSales > 0 ? ` · avg ${fmtM(avgSales)}/mo` : ""}</div>
+                          <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Period ({periodMonths} mo): {fmtM(periodSales)}{avgSales > 0 ? ` · avg ${fmtM(avgSales)}/mo` : ""}</div>
                         </div>
                         <div style={{ ...cardStyle, padding: "10px 12px" }}>
                           <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Gross margin — {MONTH_LABEL(latest.month)}</div>
                           <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>{latestMargin === null ? "—" : fmtPct(latestMargin)}</div>
                           <div style={{ fontSize: "11px", color: latestMargin !== null && prevMargin !== null && latestMargin < prevMargin ? COLOURS.RED : COLOURS.SLATE }}>
-                            {latestMargin === null ? "No sales this month" : prevMargin !== null ? `vs ${fmtPct(prevMargin)} ${MONTH_LABEL(prev.month)}` : ""}
+                            {latestMargin === null ? "No sales this month" : prevMargin !== null && prev ? `vs ${fmtPct(prevMargin)} ${MONTH_LABEL(prev.month)}` : ""}
                           </div>
                           <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Period: {periodSales > 0 ? fmtPct((periodGp / periodSales) * 100) : "—"}</div>
                         </div>
                         <div style={{ ...cardStyle, padding: "10px 12px" }}>
                           <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Operating expenses — {MONTH_LABEL(latest.month)}</div>
-                          <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>{fmtM(Math.abs(latest.operating_expenses))}</div>
+                          <div style={{ fontSize: "20px", fontWeight: 700, color: COLOURS.NAVY, whiteSpace: "nowrap" }}>{fmtPKRFull(Math.abs(latest.operating_expenses))}</div>
                           {prev && (
                             <div style={{ fontSize: "11px", color: Math.abs(latest.operating_expenses) <= Math.abs(prev.operating_expenses) ? COLOURS.GREEN : COLOURS.RED }}>
                               {Math.abs(latest.operating_expenses) <= Math.abs(prev.operating_expenses) ? "▼" : "▲"} {fmtM(Math.abs(Math.abs(latest.operating_expenses) - Math.abs(prev.operating_expenses)))} vs {MONTH_LABEL(prev.month)}
@@ -1139,7 +1249,7 @@ export default function ProfitAndLossPage() {
                         </div>
                         <div style={{ ...cardStyle, padding: "10px 12px" }}>
                           <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Net profit — {MONTH_LABEL(latest.month)}</div>
-                          <div style={{ fontSize: "22px", fontWeight: 700, color: latest.net_profit_final >= 0 ? COLOURS.NAVY : COLOURS.RED }}>{fmtM(latest.net_profit_final)}</div>
+                          <div style={{ fontSize: "20px", fontWeight: 700, color: latest.net_profit_final >= 0 ? COLOURS.NAVY : COLOURS.RED, whiteSpace: "nowrap" }}>{fmtPKRFull(latest.net_profit_final)}</div>
                           <div style={{ fontSize: "11px", color: periodNp >= 0 ? COLOURS.SLATE : COLOURS.RED }}>Period total: {fmtM(periodNp)}</div>
                         </div>
                       </div>
@@ -1246,23 +1356,23 @@ export default function ProfitAndLossPage() {
                           </thead>
                           <tbody>
                             {productionPlants.map((r) => {
-                              const pct = r.gross_sale ? (r.gross_profit / r.gross_sale) * 100 : null;
-                              const chip = marginChip(pct);
+                              const chip = marginChip(r.margin_pct);
                               const selected = plantFilter === r.plant;
                               return (
                                 <tr
                                   key={r.plant}
                                   onClick={() => setPlantFilter(selected ? "All" : r.plant)}
-                                  style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer", background: selected ? COLOURS.INFO_SOFT : "transparent" }}
+                                  title={r.zero_latest ? "No sales in the latest month" : undefined}
+                                  style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer", background: selected ? COLOURS.INFO_SOFT : r.zero_latest ? COLOURS.WARNING_SOFT : "transparent" }}
                                 >
-                                  <td style={{ padding: "9px 0", fontWeight: 700 }}>{r.plant}</td>
+                                  <td style={{ padding: "9px 0", fontWeight: 700 }}>{r.label}{r.share_pct !== null ? <span style={{ fontSize: "10px", color: COLOURS.INK_400, fontWeight: 500 }}> {fmtPct(r.share_pct)}</span> : null}</td>
                                   <td>
-                                    {fmtM(r.gross_sale)}{" "}
-                                    <span style={{ display: "inline-block", background: COLOURS.BLUE, height: "6px", width: `${Math.round((r.gross_sale / maxPlantSales) * 100)}px`, borderRadius: "3px", verticalAlign: "middle" }} />
+                                    {fmtM(r.sales)}{" "}
+                                    <span style={{ display: "inline-block", background: COLOURS.BLUE, height: "6px", width: `${Math.round((r.sales / maxPlantSales) * 100)}px`, borderRadius: "3px", verticalAlign: "middle" }} />
                                   </td>
                                   <td><span style={{ background: chip.bg, color: chip.fg, borderRadius: RADII.PILL, padding: "2px 9px", fontSize: "12px", fontWeight: 600 }}>{chip.label}</span></td>
-                                  <td style={{ color: r.net_profit >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 600 }}>{r.net_profit >= 0 ? "+" : ""}{fmtM(r.net_profit)}</td>
-                                  <td><Sparkline values={sparkFor(r.plant)} colour={(marginChip((r.gross_sale ? (r.gross_profit / r.gross_sale) * 100 : null))).fg} /></td>
+                                  <td style={{ color: r.np >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 600 }}>{r.np >= 0 ? "+" : ""}{fmtM(r.np)}</td>
+                                  <td><Sparkline values={sparkFor(r.plant)} colour={chip.fg} /></td>
                                 </tr>
                               );
                             })}
@@ -1274,10 +1384,50 @@ export default function ProfitAndLossPage() {
                                 <td style={{ padding: "9px 0", fontWeight: 700 }}>HO</td>
                                 <td style={{ color: COLOURS.INK_400 }}>cost centre</td>
                                 <td style={{ color: COLOURS.INK_400 }}>—</td>
-                                <td style={{ color: hoRow.net_profit >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 600 }}>{hoRow.net_profit >= 0 ? "+" : ""}{fmtM(hoRow.net_profit)}</td>
-                                <td style={{ fontSize: "11px", color: COLOURS.INK_400 }}>{totalPlantSales > 0 ? `${fmtPct((Math.abs(hoRow.net_profit) / totalPlantSales) * 100)} of sales` : "—"}</td>
+                                <td style={{ color: hoRow.np >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 600 }}>{hoRow.np >= 0 ? "+" : ""}{fmtM(hoRow.np)}</td>
+                                <td style={{ fontSize: "11px", color: COLOURS.INK_400 }}>{hoRow.pct_of_sales !== null ? `${fmtPct(hoRow.pct_of_sales)} of sales` : "—"}</td>
                               </tr>
                             )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    )}
+
+                    {/* ── True profit after head-office allocation (new insight, 18/10/2026) ── */}
+                    {show("unze_pnl.true_profit") && trueProfit.length > 0 && (
+                    <div style={{ ...cardStyle, marginBottom: "10px" }}>
+                      <div style={sectionTitle}>True plant profit — after head-office allocation</div>
+                      <div style={sectionCaption}>
+                        Each plant carries its share of HO cost (the workbook&apos;s allocation % where given, otherwise its share of sales). A plant that looks profitable before HO can be a loss-maker after it.
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", fontSize: "13px", borderCollapse: "collapse", minWidth: "560px" }}>
+                          <thead>
+                            <tr style={{ color: COLOURS.SLATE, textAlign: "left", fontSize: "11px" }}>
+                              <th style={{ fontWeight: 600, padding: "4px 0" }}>Plant</th>
+                              <th style={{ fontWeight: 600, textAlign: "right" }}>Sales</th>
+                              <th style={{ fontWeight: 600, textAlign: "right" }}>Net profit before HO</th>
+                              <th style={{ fontWeight: 600, textAlign: "right" }}>HO share</th>
+                              <th style={{ fontWeight: 600, textAlign: "right" }}>True profit</th>
+                              <th style={{ fontWeight: 600, textAlign: "right" }}>True margin</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {trueProfit.map((r) => (
+                              <tr key={r.plant} style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }} title={`Allocation basis: ${r.alloc_basis}`}>
+                                <td style={{ padding: "7px 0", fontWeight: 700 }}>{r.label}</td>
+                                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{fmtM(r.gross_sale)}</td>
+                                <td style={{ textAlign: "right", whiteSpace: "nowrap", color: r.net_profit >= 0 ? COLOURS.GREEN : COLOURS.RED }}>{r.net_profit >= 0 ? "+" : ""}{fmtM(r.net_profit)}</td>
+                                <td style={{ textAlign: "right", whiteSpace: "nowrap", color: COLOURS.SLATE }}>{fmtM(r.ho_share)}</td>
+                                <td style={{ textAlign: "right", whiteSpace: "nowrap", fontWeight: 700, color: r.true_profit >= 0 ? COLOURS.GREEN : COLOURS.RED }}>{r.true_profit >= 0 ? "+" : ""}{fmtM(r.true_profit)}</td>
+                                <td style={{ textAlign: "right" }}>
+                                  {r.true_margin_pct === null ? "—" : (
+                                    <span style={{ background: marginChip(r.true_margin_pct).bg, color: marginChip(r.true_margin_pct).fg, borderRadius: RADII.PILL, padding: "2px 9px", fontSize: "12px", fontWeight: 600 }}>{fmtPct(r.true_margin_pct)}</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
                           </tbody>
                         </table>
                       </div>
@@ -1289,7 +1439,7 @@ export default function ProfitAndLossPage() {
                       {show("unze_pnl.expense_watch") && (
                       <div style={cardStyle}>
                         <div style={sectionTitle}>Expense watch — {curM ? MONTH_LABEL(curM) : ""}</div>
-                        <div style={sectionCaption}>Top groups with movement vs {prevM ? MONTH_LABEL(prevM) : "prior month"}{plantFilter !== "All" ? ` · ${plantFilter} only` : ""}</div>
+                        <div style={sectionCaption}>Top groups with movement vs {prevM ? MONTH_LABEL(prevM) : "prior month"}{plantFilter !== "All" ? ` · ${plantLabel(plantFilter)} only` : ""}</div>
                         {expenseWatch.length === 0 && <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No overhead activity this month.</p>}
                         {expenseWatch.map((r) => (
                           <div key={r.group} style={{ marginBottom: "9px" }}>
@@ -1359,16 +1509,26 @@ export default function ProfitAndLossPage() {
                     <div style={{ ...cardStyle, marginBottom: "20px", padding: "10px 14px" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
                         <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>DATA QUALITY</span>
-                        {allValidated ? (
-                          <span style={{ background: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
-                            ✓ {validationRows.length}/{validationRows.length} months validated, all integrity checks passed
+                        <span style={{ background: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
+                          ✓ {allMonths.length} months loaded{allValidated ? ", every check passed" : ""}
+                        </span>
+                        {rejectedMonths.map((v) => (
+                          <span key={v.month} title={v.reason} style={{ background: COLOURS.DANGER_SOFT, color: COLOURS.RED, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
+                            ✗ {MONTH_LABEL(v.month)} rejected — {v.reason.length > 70 ? v.reason.slice(0, 67) + "…" : v.reason}
                           </span>
-                        ) : (
-                          badMonths.map((v) => (
-                            <span key={v.month} title={`${v.file_name} — uploaded ${formatDateUK(v.uploaded_at.slice(0, 10))}`} style={{ background: COLOURS.DANGER_SOFT, color: COLOURS.RED, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
-                              {MONTH_LABEL(v.month)}: {v.checks_passed}/{v.checks_passed + v.checks_failed} checks
-                            </span>
-                          ))
+                        ))}
+                        {warnedMonths.map((v) => (
+                          <span key={v.month} title={v.checks.join("; ")} style={{ background: COLOURS.WARNING_SOFT, color: COLOURS.AMBER, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
+                            ⚠ {MONTH_LABEL(v.month)} accepted with {v.checks.length} warning{v.checks.length > 1 ? "s" : ""}: {v.checks.join("; ").slice(0, 80)}
+                          </span>
+                        ))}
+                        {missingMonths.length > 0 && (
+                          <span style={{ background: COLOURS.WARNING_SOFT, color: COLOURS.AMBER, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
+                            Not uploaded: {missingMonths.map(MONTH_LABEL).join(", ")}
+                          </span>
+                        )}
+                        {coverage?.last_upload_at && (
+                          <span style={{ fontSize: "11px", color: COLOURS.INK_400 }}>Last upload {formatDateUK(coverage.last_upload_at.slice(0, 10))}</span>
                         )}
                         <span style={{ width: "1px", height: "16px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
                         <button onClick={toggleRestatements} style={{ ...chipBtn(showRestatements), padding: "3px 11px", fontSize: "11px" }}>
@@ -1434,7 +1594,7 @@ export default function ProfitAndLossPage() {
               </div>
             ) : bsLoading ? (
               <SkeletonRows count={4} />
-            ) : bsMonths.length === 0 ? (
+            ) : bsMonthRows.length === 0 ? (
               <>
                 {bsUploadPanel}
                 <div style={cardStyle}>
@@ -1453,9 +1613,22 @@ export default function ProfitAndLossPage() {
                 {/* ── BS Upload panel (button lives in the page header; defined above return) ── */}
                 {bsUploadPanel}
 
-                {/* ── Period chips ── */}
+                {/* ── Statement + period chips ── */}
+                <div style={{ display: "flex", gap: "5px", alignItems: "center", flexWrap: "wrap", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginRight: "2px" }}>Statement:</span>
+                  <button style={chipBtn(bsPlant === "Company")} onClick={() => setBsPlant("Company")}>Whole company</button>
+                  {plants.filter((p) => !p.is_cost_centre).map((p) => {
+                    const n = bsMonthRows.filter((r) => r.plant === p.code).length;
+                    return (
+                      <button key={p.code} style={{ ...chipBtn(bsPlant === p.code), opacity: n > 0 ? 1 : 0.55 }} onClick={() => setBsPlant(p.code)} title={n > 0 ? `${n} month${n > 1 ? "s" : ""}` : "No balance sheet uploaded for this plant yet"}>
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <div style={{ display: "flex", gap: "5px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px" }}>
                   <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginRight: "2px" }}>Month:</span>
+                  {bsMonths.length === 0 && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>No balance sheet uploaded yet for {bsPlant === "Company" ? "the whole company" : plantLabel(bsPlant)} — use &quot;Upload period&quot; and pick it under &quot;Statement for&quot;.</span>}
                   {bsMonths.map((m) => (
                     <button
                       key={m}

@@ -3,7 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { parseUnzePnl } from "../../../lib/excel-parsers/pnl-unze-parser";
 import { UTPL_COMPANY_ID } from "../../../lib/constants";
 import { requireAuth } from "../../../lib/api-auth";
-import { financeCompanies, type UserCtx, type PermOverrides } from "../../../lib/permissions";
+import { canViewUnzePnl, canEditFinance, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 import { sendRestatementAlert } from "../../../lib/pnl-restatement-alert";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -34,8 +34,9 @@ export async function POST(request: NextRequest) {
   }
   const ctx: UserCtx = { email: auth.email, role: member?.role ?? null, department: member?.department ?? null, company: member?.company ?? null, overrides };
 
-  const scope = financeCompanies(ctx);
-  if (scope !== "both" && scope !== "UTPL") {
+  // Same gate as the page (Khuram, 18/10/2026: Khuram, Kamran, Sania,
+  // Shakeel) plus the edit-finance right.
+  if (!canViewUnzePnl(ctx) || !canEditFinance(ctx)) {
     return Response.json({ error: "Not authorised to upload Unze Trading's P&L." }, { status: 403 });
   }
 
@@ -101,6 +102,20 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // What was stored for this month before this upload — so the page can say
+  // "data fixed" (a rejected month now accepted) or "figures replaced".
+  const { data: prevUpload } = await supabase
+    .from("pnl_uploads")
+    .select("status, uploaded_at")
+    .eq("company_id", UTPL_COMPANY_ID)
+    .eq("month", parsed.month)
+    .in("status", ["accepted", "rejected"])
+    .order("uploaded_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const previousStatus: "accepted" | "rejected" | null = prevUpload?.status === "accepted" ? "accepted" : prevUpload?.status === "rejected" ? "rejected" : null;
+  const previousUploadedAt: string | null = prevUpload?.uploaded_at ?? null;
+
   // pnl_uploads has UNIQUE (company_id, month, status). To replace an
   // accepted month WITHOUT deleting the old data first (a mid-write failure
   // must never destroy an accepted month), the new upload is inserted as
@@ -159,6 +174,8 @@ export async function POST(request: NextRequest) {
       month: parsed.month,
       checks: parsed.checks,
       auditIssues: parsed.auditIssues,
+      previous_status: previousStatus,
+      previous_uploaded_at: previousUploadedAt,
       summary: `${checksFailed.length} of ${parsed.checks.length} checks failed.`,
     }, { status: 422 });
   }
@@ -233,6 +250,8 @@ export async function POST(request: NextRequest) {
     checks: parsed.checks,
     auditIssues: parsed.auditIssues,
     restated: restated.length > 0 ? restated : undefined,
+    previous_status: previousStatus,
+    previous_uploaded_at: previousUploadedAt,
     lineItems: parsed.lineItems.length,
     ledgerLines: parsed.ledgerLines.length,
     summary: (parsed.auditIssues.length > 0

@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { UTPL_COMPANY_ID } from "../../../lib/constants";
-import { financeCompanies, type UserCtx, type PermOverrides } from "../../../lib/permissions";
+import { canViewUnzePnl, canEditFinance, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const BALANCE_TOLERANCE_PCT = 0.01; // 0.01% — hard check
@@ -479,16 +479,22 @@ export async function POST(request: NextRequest) {
     overrides = (perms as PermOverrides) || null;
   }
   const ctx: UserCtx = { email: auth.email, role: member?.role ?? null, department: member?.department ?? null, company: member?.company ?? null, overrides };
-  const scope = financeCompanies(ctx);
-  if (scope !== "both" && scope !== "UTPL") {
+  // Same gate as the page (Khuram, 18/10/2026: Khuram, Kamran, Sania,
+  // Shakeel) plus the edit-finance right.
+  if (!canViewUnzePnl(ctx) || !canEditFinance(ctx)) {
     return NextResponse.json({ error: "Not authorised to upload Unze Trading's Balance Sheet." }, { status: 403 });
   }
 
   // Parse FormData
+  // Balance sheets are held per plant (migration 279): "Company" is the
+  // consolidated statement; "SMART METERS" etc. are plant-level sheets.
   let file: File | null = null;
+  let plant = "Company";
   try {
     const formData = await request.formData();
     file = formData.get("file") as File | null;
+    const p = String(formData.get("plant") || "Company").trim();
+    plant = p === "" ? "Company" : p.slice(0, 40);
   } catch {
     return NextResponse.json({ error: "Could not read the uploaded file." }, { status: 400 });
   }
@@ -534,6 +540,7 @@ export async function POST(request: NextRequest) {
     .from("balance_sheet")
     .select("ppe, long_term_investment, receivables, stocks, advances_prepayments, advance_taxation, cash_bank, retained_earnings")
     .eq("company_id", UTPL_COMPANY_ID)
+    .eq("plant", plant)
     .lt("month", month)
     .order("month", { ascending: false })
     .limit(1);
@@ -560,6 +567,7 @@ export async function POST(request: NextRequest) {
     .select("ppe, long_term_investment, receivables, stocks, advances_prepayments, advance_taxation, cash_bank, owner_capital, revenue_reserves, retained_earnings, hbl_stf, loan_family, mazhar_sb_ac, loan_associates, lease_liabilities, accrued_liabilities, payable_controls, taxation")
     .eq("company_id", UTPL_COMPANY_ID)
     .eq("month", month)
+    .eq("plant", plant)
     .limit(1);
   const existing = existingRows?.[0] as Record<string, number | null> | undefined;
   if (existing && accepted) {
@@ -611,13 +619,14 @@ export async function POST(request: NextRequest) {
     {
       company_id: UTPL_COMPANY_ID,
       month,
+      plant,
       ...lineItems,
       uploaded_by: auth.email,
       checks_passed: checks.filter((c) => c.passed).length,
       checks_failed: checks.filter((c) => !c.passed).length,
       audit_warnings: warnings,
     },
-    { onConflict: "company_id,month" }
+    { onConflict: "company_id,month,plant" }
   );
 
   if (dbErr) {
@@ -627,8 +636,8 @@ export async function POST(request: NextRequest) {
     const missingCol = dbErr.code === "42703" || /column .* does not exist/i.test(dbErr.message || "");
     if (!missingCol) return NextResponse.json({ error: dbErr.message }, { status: 500 });
     const { error: dbErr2 } = await supabase.from("balance_sheet").upsert(
-      { company_id: UTPL_COMPANY_ID, month, ...lineItems, uploaded_by: auth.email },
-      { onConflict: "company_id,month" }
+      { company_id: UTPL_COMPANY_ID, month, plant, ...lineItems, uploaded_by: auth.email },
+      { onConflict: "company_id,month,plant" }
     );
     if (dbErr2) return NextResponse.json({ error: dbErr2.message }, { status: 500 });
     warnings.push("Audit columns (checks_passed / audit_warnings) are missing from the balance_sheet table — figures saved, audit trail not stored. Run migration 183.");
@@ -641,12 +650,13 @@ export async function POST(request: NextRequest) {
       .from("balance_sheet_notes")
       .delete()
       .eq("company_id", UTPL_COMPANY_ID)
-      .eq("month", month);
+      .eq("month", month)
+      .eq("plant", plant);
     if (delErr) {
       warnings.push(`Note breakdowns could not be refreshed (${delErr.message}) — the note panel may show stale data for this month.`);
     } else {
       const { error: notesErr } = await supabase.from("balance_sheet_notes").insert(
-        noteLines.map((l) => ({ company_id: UTPL_COMPANY_ID, month, ...l }))
+        noteLines.map((l) => ({ company_id: UTPL_COMPANY_ID, month, plant, ...l }))
       );
       if (notesErr) {
         warnings.push(`Note breakdowns failed to save (${notesErr.message}) — the note panel will show no detail for this month until a successful re-upload.`);
@@ -661,6 +671,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     accepted: true,
     month,
+    plant,
     sheetUsed,
     checks,
     auditWarnings: warnings,

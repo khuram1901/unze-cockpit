@@ -14,7 +14,8 @@ import {
   canManageMembers, canViewAuditLog, canImportExport,
   canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry, canAccessVisitorEntry, canAccessBanking, canAccessAdminPage,
   canViewPADashboard, canViewInvestments,
-  canViewStock, canViewGuarantees, canViewIfplPnl, canViewRestaurantsPnl, canViewGroupHR, canAccessFolderit,
+  canViewStock, canViewGuarantees, canViewIfplPnl,
+  canViewUnzePnl, canViewRestaurantsPnl, canViewGroupHR, canAccessFolderit,
   canViewTaxAccounts, canViewTeamPerformance,
   isPrivileged, isAdminTier, isMainAdmin,
   type UserCtx, type PermOverrides, type WidgetOverrides,
@@ -25,7 +26,7 @@ type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
   | "audit_log" | "import_export" | "daily_entry"
   | "pa_dashboard" | "investments" | "system_backups" | "stock" | "guarantees"
-  | "ifpl_pnl" | "restaurants_pnl" | "admin_ops" | "admin_entry" | "visitor_entry" | "admin_page" | "folderit" | "banking" | "group_hr"
+  | "ifpl_pnl" | "unze_pnl" | "restaurants_pnl" | "admin_ops" | "admin_entry" | "visitor_entry" | "admin_page" | "folderit" | "banking" | "group_hr"
   | "dept_tax_accounts"
   | "team_performance";
 
@@ -51,6 +52,7 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   visitor_entry: canAccessVisitorEntry,
   stock: canViewStock,
   ifpl_pnl: canViewIfplPnl,
+  unze_pnl: canViewUnzePnl,
   restaurants_pnl: canViewRestaurantsPnl,
   group_hr: canViewGroupHR,
   folderit: canAccessFolderit,
