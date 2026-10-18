@@ -23,8 +23,9 @@ import { requireAuth } from "../../../lib/api-auth";
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
-async function isAdmin(_email: string): Promise<boolean> {
-  const sb = createServiceClient();
+async function isAdmin(_email: string, request?: NextRequest): Promise<boolean> {
+  // Must use the user's JWT so auth.email() works inside is_generator_admin()
+  const sb = request ? createUserClient(request) : createServiceClient();
   const { data } = await sb.rpc("is_generator_admin");
   return !!data;
 }
@@ -193,7 +194,7 @@ export async function POST(request: NextRequest) {
 
   // ── upsert generator master ───────────────────────────────────────────────
   if (type === "upsert_generator") {
-    const admin = await isAdmin(auth.email);
+    const admin = await isAdmin(auth.email, request);
     if (!admin) return Response.json({ error: "Admin access required" }, { status: 403 });
     const { id, location_id, kva, model, label, is_active } = body;
     if (!location_id || !kva || !model) {
@@ -213,7 +214,7 @@ export async function POST(request: NextRequest) {
 
   // ── update thresholds ─────────────────────────────────────────────────────
   if (type === "upsert_thresholds") {
-    const admin = await isAdmin(auth.email);
+    const admin = await isAdmin(auth.email, request);
     if (!admin) return Response.json({ error: "Admin access required" }, { status: 403 });
     const { unusual_pct, service_hours, days_amber, days_red } = body;
     const { error } = await sb.rpc("update_generator_thresholds", {
@@ -235,7 +236,7 @@ export async function PATCH(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
-  const admin = await isAdmin(auth.email);
+  const admin = await isAdmin(auth.email, request);
   if (!admin) return Response.json({ error: "Admin access required" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
@@ -291,7 +292,7 @@ export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
-  const admin = await isAdmin(auth.email);
+  const admin = await isAdmin(auth.email, request);
   if (!admin) return Response.json({ error: "Admin access required" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
