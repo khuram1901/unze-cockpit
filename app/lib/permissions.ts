@@ -682,6 +682,8 @@ export function canAccessAdminPage(u: UserCtx): boolean {
 export function canAccessAdminEntry(u: UserCtx): boolean {
   const o = ov(u, "can_access_admin_entry");
   if (o !== null) return o;
+  // Admin tier always has entry access
+  if (isAdminTier(u)) return true;
   return false;
 }
 
