@@ -1003,38 +1003,47 @@ export default function AdminDataPage() {
 
         {/* Generator status table */}
         <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", marginBottom: "20px", overflowX: "auto" }}>
-          <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>🔋 Generator Status</p>
-          {genSummary.length === 0 ? (
-            <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No generators found.</p>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  {["Generator","Location","Last Refuel","Last Service","Days Since Refuel","Days Since Service","Total Litres","Avg L/hr"].map(h =>
-                    <th key={h} style={TH}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {genSummary.map(r => (
-                  <tr key={r.generator_id}>
-                    <td style={TD}><strong>{r.generator_label}</strong> <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{r.kva}KVA</span></td>
-                    <td style={TD}>{r.location_name}</td>
-                    <td style={TD}>{r.last_refuel_date  ? formatDateUK(r.last_refuel_date)  : "—"}</td>
-                    <td style={TD}>{r.last_service_date ? formatDateUK(r.last_service_date) : "—"}</td>
-                    <td style={TD}>{daysBadge(r.days_since_refuel,  7, 14)  ?? "—"}</td>
-                    <td style={TD}>{daysBadge(r.days_since_service, 7, 14) ?? "—"}</td>
-                    <td style={TD}>{Math.round(r.total_litres).toLocaleString("en-PK")} L</td>
-                    <td style={TD}>{NUM(r.avg_litres_per_hour, 2)} L/hr</td>
+          <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>
+            🔋 Generator Status{selectedLocName ? ` — ${selectedLocName}` : ""}
+          </p>
+          {(() => {
+            const rows = genLocFilter
+              ? genSummary.filter(r => r.location_name === selectedLocName)
+              : genSummary;
+            return rows.length === 0 ? (
+              <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No generators found.</p>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Generator","Location","Last Refuel","Last Service","Days Since Refuel","Days Since Service","Total Litres","Avg L/hr"].map(h =>
+                      <th key={h} style={TH}>{h}</th>)}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.generator_id}>
+                      <td style={TD}><strong>{r.generator_label}</strong> <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{r.kva}KVA</span></td>
+                      <td style={TD}>{r.location_name}</td>
+                      <td style={TD}>{r.last_refuel_date  ? formatDateUK(r.last_refuel_date)  : "—"}</td>
+                      <td style={TD}>{r.last_service_date ? formatDateUK(r.last_service_date) : "—"}</td>
+                      <td style={TD}>{daysBadge(r.days_since_refuel,  7, 14)  ?? "—"}</td>
+                      <td style={TD}>{daysBadge(r.days_since_service, 7, 14) ?? "—"}</td>
+                      <td style={TD}>{Math.round(r.total_litres).toLocaleString("en-PK")} L</td>
+                      <td style={TD}>{NUM(r.avg_litres_per_hour, 2)} L/hr</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
 
         {/* Fuel log table */}
         <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", overflowX: "auto" }}>
-          <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>⛽ Diesel Refuel Log ({genFuelRows.length} entries)</p>
+          <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>
+            ⛽ Diesel Refuel Log{selectedLocName ? ` — ${selectedLocName}` : ""} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>({genFuelRows.length} entries)</span>
+          </p>
           {genFuelRows.length === 0 ? (
             <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No fuel entries for this period.</p>
           ) : (
@@ -1089,7 +1098,9 @@ export default function AdminDataPage() {
         {summaryCards}
         {filterBar}
         <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", overflowX: "auto" }}>
-          <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>🔧 Generator Maintenance Log ({genMaintRows.length} entries)</p>
+          <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>
+            🔧 Maintenance Log{selectedLocName ? ` — ${selectedLocName}` : ""} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>({genMaintRows.length} entries)</span>
+          </p>
           {genMaintRows.length === 0 ? (
             <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No maintenance entries for this period.</p>
           ) : (
