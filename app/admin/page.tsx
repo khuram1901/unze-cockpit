@@ -942,28 +942,54 @@ export default function AdminDataPage() {
     );
 
     const filterBar = (
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px", alignItems: "center" }}>
-        <select value={genLocFilter} onChange={e => { setGenLocFilter(e.target.value); setGenGenFilter(""); }}
-          style={{ padding: "7px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", minWidth: "140px" }}>
-          <option value="">All Locations</option>
-          {allLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-        {locGens.length > 1 && (
-          <select value={genGenFilter} onChange={e => setGenGenFilter(e.target.value)}
-            style={{ padding: "7px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", minWidth: "140px" }}>
-            <option value="">All Generators</option>
-            {locGens.map(g => <option key={g.generator_id} value={g.generator_id}>{g.label || `${g.kva} kVA – ${g.model}`}</option>)}
-          </select>
-        )}
-        <DateInput value={genDateFrom} onChange={e => setGenDateFrom(e.target.value)} />
-        <span style={{ color: COLOURS.SLATE, fontSize: "12px" }}>to</span>
-        <DateInput value={genDateTo}   onChange={e => setGenDateTo(e.target.value)} />
-        <input type="text" placeholder="Search…" value={genSearch} onChange={e => setGenSearch(e.target.value)}
-          style={{ padding: "7px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", minWidth: "160px" }} />
-        <button onClick={loadGeneratorData}
-          style={{ padding: "7px 14px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-          {loadingGen ? "Loading…" : "Apply"}
-        </button>
+      <div style={{ background: "#FFFFFF", border: "1px solid #EEF0F3", borderRadius: "12px", padding: "16px", marginBottom: "20px" }}>
+        {/* Row 1: Location (prominent) + Generator sub-filter */}
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "10px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748B" }}>📍 Location</span>
+            <select value={genLocFilter} onChange={e => { setGenLocFilter(e.target.value); setGenGenFilter(""); }}
+              style={{ padding: "8px 12px", border: `2px solid ${genLocFilter ? "#0F1720" : "#EEF0F3"}`, borderRadius: "8px", fontSize: "13px", fontWeight: genLocFilter ? 600 : 400, minWidth: "180px", background: "white", color: "#0F1720" }}>
+              <option value="">All Locations</option>
+              {allLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </div>
+          {locGens.length > 1 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748B" }}>⚡ Generator</span>
+              <select value={genGenFilter} onChange={e => setGenGenFilter(e.target.value)}
+                style={{ padding: "8px 12px", border: "1px solid #EEF0F3", borderRadius: "8px", fontSize: "13px", minWidth: "160px", background: "white" }}>
+                <option value="">All Generators</option>
+                {locGens.map(g => <option key={g.generator_id} value={g.generator_id}>{g.label || `${g.kva} kVA – ${g.model}`}</option>)}
+              </select>
+            </div>
+          )}
+          {genLocFilter && (
+            <button onClick={() => { setGenLocFilter(""); setGenGenFilter(""); }}
+              style={{ alignSelf: "flex-end", padding: "8px 12px", border: "1px solid #EEF0F3", borderRadius: "8px", fontSize: "12px", cursor: "pointer", background: "white", color: "#64748B" }}>
+              ✕ Clear
+            </button>
+          )}
+        </div>
+        {/* Row 2: Date range + search + apply */}
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748B" }}>From</span>
+            <DateInput value={genDateFrom} onChange={e => setGenDateFrom(e.target.value)} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748B" }}>To</span>
+            <DateInput value={genDateTo} onChange={e => setGenDateTo(e.target.value)} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748B" }}>Search</span>
+            <input type="text" placeholder="Search…" value={genSearch} onChange={e => setGenSearch(e.target.value)}
+              style={{ padding: "7px 10px", border: "1px solid #EEF0F3", borderRadius: "8px", fontSize: "13px", minWidth: "160px" }} />
+          </div>
+          <button onClick={loadGeneratorData}
+            style={{ padding: "8px 18px", backgroundColor: "#0F1720", color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+            {loadingGen ? "Loading…" : "Apply"}
+          </button>
+        </div>
       </div>
     );
 
