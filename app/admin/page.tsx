@@ -1060,7 +1060,7 @@ export default function AdminDataPage() {
                     <td style={TD}>{NUM(r.cost_per_hour, 0) !== "—" ? PKR(r.cost_per_hour) : "—"}</td>
                     <td style={{ ...TD, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis" }}>{r.remarks ?? "—"}</td>
                     <td style={TD}>
-                      {isAdminTier(ctx) && (
+                      {ctx && isAdminTier(ctx) && (
                         <button onClick={() => setEditingGenFuel(r)}
                           style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
                           Edit
@@ -1118,7 +1118,7 @@ export default function AdminDataPage() {
                     <td style={{ ...TD, fontWeight: 700 }}>{PKR(r.total_cost)}</td>
                     <td style={{ ...TD, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis" }}>{r.remarks ?? "—"}</td>
                     <td style={TD}>
-                      {isAdminTier(ctx) && (
+                      {ctx && isAdminTier(ctx) && (
                         <button onClick={() => setEditingGenMaint(r)}
                           style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
                           Edit
@@ -1139,7 +1139,7 @@ export default function AdminDataPage() {
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
           <p style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>Generator Master List</p>
-          {isAdminTier(ctx) && (
+          {ctx && isAdminTier(ctx) && (
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => { setShowGenThresholds(v => !v); }}
                 style={{ padding: "7px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
@@ -1154,7 +1154,7 @@ export default function AdminDataPage() {
         </div>
 
         {/* Thresholds panel */}
-        {showGenThresholds && isAdminTier(ctx) && (
+        {showGenThresholds && ctx && isAdminTier(ctx) && (
           <div style={{ background: "#FFFBEB", border: `1px solid #FDE68A`, borderRadius: "12px", padding: "20px", marginBottom: "20px" }}>
             <p style={{ margin: "0 0 14px", fontSize: "13px", fontWeight: 700, color: COLOURS.AMBER }}>⚙ Alert Thresholds</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "12px" }}>
@@ -1223,7 +1223,7 @@ export default function AdminDataPage() {
                       </span>
                     </td>
                     <td style={TD}>
-                      {isAdminTier(ctx) && (
+                      {ctx && isAdminTier(ctx) && (
                         <button onClick={() => {
                           setEditingGenMaster(g);
                           setGenMasterForm({ location_id: g.location_id, kva: String(g.kva), model: g.model, label: g.label ?? "", is_active: g.is_active });
