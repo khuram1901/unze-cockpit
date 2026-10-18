@@ -1727,7 +1727,6 @@ export default function AdminDataPage() {
                   {savingGenFuel ? "Saving…" : "Save Changes"}
                 </button>
                 <button disabled={savingGenFuel} onClick={async () => {
-                  if (!window.confirm("Soft-delete this fuel entry?")) return;
                   setSavingGenFuel(true);
                   try {
                     const res = await authFetch(`/api/admin/generators?type=fuel&id=${editingGenFuel.id}&reason=Deleted by admin`, { method: "DELETE" });
@@ -1788,7 +1787,6 @@ export default function AdminDataPage() {
                   {savingGenMaint ? "Saving…" : "Save Changes"}
                 </button>
                 <button disabled={savingGenMaint} onClick={async () => {
-                  if (!window.confirm("Soft-delete this maintenance entry?")) return;
                   setSavingGenMaint(true);
                   try {
                     const res = await authFetch(`/api/admin/generators?type=maintenance&id=${editingGenMaint.id}&reason=Deleted by admin`, { method: "DELETE" });
