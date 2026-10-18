@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
       generator_id, service_date,
       engine_oil, oil_filter, fuel_filter, air_filter,
       radiator_service, periodic_maintenance, other_mechanical, others,
+      vendor, previous_hours, service_hours,
       remarks,
     } = body;
     if (!generator_id || !service_date) {
@@ -145,17 +146,20 @@ export async function POST(request: NextRequest) {
     }
     // RPC uses auth.email() internally — do NOT pass p_entered_by
     const { error } = await sb.rpc("insert_generator_maintenance", {
-      p_generator_id:         generator_id,
-      p_service_date:         service_date,
-      p_engine_oil:           parseFloat(engine_oil || "0"),
-      p_oil_filter:           parseFloat(oil_filter || "0"),
-      p_fuel_filter:          parseFloat(fuel_filter || "0"),
-      p_air_filter:           parseFloat(air_filter || "0"),
-      p_radiator_service:     parseFloat(radiator_service || "0"),
-      p_periodic_maintenance: parseFloat(periodic_maintenance || "0"),
-      p_other_mechanical:     parseFloat(other_mechanical || "0"),
-      p_others:               parseFloat(others || "0"),
-      p_remarks:              remarks || null,
+      p_generator_id:          generator_id,
+      p_maintenance_date:      service_date,
+      p_engine_oil:            parseFloat(engine_oil || "0"),
+      p_oil_filter:            parseFloat(oil_filter || "0"),
+      p_fuel_filter:           parseFloat(fuel_filter || "0"),
+      p_air_filter:            parseFloat(air_filter || "0"),
+      p_radiator_service:      parseFloat(radiator_service || "0"),
+      p_periodic_maintenance:  parseFloat(periodic_maintenance || "0"),
+      p_other_mechanical_work: parseFloat(other_mechanical || "0"),
+      p_others:                parseFloat(others || "0"),
+      p_vendor:                vendor || null,
+      p_previous_hours:        previous_hours ? parseFloat(previous_hours) : null,
+      p_service_hours:         service_hours  ? parseFloat(service_hours)  : null,
+      p_remarks:               remarks || null,
     });
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ ok: true });

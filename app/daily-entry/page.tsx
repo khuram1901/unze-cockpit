@@ -86,7 +86,10 @@ export default function DailyEntryPage() {
   // ── Generator meta & forms ─────────────────────────────────────────────
   const [genMeta, setGenMeta] = useState<GenLocation[]>([]);
   const [loadingGenMeta, setLoadingGenMeta] = useState(false);
-  const [genLastRefuel, setGenLastRefuel] = useState<{ previous_hours: number | null; present_hours: number | null } | null>(null);
+  type LastRefuelFull = { previous_hours: number | null; present_hours: number | null; refuel_date: string | null; is_seed: boolean };
+  const [genLastRefuel, setGenLastRefuel] = useState<LastRefuelFull | null>(null);
+  const [genFuelPrevEditable, setGenFuelPrevEditable] = useState(true);
+  const [lastRefuelData, setLastRefuelData] = useState<LastRefuelFull | null>(null);
   const [genFuel, setGenFuel] = useState({
     generator_id: "", refuel_date: today,
     previous_hours: "", present_hours: "",
@@ -94,10 +97,15 @@ export default function DailyEntryPage() {
   });
   const [submittingGenFuel, setSubmittingGenFuel] = useState(false);
   const [genMaint, setGenMaint] = useState({
-    generator_id: "", service_date: today,
+    location_id: "", generator_id: "", service_date: today,
     engine_oil: "", oil_filter: "", fuel_filter: "", air_filter: "",
     radiator_service: "", periodic_maintenance: "", other_mechanical: "", others: "",
+    vendor: "", previous_hours: "", service_hours: "",
     remarks: "",
+  });
+  const [genMaintTicked, setGenMaintTicked] = useState<Record<string, boolean>>({
+    engine_oil: false, oil_filter: false, fuel_filter: false, air_filter: false,
+    radiator_service: false, periodic_maintenance: false, other_mechanical: false, others: false,
   });
   const [submittingGenMaint, setSubmittingGenMaint] = useState(false);
   const isMobile = useMobile();
@@ -312,9 +320,27 @@ export default function DailyEntryPage() {
   // Auto-fetch last refuel when generator changes
   useEffect(() => {
     if (!genFuel.generator_id) return;
+    setLastRefuelData(null);
     authFetch(`/api/admin/generators?type=last_refuel&generator_id=${genFuel.generator_id}`)
       .then((r) => r.json())
-      .then((json) => setGenLastRefuel(json.data ?? null));
+      .then((json) => {
+        const d = json.data as LastRefuelFull | null;
+        if (d) {
+          setGenFuel((g) => ({ ...g, previous_hours: d.previous_hours != null ? String(d.previous_hours) : "" }));
+          setGenFuelPrevEditable(!!d.is_seed);
+          if (!d.is_seed) {
+            setLastRefuelData({ previous_hours: d.previous_hours ?? null, present_hours: d.present_hours ?? null, refuel_date: d.refuel_date ?? null, is_seed: false });
+          } else {
+            setLastRefuelData(null);
+          }
+          setGenLastRefuel(d);
+        } else {
+          setGenFuel((g) => ({ ...g, previous_hours: "" }));
+          setGenFuelPrevEditable(true);
+          setLastRefuelData(null);
+          setGenLastRefuel(null);
+        }
+      });
   }, [genFuel.generator_id]);
 
   async function submitLegalUpdate() {
@@ -398,29 +424,60 @@ export default function DailyEntryPage() {
     if (!res.ok) { showToast(json.error || "Failed to save fuel entry.", "error"); return; }
     showToast("Generator fuel entry saved.", "success");
     setGenFuel((f) => ({ ...f, previous_hours: "", present_hours: "", qty_litres: "", remarks: "" }));
-    // Refresh last refuel hint
+    // Refresh last refuel hint and previous hours for next entry
     authFetch(`/api/admin/generators?type=last_refuel&generator_id=${generator_id}`)
       .then((r) => r.json())
-      .then((json) => setGenLastRefuel(json.data ?? null));
+      .then((j) => {
+        const d = j.data as LastRefuelFull | null;
+        if (d) {
+          setGenFuel((g) => ({ ...g, previous_hours: d.previous_hours != null ? String(d.previous_hours) : "" }));
+          setGenFuelPrevEditable(false);
+          setLastRefuelData({ previous_hours: d.previous_hours ?? null, present_hours: d.present_hours ?? null, refuel_date: d.refuel_date ?? null, is_seed: false });
+          setGenLastRefuel(d);
+        }
+      });
   }
 
   async function submitGenMaint(e: React.FormEvent) {
     e.preventDefault();
-    const { generator_id, service_date, engine_oil, oil_filter, fuel_filter, air_filter, radiator_service, periodic_maintenance, other_mechanical, others, remarks } = genMaint;
+    const { generator_id, service_date, vendor, previous_hours, service_hours, remarks } = genMaint;
     if (!generator_id || !service_date) {
       showToast("Please select a generator and service date.", "error"); return;
+    }
+    const anyTicked = Object.values(genMaintTicked).some(Boolean);
+    if (!anyTicked) {
+      showToast("Please tick at least one service item.", "error"); return;
     }
     setSubmittingGenMaint(true);
     const res = await authFetch("/api/admin/generators?type=maintenance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ generator_id, service_date, engine_oil, oil_filter, fuel_filter, air_filter, radiator_service, periodic_maintenance, other_mechanical, others, remarks }),
+      body: JSON.stringify({
+        generator_id, service_date, vendor,
+        previous_hours: previous_hours || null,
+        service_hours: service_hours || null,
+        engine_oil:           genMaintTicked.engine_oil          ? genMaint.engine_oil          : "0",
+        oil_filter:           genMaintTicked.oil_filter           ? genMaint.oil_filter           : "0",
+        fuel_filter:          genMaintTicked.fuel_filter          ? genMaint.fuel_filter          : "0",
+        air_filter:           genMaintTicked.air_filter           ? genMaint.air_filter           : "0",
+        radiator_service:     genMaintTicked.radiator_service     ? genMaint.radiator_service     : "0",
+        periodic_maintenance: genMaintTicked.periodic_maintenance ? genMaint.periodic_maintenance : "0",
+        other_mechanical:     genMaintTicked.other_mechanical     ? genMaint.other_mechanical     : "0",
+        others:               genMaintTicked.others               ? genMaint.others               : "0",
+        remarks,
+      }),
     });
     const json = await res.json();
     setSubmittingGenMaint(false);
     if (!res.ok) { showToast(json.error || "Failed to save maintenance entry.", "error"); return; }
-    showToast("Generator maintenance entry saved.", "success");
-    setGenMaint((m) => ({ ...m, engine_oil: "", oil_filter: "", fuel_filter: "", air_filter: "", radiator_service: "", periodic_maintenance: "", other_mechanical: "", others: "", remarks: "" }));
+    showToast("Generator service record saved.", "success");
+    setGenMaint((m) => ({
+      ...m,
+      engine_oil: "", oil_filter: "", fuel_filter: "", air_filter: "",
+      radiator_service: "", periodic_maintenance: "", other_mechanical: "", others: "",
+      vendor: "", previous_hours: "", service_hours: "", remarks: "",
+    }));
+    setGenMaintTicked({ engine_oil: false, oil_filter: false, fuel_filter: false, air_filter: false, radiator_service: false, periodic_maintenance: false, other_mechanical: false, others: false });
   }
 
   function compressImage(file: File): Promise<File> {
@@ -1510,11 +1567,12 @@ export default function DailyEntryPage() {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginTop: "12px" }}>
-                <Field label="Previous Hours">
-                  <input type="number" step="0.1" min="0" placeholder={genLastRefuel?.present_hours != null ? `Last: ${genLastRefuel.present_hours}` : "e.g. 1240.5"}
+                <Field label={genFuelPrevEditable ? "Previous Hours (enter once)" : "Previous Hours"}>
+                  <input type="number" step="0.1" min="0" placeholder="e.g. 1240.5"
                     value={genFuel.previous_hours}
-                    onChange={(e) => setGenFuel({ ...genFuel, previous_hours: e.target.value })}
-                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                    readOnly={!genFuelPrevEditable}
+                    onChange={(e) => { if (genFuelPrevEditable) setGenFuel({ ...genFuel, previous_hours: e.target.value }); }}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, backgroundColor: genFuelPrevEditable ? undefined : "#F1F5F9", color: genFuelPrevEditable ? undefined : COLOURS.SLATE, cursor: genFuelPrevEditable ? undefined : "not-allowed" }} />
                 </Field>
                 <Field label="Present Hours *">
                   <input type="number" step="0.1" min="0" placeholder="e.g. 1268.0"
@@ -1523,6 +1581,26 @@ export default function DailyEntryPage() {
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
                 </Field>
               </div>
+
+              {/* Last recorded readings */}
+              {lastRefuelData && !lastRefuelData.is_seed && (
+                <div style={{ margin: "10px 0", padding: "10px 14px", backgroundColor: "#F8FAFC", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                  <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "4px" }}>
+                    Last refuel{lastRefuelData.refuel_date ? ` — ${lastRefuelData.refuel_date.split("-").reverse().join("/")}` : ""}
+                  </div>
+                  <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>
+                    Meter: <strong>{lastRefuelData.previous_hours ?? "—"} hrs</strong>
+                    {lastRefuelData.present_hours != null && (
+                      <> → <strong>{lastRefuelData.present_hours} hrs</strong></>
+                    )}
+                    {lastRefuelData.present_hours != null && lastRefuelData.previous_hours != null && (
+                      <span style={{ color: COLOURS.SLATE, marginLeft: "8px", fontSize: "12px" }}>
+                        ({(lastRefuelData.present_hours - lastRefuelData.previous_hours).toFixed(1)} hrs run)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginTop: "12px" }}>
                 <Field label="Rate (PKR/L) *">
@@ -1599,35 +1677,68 @@ export default function DailyEntryPage() {
                 </Field>
               </div>
 
-              {/* Cost fields — 2 per row on mobile, 3 on desktop */}
-              <div style={{ marginTop: "16px", marginBottom: "4px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>Service costs (PKR) — leave 0 if not done</span>
+              {/* Hours + Vendor row */}
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginTop: "12px" }}>
+                <Field label="Previous Hours">
+                  <input type="number" step="0.1" min="0" placeholder="e.g. 1240.5"
+                    value={genMaint.previous_hours}
+                    onChange={(e) => setGenMaint((m) => ({ ...m, previous_hours: e.target.value }))}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                </Field>
+                <Field label="Service Hours (meter at service)">
+                  <input type="number" step="0.1" min="0" placeholder="e.g. 1312.0"
+                    value={genMaint.service_hours}
+                    onChange={(e) => setGenMaint((m) => ({ ...m, service_hours: e.target.value }))}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                </Field>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: "10px", marginTop: "8px" }}>
-                {[
-                  { key: "engine_oil",           label: "Engine Oil" },
-                  { key: "oil_filter",            label: "Oil Filter" },
-                  { key: "fuel_filter",           label: "Fuel Filter" },
-                  { key: "air_filter",            label: "Air Filter" },
-                  { key: "radiator_service",      label: "Radiator" },
-                  { key: "periodic_maintenance",  label: "Periodic Maint." },
-                  { key: "other_mechanical",      label: "Other Mechanical" },
-                  { key: "others",                label: "Others" },
-                ].map(({ key, label }) => (
-                  <div key={key}>
-                    <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>{label}</label>
-                    <input type="number" step="0.01" min="0" placeholder="0"
-                      value={(genMaint as Record<string, string>)[key]}
-                      onChange={(e) => setGenMaint((m) => ({ ...m, [key]: e.target.value }))}
-                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+
+              <div style={{ marginTop: "12px" }}>
+                <Field label="Vendor / Workshop">
+                  <input type="text" placeholder="e.g. Ali Engine Works"
+                    value={genMaint.vendor}
+                    onChange={(e) => setGenMaint((m) => ({ ...m, vendor: e.target.value }))}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                </Field>
+              </div>
+
+              {/* Tick-box service items */}
+              <div style={{ marginTop: "16px", marginBottom: "8px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>Items serviced — tick each and enter cost (PKR)</span>
+              </div>
+              {[
+                { key: "engine_oil",           label: "Engine Oil" },
+                { key: "oil_filter",            label: "Oil Filter" },
+                { key: "fuel_filter",           label: "Fuel Filter" },
+                { key: "air_filter",            label: "Air Filter" },
+                { key: "radiator_service",      label: "Radiator Service" },
+                { key: "periodic_maintenance",  label: "Periodic Maintenance" },
+                { key: "other_mechanical",      label: "Other Mechanical" },
+                { key: "others",                label: "Others" },
+              ].map(({ key, label }) => {
+                const ticked = genMaintTicked[key];
+                return (
+                  <div key={key} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", marginBottom: "6px", borderRadius: "6px", border: `1px solid ${ticked ? COLOURS.GREEN : COLOURS.HAIRLINE}`, backgroundColor: ticked ? "#F0FDF4" : "transparent", transition: "all 0.15s" }}>
+                    <button type="button"
+                      onClick={() => setGenMaintTicked((t) => ({ ...t, [key]: !t[key] }))}
+                      style={{ width: "22px", height: "22px", borderRadius: "4px", border: `2px solid ${ticked ? COLOURS.GREEN : COLOURS.SLATE}`, backgroundColor: ticked ? COLOURS.GREEN : "transparent", color: "#fff", fontSize: "13px", fontWeight: 700, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {ticked ? "✓" : ""}
+                    </button>
+                    <span style={{ fontSize: "13px", color: COLOURS.NAVY, flex: 1, fontWeight: ticked ? 600 : 400 }}>{label}</span>
+                    {ticked && (
+                      <input type="number" step="0.01" min="0" placeholder="Cost (PKR)"
+                        value={(genMaint as Record<string, string>)[key]}
+                        onChange={(e) => setGenMaint((m) => ({ ...m, [key]: e.target.value }))}
+                        style={{ ...inputStyle, width: "130px", boxSizing: "border-box" as const }} />
+                    )}
                   </div>
-                ))}
-              </div>
+                );
+              })}
 
               {/* Total cost */}
               {(() => {
                 const keys = ["engine_oil","oil_filter","fuel_filter","air_filter","radiator_service","periodic_maintenance","other_mechanical","others"];
-                const total = keys.reduce((sum, k) => sum + (parseFloat((genMaint as Record<string,string>)[k] || "0") || 0), 0);
+                const total = keys.filter(k => genMaintTicked[k]).reduce((sum, k) => sum + (parseFloat((genMaint as Record<string,string>)[k] || "0") || 0), 0);
                 if (total <= 0) return null;
                 return (
                   <div style={{ marginTop: "10px", padding: "10px 14px", backgroundColor: "#F0FDF4", borderRadius: "8px", border: `1px solid ${COLOURS.GREEN}22` }}>
