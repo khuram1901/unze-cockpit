@@ -1560,21 +1560,24 @@ export default function AdminDataPage() {
                     }}>{row.is_inside ? "Inside" : "Out"}</span>
                   </td>
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
-                    <div style={{ display: "flex", gap: "4px" }}>
+                    <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
                       <button
+                        title="Edit record"
                         onClick={() => setEditingVisitor(row)}
-                        style={{ padding: "3px 8px", borderRadius: "5px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", fontSize: "11px" }}
-                      >Edit</button>
+                        style={{ width: "28px", height: "28px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >✏️</button>
                       {row.is_inside && (
                         <button
+                          title="Check out"
                           onClick={() => handleVisitorCheckout(row.id)}
-                          style={{ padding: "3px 8px", borderRadius: "5px", border: `1px solid ${COLOURS.GREEN}`, background: "#D1FAE5", color: COLOURS.GREEN, cursor: "pointer", fontSize: "11px", fontWeight: 600 }}
-                        >✓ Out</button>
+                          style={{ width: "28px", height: "28px", borderRadius: "6px", border: `1px solid ${COLOURS.GREEN}`, background: "#D1FAE5", color: COLOURS.GREEN, cursor: "pointer", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                        >✓</button>
                       )}
                       <button
+                        title="Delete record"
                         onClick={() => handleVisitorDelete(row.id)}
-                        style={{ padding: "3px 6px", borderRadius: "5px", border: `1px solid #FECACA`, background: "#FEF2F2", color: COLOURS.RED, cursor: "pointer", fontSize: "11px" }}
-                      >✕</button>
+                        style={{ width: "28px", height: "28px", borderRadius: "6px", border: `1px solid #FECACA`, background: "#FEF2F2", color: COLOURS.RED, cursor: "pointer", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >🗑️</button>
                     </div>
                   </td>
                 </tr>
