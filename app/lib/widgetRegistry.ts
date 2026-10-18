@@ -52,6 +52,7 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "imperial_pnl.charts", label: "Charts (plan vs actual, profit, growth)", page: "Imperial P&L" },
   { key: "imperial_pnl.branch_league", label: "Branch league", page: "Imperial P&L" },
   { key: "imperial_pnl.expense_watch", label: "Expense watch", page: "Imperial P&L" },
+  { key: "imperial_pnl.like_for_like", label: "Like-for-like growth", page: "Imperial P&L" },
   { key: "imperial_pnl.commentary", label: "CEO commentary (AI)", page: "Imperial P&L" },
   { key: "imperial_pnl.data_strip", label: "Data quality strip", page: "Imperial P&L" },
 

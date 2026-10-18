@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
   }
 
   type Restated = { scope: string; line: string; old_value: number; new_value: number };
-  const results: { month: string; accepted: boolean; summary: string; restated?: Restated[] }[] = [];
+  type PrevStatus = "accepted" | "rejected" | null;
+  const results: { month: string; accepted: boolean; summary: string; restated?: Restated[]; previous_status?: PrevStatus; previous_uploaded_at?: string | null }[] = [];
   const allRestated: RestatementItem[] = [];
   for (const m of months) {
     const checks = m.checks.filter((c) => typeof c?.name === "string");
@@ -93,6 +94,19 @@ export async function POST(request: NextRequest) {
         if (!ok) accepted = false;
       }
     }
+
+    // What was stored for this month before this upload — so the page can
+    // say "data fixed" (a rejected month now accepted) or "figures replaced"
+    // (an accepted month re-uploaded) rather than a bare "Accepted".
+    const { data: prevUpload } = await supabase
+      .from("ifpl_pnl_uploads")
+      .select("status, uploaded_at")
+      .eq("month", m.month)
+      .order("uploaded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const previousStatus: PrevStatus = prevUpload?.status === "accepted" ? "accepted" : prevUpload?.status ? "rejected" : null;
+    const previousUploadedAt: string | null = prevUpload?.uploaded_at ?? null;
 
     // ── Restatement detection (transparency log) ──────────────────
     // Compare stored actual net sales / final profit per branch against the
@@ -223,6 +237,8 @@ export async function POST(request: NextRequest) {
         ? `Rejected by server-side verification: ${serverFailed.map((c) => c.name.replace("Server: ", "")).join("; ")}`.slice(0, 300)
         : String(m.summary || "").slice(0, 300),
       restated: restated.length > 0 ? restated : undefined,
+      previous_status: previousStatus,
+      previous_uploaded_at: previousUploadedAt,
     });
   }
 
