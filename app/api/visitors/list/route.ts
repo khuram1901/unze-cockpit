@@ -32,13 +32,14 @@ export async function GET(request: NextRequest) {
 
   const sp = request.nextUrl.searchParams;
   const { data, error } = await supabase.rpc("visitor_list_paged", {
-    p_date_from:  sp.get("date_from")  || null,
-    p_date_to:    sp.get("date_to")    || null,
-    p_department: sp.get("department") || null,
-    p_search:     sp.get("search")     || null,
-    p_status:     sp.get("status")     || null,
-    p_limit:      parseInt(sp.get("limit")  || "50",  10),
-    p_offset:     parseInt(sp.get("offset") || "0",   10),
+    p_date_from:    sp.get("date_from")  || null,
+    p_date_to:      sp.get("date_to")    || null,
+    p_department:   sp.get("department") || null,
+    p_search:       sp.get("search")     || null,
+    p_status:       sp.get("status")     || null,
+    p_limit:        parseInt(sp.get("limit")  || "50",  10),
+    p_offset:       parseInt(sp.get("offset") || "0",   10),
+    p_caller_email: auth.email,   // lets the RPC resolve the caller's role under service key
   });
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
