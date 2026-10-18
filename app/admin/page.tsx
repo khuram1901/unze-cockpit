@@ -843,6 +843,7 @@ export default function AdminDataPage() {
 
   // ── Generator state ────────────────────────────────────────────────────────
   const [genTabView, setGenTabView]         = useState<GenTabView>("diesel");
+  const [genActiveCard, setGenActiveCard]   = useState<string | null>(null);
   const [genFuelRows, setGenFuelRows]       = useState<GenFuelRow[]>([]);
   const [genMaintRows, setGenMaintRows]     = useState<GenMaintRow[]>([]);
   const [genSummary, setGenSummary]         = useState<GenSummaryRow[]>([]);
@@ -933,7 +934,7 @@ export default function AdminDataPage() {
     };
 
     const subTab = (id: GenTabView, label: string) => (
-      <button key={id} onClick={() => setGenTabView(id)} style={{
+      <button key={id} onClick={() => { setGenTabView(id); setGenActiveCard(null); }} style={{
         padding: "6px 16px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
         backgroundColor: genTabView === id ? COLOURS.NAVY : "transparent",
         color:           genTabView === id ? "white"      : COLOURS.SLATE,
@@ -1005,6 +1006,14 @@ export default function AdminDataPage() {
       ? genSummary.filter(r => r.avg_litres_per_hour != null).reduce((s, r) => s + (r.avg_litres_per_hour ?? 0), 0) / Math.max(1, genSummary.filter(r => r.avg_litres_per_hour != null).length)
       : null;
 
+    const CARD_ACTIONS: Record<string, GenTabView> = {
+      "Total Litres": "diesel",
+      "Fuel Cost":    "diesel",
+      "Avg L/hr":     "diesel",
+      "Maint Cost":   "maintenance",
+      "Generators":   "master",
+    };
+
     const summaryCards = (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "12px", marginBottom: "20px" }}>
         {[
@@ -1013,12 +1022,39 @@ export default function AdminDataPage() {
           { label: "Maint Cost",     value: PKR(totalMaintCost),   colour: "#7C3AED" },
           { label: "Avg L/hr",       value: avgLph != null ? `${avgLph.toFixed(2)} L/hr` : "—", colour: COLOURS.SLATE },
           { label: "Generators",     value: genSummary.length.toString(), colour: COLOURS.GREEN },
-        ].map(c => (
-          <div key={c.label} style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", borderTop: `3px solid ${c.colour}` }}>
-            <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>{c.label}</p>
-            <p style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: COLOURS.NAVY }}>{c.value}</p>
-          </div>
-        ))}
+        ].map(c => {
+          const isActive = genActiveCard === c.label;
+          return (
+            <div key={c.label}
+              onClick={() => {
+                const target = CARD_ACTIONS[c.label];
+                if (target) {
+                  setGenTabView(target);
+                  setGenActiveCard(isActive ? null : c.label);
+                }
+              }}
+              style={{
+                background: COLOURS.CARD,
+                border: isActive ? `2px solid ${c.colour}` : `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: "12px",
+                padding: isActive ? "15px" : "16px",
+                borderTop: `3px solid ${c.colour}`,
+                cursor: "pointer",
+                transition: "box-shadow 0.15s",
+                boxShadow: isActive ? `0 0 0 3px ${c.colour}22` : "none",
+                userSelect: "none" as const,
+              }}
+            >
+              <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>
+                {c.label}
+              </p>
+              <p style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: COLOURS.NAVY }}>{c.value}</p>
+              <p style={{ margin: "4px 0 0", fontSize: "10px", color: c.colour, fontWeight: 600 }}>
+                {isActive ? "✓ viewing" : `→ ${CARD_ACTIONS[c.label] === "diesel" ? "Diesel Log" : CARD_ACTIONS[c.label] === "maintenance" ? "Maintenance" : "Master"}`}
+              </p>
+            </div>
+          );
+        })}
       </div>
     );
 
