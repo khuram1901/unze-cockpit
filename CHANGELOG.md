@@ -4,6 +4,23 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.8 — 2026-10-18 (minor bump)
+
+**Imperial P&L page audit + fix — Supabase computes everything; stores de-duplicated; RPCs locked down**
+
+- Every IFPL RPC now checks the caller (`assert_ifpl_pnl_access()`, migration 277). They were SECURITY DEFINER with EXECUTE for `authenticated` and no check — any signed-in user could read the P&L directly. Commentary/restatement RPCs check per company; balance-sheet RPCs and the AI route gated too.
+- Stores are keyed by master location (`ifpl_pnl_lines_v`): 40 branch strings → 38 real locations (34 retail). Sialkot / Faisalabad KN / Emporium Mall / Iqbal Town duplicates merged; Sukkur no longer filed under "UK".
+- `ifpl_period_summary`, `ifpl_store_league`, `ifpl_sales_by_fy`, `ifpl_data_coverage`, `ifpl_yoy_stores` replace all JavaScript aggregation on the page; FY history moved from a hard-coded constant to `ifpl_fy_history`.
+- Period presets: Month = current month, Quarter = current fiscal quarter, YTD = calendar year to date; fiscal views under Custom; fallback to latest data with an on-screen note.
+- "Needs attention" is a structured, DB-built list (rejected uploads with the failing check, plan misses, margin/overhead drift, loss-making and off-plan stores, recent restatements).
+- Re-upload reports "Data fixed" / "Replaced previous figures"; rejections show the reason in the data strip.
+- AI commentary auto-generates for a period with none saved, is fed the same RPC figures, and is only shown for the period still on screen (#39).
+- New insight: like-for-like growth vs the same months last year (widget `imperial_pnl.like_for_like`).
+- PKR prefix on headline figures; duplicate `page 2.tsx` removed.
+- Docs: `docs/imperial-pnl/DECISIONS.md`.
+
+---
+
 ## v4.7 — 2026-10-18 (minor bump)
 
 **Banking page audit + fix — cash sheets have one source of truth; PDF problems are named, not silent**
