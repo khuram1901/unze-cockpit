@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
+import { formatPKR } from "../lib/pkrFormatter";
 import DateInput from "../lib/DateInput";
 import {
   COLOURS, RADII, SkeletonRows,
@@ -11,7 +12,6 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TxnSummary = { id: string; txn_type: "payment" | "receipt"; amount_pkr: number };
 
 type CashSheetSummary = {
   id: string;
@@ -24,7 +24,11 @@ type CashSheetSummary = {
   notes: string | null;
   uploaded_by: string;
   created_at: string;
-  cash_sheet_transactions: TxnSummary[];
+  // Line sums / counts computed in the DB (cash_sheet_uploads_with_totals view)
+  line_receipts_pkr: number;
+  line_payments_pkr: number;
+  receipt_count: number;
+  payment_count: number;
 };
 
 type Transaction = {
@@ -38,7 +42,7 @@ type Transaction = {
   sort_order: number;
 };
 
-type CashSheetDetail = Omit<CashSheetSummary, "cash_sheet_transactions"> & {
+type CashSheetDetail = CashSheetSummary & {
   receipts: Transaction[];
   payments: Transaction[];
   pdf_signed_url: string | null;
@@ -81,12 +85,9 @@ const PAYMENT_CATEGORIES = [
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
+// Shared PKR formatter (PKR 1,234,567.00) — same as every other finance page
 function pkr(amount: number | null | undefined): string {
-  if (amount == null) return "—";
-  const rounded = Math.round(amount);
-  const abs = Math.abs(rounded);
-  const sign = rounded < 0 ? "-" : "";
-  return sign + "PKR " + abs.toLocaleString("en-PK");
+  return formatPKR(amount);
 }
 
 function monthLabel(ym: string): string {
@@ -155,8 +156,9 @@ export default function CashSheetTab() {
 
   // Upload modal
   const [showUpload, setShowUpload] = useState(false);
+  const [parseIssues, setParseIssues] = useState<string[]>([]);
   const [uploadForm, setUploadForm] = useState({
-    sheet_date: todayISO(), opening_balance_pkr: "", closing_balance_pkr: "", notes: "",
+    sheet_date: todayISO(), opening_balance_pkr: "", closing_balance_pkr: "", receipts_pkr: "", payments_pkr: "", notes: "",
   });
   const [draftTxns, setDraftTxns] = useState<DraftTxn[]>([]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -278,14 +280,19 @@ export default function CashSheetTab() {
         parsedTxns = pdfJson.parsed.transactions ?? [];
         parsedPdcBuckets = pdfJson.parsed.pdc_buckets ?? [];
       }
-      // If the parser couldn't read the values reliably, warn the user so they
-      // know to enter the balances manually rather than silently storing zeros.
-      if (pdfJson.parseWarning) {
-        showToast(
-          "PDF uploaded but values couldn't be read automatically — please enter the balances below manually.",
-          "warning",
-        );
+      // 18/10/2026: the parse step now names what it couldn't read or what
+      // doesn't add up. Manually typed figures override the parsed ones, so a
+      // user can fix a bad read and save; otherwise we stop here — nothing has
+      // been saved yet (the PDF is in storage, the sheet is not).
+      const checks: { level: "error" | "warning"; message: string }[] = pdfJson.checks ?? [];
+      const manualOverrides = !!(uploadForm.opening_balance_pkr && uploadForm.closing_balance_pkr && uploadForm.receipts_pkr && uploadForm.payments_pkr);
+      const errors = checks.filter((c) => c.level === "error");
+      if (errors.length > 0 && !manualOverrides) {
+        setParseIssues(checks.map((c) => c.message));
+        showToast("PDF read problem — see the notes in the form. Enter the figures manually to save.", "error");
+        return;
       }
+      setParseIssues(checks.filter((c) => c.level === "warning").map((c) => c.message));
     }
 
     // 2. Build validated transactions — manually entered rows first; if none
@@ -320,6 +327,8 @@ export default function CashSheetTab() {
     const finalClosing = uploadForm.closing_balance_pkr
       ? parseFloat(uploadForm.closing_balance_pkr)
       : parsedClosing;
+    const finalReceipts = uploadForm.receipts_pkr ? parseFloat(uploadForm.receipts_pkr) : parsedReceipts;
+    const finalPayments = uploadForm.payments_pkr ? parseFloat(uploadForm.payments_pkr) : parsedPayments;
 
     // 3. Create sheet
     const res = await authFetch("/api/banking/cash-sheets", {
@@ -334,8 +343,8 @@ export default function CashSheetTab() {
         pdf_storage_path,
         transactions,
         // Pass parsed totals so daily_cash_position can be kept in sync
-        total_receipts: parsedReceipts,
-        total_payments: parsedPayments,
+        total_receipts: finalReceipts,
+        total_payments: finalPayments,
         // Loan / PDC section — feeds the Finance pages' Cash-in-Hand vs
         // PDC-Outstanding split and the PDC outlook chart
         post_dated_total: parsedPdcTotal,
@@ -376,10 +385,11 @@ export default function CashSheetTab() {
   }
 
   function closeUpload() {
+    setParseIssues([]);
     setShowUpload(false);
     setDragOver(false);
     setSaving(false);
-    setUploadForm({ sheet_date: todayISO(), opening_balance_pkr: "", closing_balance_pkr: "", notes: "" });
+    setUploadForm({ sheet_date: todayISO(), opening_balance_pkr: "", closing_balance_pkr: "", receipts_pkr: "", payments_pkr: "", notes: "" });
     setDraftTxns([]);
     setUploadFile(null);
     setUploadBytes(null);
@@ -522,11 +532,11 @@ export default function CashSheetTab() {
   // ── Sheet list helpers ──────────────────────────────────────────────────────
 
   function getSheetTotals(sheet: CashSheetSummary) {
-    const txns = sheet.cash_sheet_transactions || [];
-    const totalReceipts = txns.filter((t) => t.txn_type === "receipt").reduce((s, t) => s + Number(t.amount_pkr), 0);
-    const totalPayments = txns.filter((t) => t.txn_type === "payment").reduce((s, t) => s + Number(t.amount_pkr), 0);
+    // All figures come from the DB view — nothing summed here (golden rule)
+    const totalReceipts = Number(sheet.line_receipts_pkr ?? 0);
+    const totalPayments = Number(sheet.line_payments_pkr ?? 0);
     const net = totalReceipts - totalPayments;
-    return { totalReceipts, totalPayments, net, txnCount: txns.length };
+    return { totalReceipts, totalPayments, net, txnCount: Number(sheet.receipt_count ?? 0) + Number(sheet.payment_count ?? 0) };
   }
 
   // ── Styles ──────────────────────────────────────────────────────────────────
@@ -731,10 +741,10 @@ export default function CashSheetTab() {
                       {txnCount > 0 ? (
                         <>
                           <span style={{ color: COLOURS.GREEN }}>
-                            ↑ {(sheet.cash_sheet_transactions || []).filter((t) => t.txn_type === "receipt").length} receipts
+                            ↑ {sheet.receipt_count} receipts
                           </span>
                           <span style={{ color: COLOURS.RED }}>
-                            ↓ {(sheet.cash_sheet_transactions || []).filter((t) => t.txn_type === "payment").length} payments
+                            ↓ {sheet.payment_count} payments
                           </span>
                         </>
                       ) : (
@@ -845,8 +855,8 @@ export default function CashSheetTab() {
 
                   {/* Balance summary */}
                   {(detail.opening_balance_pkr != null || detail.closing_balance_pkr != null || detail.receipts_pkr != null || detail.payments_pkr != null) && (() => {
-                    const effectiveReceipts = (detail.receipts_pkr != null && detail.receipts_pkr > 0) ? detail.receipts_pkr : detail.receipts.reduce((s, t) => s + Number(t.amount_pkr), 0);
-                    const effectivePayments = (detail.payments_pkr != null && detail.payments_pkr > 0) ? detail.payments_pkr : detail.payments.reduce((s, t) => s + Number(t.amount_pkr), 0);
+                    const effectiveReceipts = (detail.receipts_pkr != null && detail.receipts_pkr > 0) ? detail.receipts_pkr : detail.line_receipts_pkr;
+                    const effectivePayments = (detail.payments_pkr != null && detail.payments_pkr > 0) ? detail.payments_pkr : detail.line_payments_pkr;
                     const hasParsed = effectiveReceipts > 0 || effectivePayments > 0;
                     const tiles = [
                       { label: "Opening Balance", value: detail.opening_balance_pkr, color: COLOURS.SLATE },
@@ -884,7 +894,7 @@ export default function CashSheetTab() {
                   {/* Receipts */}
                   <SectionHeader
                     label="Receipts"
-                    total={detail.receipts.reduce((s, t) => s + Number(t.amount_pkr), 0)}
+                    total={detail.line_receipts_pkr}
                     color={COLOURS.GREEN}
                     onAdd={() => openAddTxn("receipt")}
                   />
@@ -908,7 +918,7 @@ export default function CashSheetTab() {
                   {/* Payments */}
                   <SectionHeader
                     label="Payments"
-                    total={detail.payments.reduce((s, t) => s + Number(t.amount_pkr), 0)}
+                    total={detail.line_payments_pkr}
                     color={COLOURS.RED}
                     onAdd={() => openAddTxn("payment")}
                   />
@@ -1013,7 +1023,33 @@ export default function CashSheetTab() {
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}
                   />
                 </div>
+                <div>
+                  <label style={labelStyle}>Total Receipts (PKR)</label>
+                  <input
+                    type="number" placeholder="From PDF unless entered"
+                    value={uploadForm.receipts_pkr}
+                    onChange={(e) => setUploadForm({ ...uploadForm, receipts_pkr: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Total Payments (PKR)</label>
+                  <input
+                    type="number" placeholder="From PDF unless entered"
+                    value={uploadForm.payments_pkr}
+                    onChange={(e) => setUploadForm({ ...uploadForm, payments_pkr: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}
+                  />
+                </div>
               </div>
+
+              {parseIssues.length > 0 && (
+                <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderLeft: `3px solid ${COLOURS.RED}`, borderRadius: "8px", padding: "10px 12px", marginBottom: "14px", backgroundColor: COLOURS.DANGER_SOFT, fontSize: "12px", color: COLOURS.RED }}>
+                  <div style={{ fontWeight: 700, marginBottom: "4px" }}>PDF read problems — nothing saved yet</div>
+                  {parseIssues.map((m, i) => <div key={i} style={{ marginTop: i ? "3px" : 0 }}>{m}</div>)}
+                  <div style={{ marginTop: "6px", color: COLOURS.NAVY }}>Type all four figures above to override the PDF, then save again.</div>
+                </div>
+              )}
 
               {/* PDF upload — drag & drop zone */}
               <div style={{ marginBottom: "14px" }}>
@@ -1184,7 +1220,7 @@ function SectionHeader({
         }}>{label}</span>
         {total > 0 && (
           <span style={{ fontSize: "12px", fontWeight: 700, color }}>
-            PKR {Math.round(total).toLocaleString("en-PK")}
+            {formatPKR(total)}
           </span>
         )}
       </div>

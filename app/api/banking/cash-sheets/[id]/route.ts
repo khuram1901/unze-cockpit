@@ -35,9 +35,10 @@ export async function GET(
   const supabase = createServiceClient();
 
   // Fetch sheet first so we can pass company to the auth check
+  // Header + line sums from the view (migration 276) — sums are not done here.
   const { data, error } = await supabase
-    .from("cash_sheet_uploads")
-    .select("*, cash_sheet_transactions(*)")
+    .from("cash_sheet_uploads_with_totals")
+    .select("*")
     .eq("id", id)
     .single();
 
@@ -48,15 +49,16 @@ export async function GET(
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
-  // Split and sort transactions
-  type Txn = { txn_type: string; sort_order: number; created_at: string };
-  const txns: Txn[] = data.cash_sheet_transactions || [];
-  const receipts = txns
-    .filter((t) => t.txn_type === "receipt")
-    .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
-  const payments = txns
-    .filter((t) => t.txn_type === "payment")
-    .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+  // Lines, ordered by the database
+  const { data: txns, error: txnErr } = await supabase
+    .from("cash_sheet_transactions")
+    .select("*")
+    .eq("sheet_id", id)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (txnErr) return Response.json({ error: txnErr.message }, { status: 500 });
+  const receipts = (txns ?? []).filter((t) => t.txn_type === "receipt");
+  const payments = (txns ?? []).filter((t) => t.txn_type === "payment");
 
   // Generate signed URL for PDF if present
   let pdf_signed_url: string | null = null;
@@ -70,9 +72,11 @@ export async function GET(
   return Response.json({
     data: {
       ...data,
-      cash_sheet_transactions: undefined,
       receipts,
       payments,
+      // DB-computed line sums (view columns) — the page shows these, never sums lines itself
+      line_receipts_pkr: Number(data.line_receipts_pkr ?? 0),
+      line_payments_pkr: Number(data.line_payments_pkr ?? 0),
       pdf_signed_url,
     },
   });
