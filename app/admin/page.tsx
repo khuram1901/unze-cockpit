@@ -775,6 +775,8 @@ export default function AdminDataPage() {
   const [visitorDeptFilter, setVisitorDeptFilter] = useState("");
   const [visitorPage, setVisitorPage]         = useState(0);
   const [editingVisitor, setEditingVisitor]   = useState<VisitorRow | null>(null);
+  const [editCnic, setEditCnic]               = useState("");   // raw 13-digit CNIC to overwrite (blank = no change)
+  const [editMobile, setEditMobile]           = useState("");   // raw mobile to overwrite (blank = no change)
   const [savingVisitor, setSavingVisitor]     = useState(false);
   const [deleteVisitorId, setDeleteVisitorId] = useState<string | null>(null);
   const [deleteReason, setDeleteReason]       = useState("");
@@ -864,9 +866,15 @@ export default function AdminDataPage() {
     if (!editingVisitor) return;
     setSavingVisitor(true);
     try {
+      const payload: Record<string, unknown> = { ...editingVisitor };
+      // Only include cnic/mobile if the user typed new values
+      const rawCnic = editCnic.replace(/\D/g, "");
+      if (rawCnic.length === 13) payload.cnic = rawCnic;
+      const rawMobile = editMobile.trim();
+      if (rawMobile) payload.mobile = rawMobile;
       const res = await authFetch("/api/visitors/list", {
         method: "PATCH",
-        body: JSON.stringify({ ...editingVisitor }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) { showToast("Save failed"); return; }
       showToast("Saved");
@@ -1563,7 +1571,7 @@ export default function AdminDataPage() {
                     <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
                       <button
                         title="Edit record"
-                        onClick={() => setEditingVisitor(row)}
+                        onClick={() => { setEditingVisitor(row); setEditCnic(""); setEditMobile(""); }}
                         style={{ width: "28px", height: "28px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center" }}
                       >✏️</button>
                       {row.is_inside && (
@@ -1836,6 +1844,32 @@ export default function AdminDataPage() {
                   />
                 </div>
               ))}
+              {/* CNIC + Mobile (raw — leave blank to keep existing) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px", textTransform: "uppercase" }}>CNIC</label>
+                  <input
+                    type="text"
+                    placeholder={editingVisitor.cnic_masked ?? "Leave blank to keep"}
+                    maxLength={15}
+                    value={editCnic}
+                    onChange={(e) => setEditCnic(e.target.value.replace(/[^\d-]/g, ""))}
+                    style={{ ...inputStyle, display: "block", width: "100%", boxSizing: "border-box" }}
+                  />
+                  <p style={{ margin: "3px 0 0", fontSize: "11px", color: COLOURS.SLATE }}>Enter 13 digits to update</p>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px", textTransform: "uppercase" }}>Mobile</label>
+                  <input
+                    type="text"
+                    placeholder={editingVisitor.mobile_masked ?? "Leave blank to keep"}
+                    value={editMobile}
+                    onChange={(e) => setEditMobile(e.target.value)}
+                    style={{ ...inputStyle, display: "block", width: "100%", boxSizing: "border-box" }}
+                  />
+                  <p style={{ margin: "3px 0 0", fontSize: "11px", color: COLOURS.SLATE }}>e.g. 03001234567</p>
+                </div>
+              </div>
               {/* Time In / Time Out editors */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 {(["time_in", "time_out"] as const).map((field) => {
@@ -1866,7 +1900,7 @@ export default function AdminDataPage() {
                 })}
               </div>
               <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-                <button onClick={() => setEditingVisitor(null)} style={{ flex: 1, padding: "10px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer" }}>Cancel</button>
+                <button onClick={() => { setEditingVisitor(null); setEditCnic(""); setEditMobile(""); }} style={{ flex: 1, padding: "10px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer" }}>Cancel</button>
                 <button onClick={handleVisitorEdit} disabled={savingVisitor} style={{ flex: 2, ...primaryButtonStyle, padding: "10px" }}>
                   {savingVisitor ? "Saving…" : "Save Changes"}
                 </button>
