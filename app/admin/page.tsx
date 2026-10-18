@@ -79,7 +79,45 @@ type UtilityLocation = {
   months: { month: number; total_bill: number | null; meters_read: number }[] | null;
 };
 
-type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations" | "legal" | "visitors";
+type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations" | "legal" | "visitors" | "generators";
+
+// ── Generator types ───────────────────────────────────────────────────
+type GenTabView = "diesel" | "maintenance" | "master";
+
+type GenFuelRow = {
+  id: string; generator_label: string; location_name: string;
+  refuel_date: string; previous_hours: number | null; present_hours: number;
+  hours_run: number | null; rate_per_litre: number; qty_litres: number;
+  total_cost: number; litres_per_hour: number | null; cost_per_hour: number | null;
+  remarks: string | null; entered_by: string | null;
+};
+
+type GenMaintRow = {
+  id: string; generator_label: string; location_name: string;
+  service_date: string;
+  engine_oil: number; oil_filter: number; fuel_filter: number; air_filter: number;
+  radiator_service: number; periodic_maintenance: number; other_mechanical: number; others: number;
+  total_cost: number; remarks: string | null; entered_by: string | null;
+};
+
+type GenSummaryRow = {
+  generator_id: string; generator_label: string; location_name: string;
+  kva: number; model: string; is_active: boolean;
+  total_refuels: number; total_litres: number; total_fuel_cost: number;
+  avg_litres_per_hour: number | null; avg_cost_per_hour: number | null;
+  last_refuel_date: string | null; last_service_date: string | null;
+  days_since_refuel: number | null; days_since_service: number | null;
+  hours_since_last_service: number | null;
+};
+
+type GenMasterRow = {
+  id: string; location_id: string; location_name: string;
+  kva: number; model: string; label: string | null; is_active: boolean;
+};
+
+type GenThresholds = {
+  unusual_pct: number; service_hours: number; days_amber: number; days_red: number;
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -803,6 +841,632 @@ export default function AdminDataPage() {
   const [visitorImportPreview, setVisitorImportPreview] = useState<VisitorImportPreviewRow[] | null>(null);
   const [visitorImportRowCount, setVisitorImportRowCount] = useState(0);
 
+  // ── Generator state ────────────────────────────────────────────────────────
+  const [genTabView, setGenTabView]         = useState<GenTabView>("diesel");
+  const [genFuelRows, setGenFuelRows]       = useState<GenFuelRow[]>([]);
+  const [genMaintRows, setGenMaintRows]     = useState<GenMaintRow[]>([]);
+  const [genSummary, setGenSummary]         = useState<GenSummaryRow[]>([]);
+  const [genMaster, setGenMaster]           = useState<GenMasterRow[]>([]);
+  const [genThresholds, setGenThresholds]   = useState<GenThresholds | null>(null);
+  const [genMeta, setGenMeta]               = useState<{id:string;name:string;generators:{id:string;label:string;kva:number;model:string}[]}[]>([]);
+  const [loadingGen, setLoadingGen]         = useState(false);
+  const [genDateFrom, setGenDateFrom]       = useState<string>(() => { const d = new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); });
+  const [genDateTo, setGenDateTo]           = useState<string>(() => new Date().toISOString().slice(0,10));
+  const [genLocFilter, setGenLocFilter]     = useState("");
+  const [genGenFilter, setGenGenFilter]     = useState("");
+  const [genSearch, setGenSearch]           = useState("");
+  const [editingGenFuel, setEditingGenFuel]     = useState<GenFuelRow | null>(null);
+  const [editingGenMaint, setEditingGenMaint]   = useState<GenMaintRow | null>(null);
+  const [showGenMasterForm, setShowGenMasterForm] = useState(false);
+  const [editingGenMaster, setEditingGenMaster]   = useState<GenMasterRow | null>(null);
+  const [showGenThresholds, setShowGenThresholds] = useState(false);
+  const [genMasterForm, setGenMasterForm]   = useState({ location_id:"", kva:"", model:"", label:"", is_active:true });
+  const [genThreshForm, setGenThreshForm]   = useState({ unusual_pct:"50", service_hours:"250", days_amber:"7", days_red:"14" });
+  const [savingGenFuel, setSavingGenFuel]   = useState(false);
+  const [savingGenMaint, setSavingGenMaint] = useState(false);
+  const [savingGenMaster, setSavingGenMaster] = useState(false);
+  const [savingGenThresh, setSavingGenThresh] = useState(false);
+
+  async function loadGeneratorData() {
+    setLoadingGen(true);
+    try {
+      const params = new URLSearchParams({ date_from: genDateFrom, date_to: genDateTo });
+      if (genLocFilter) params.set("location_id",  genLocFilter);
+      if (genGenFilter) params.set("generator_id", genGenFilter);
+      if (genSearch)    params.set("search",        genSearch);
+      const [metaRes, fuelRes, maintRes, summRes] = await Promise.all([
+        authFetch("/api/admin/generators?type=meta"),
+        authFetch(`/api/admin/generators?type=fuel_table&${params}`),
+        authFetch(`/api/admin/generators?type=maint_table&${params}`),
+        authFetch(`/api/admin/generators?type=summary&${params}`),
+      ]);
+      const [meta, fuel, maint, summ] = await Promise.all([metaRes.json(), fuelRes.json(), maintRes.json(), summRes.json()]);
+      setGenMeta(meta.data ?? []);
+      setGenFuelRows(fuel.data ?? []);
+      setGenMaintRows(maint.data ?? []);
+      setGenSummary(summ.summary ?? []);
+      if (summ.summary?.[0]) {
+        // thresholds come from the first summary row — extract from meta instead
+      }
+      // load master list separately
+      const masterRows = (meta.data ?? []).flatMap((loc: {id:string;name:string;generators:{id:string;label:string;kva:number;model:string}[]}) =>
+        loc.generators.map((g) => ({
+          id: g.id,
+          location_id: loc.id,
+          location_name: loc.name,
+          kva: g.kva,
+          model: g.model,
+          label: g.label,
+          is_active: true,
+        }))
+      );
+      setGenMaster(masterRows);
+    } finally {
+      setLoadingGen(false);
+    }
+  }
+
+  // Load generators when tab becomes active or filters change
+  useEffect(() => {
+    if (activeTab === "generators" && !checking) {
+      loadGeneratorData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, checking, genDateFrom, genDateTo, genLocFilter, genGenFilter, genSearch]);
+
+  function renderGeneratorsTab() {
+    const PKR = (n: number | null | undefined) => n == null ? "—" : `PKR ${Math.round(n).toLocaleString("en-PK")}`;
+    const NUM = (n: number | null | undefined, dp = 1) => n == null ? "—" : n.toFixed(dp);
+
+    // All locations for the filter dropdown
+    const allLocations = genMeta;
+    // Generators for the selected location
+    const locGens = genLocFilter
+      ? (genMeta.find((l: {id:string;name:string;generators:{id:string;label:string;kva:number;model:string}[]}) => l.id === genLocFilter)?.generators ?? [])
+      : [];
+
+    // Status badge helper
+    const daysBadge = (days: number | null, amberThreshold = 7, redThreshold = 14) => {
+      if (days == null) return null;
+      const color = days > redThreshold ? "#B3261E" : days > amberThreshold ? "#B4791F" : "#0F7B5F";
+      const bg    = days > redThreshold ? "#FEF2F2" : days > amberThreshold ? "#FFFBEB" : "#F0FDF4";
+      return <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px", backgroundColor: bg, color }}>{days}d ago</span>;
+    };
+
+    const subTab = (id: GenTabView, label: string) => (
+      <button key={id} onClick={() => setGenTabView(id)} style={{
+        padding: "6px 16px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+        backgroundColor: genTabView === id ? COLOURS.NAVY : "transparent",
+        color:           genTabView === id ? "white"      : COLOURS.SLATE,
+        border: `1px solid ${genTabView === id ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+      }}>{label}</button>
+    );
+
+    const filterBar = (
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px", alignItems: "center" }}>
+        <select value={genLocFilter} onChange={e => { setGenLocFilter(e.target.value); setGenGenFilter(""); }}
+          style={{ padding: "7px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", minWidth: "140px" }}>
+          <option value="">All Locations</option>
+          {allLocations.map((l: {id:string;name:string;generators:{id:string;label:string;kva:number;model:string}[]}) => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
+        {locGens.length > 0 && (
+          <select value={genGenFilter} onChange={e => setGenGenFilter(e.target.value)}
+            style={{ padding: "7px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", minWidth: "140px" }}>
+            <option value="">All Generators</option>
+            {locGens.map((g: {id:string;label:string;kva:number;model:string}) => <option key={g.id} value={g.id}>{g.label || `${g.kva}KVA ${g.model}`}</option>)}
+          </select>
+        )}
+        <DateInput value={genDateFrom} onChange={e => setGenDateFrom(e.target.value)} />
+        <span style={{ color: COLOURS.SLATE, fontSize: "12px" }}>to</span>
+        <DateInput value={genDateTo}   onChange={e => setGenDateTo(e.target.value)} />
+        <input type="text" placeholder="Search…" value={genSearch} onChange={e => setGenSearch(e.target.value)}
+          style={{ padding: "7px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", minWidth: "160px" }} />
+        <button onClick={loadGeneratorData}
+          style={{ padding: "7px 14px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+          {loadingGen ? "Loading…" : "Apply"}
+        </button>
+      </div>
+    );
+
+    // ── Summary cards ──────────────────────────────────────────────────────
+    const totalLitres   = genFuelRows.reduce((s, r) => s + r.qty_litres, 0);
+    const totalFuelCost = genFuelRows.reduce((s, r) => s + r.total_cost, 0);
+    const totalMaintCost = genMaintRows.reduce((s, r) => s + r.total_cost, 0);
+    const avgLph = genSummary.length > 0
+      ? genSummary.filter(r => r.avg_litres_per_hour != null).reduce((s, r) => s + (r.avg_litres_per_hour ?? 0), 0) / Math.max(1, genSummary.filter(r => r.avg_litres_per_hour != null).length)
+      : null;
+
+    const summaryCards = (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "12px", marginBottom: "20px" }}>
+        {[
+          { label: "Total Litres",   value: `${Math.round(totalLitres).toLocaleString("en-PK")} L`, colour: COLOURS.NAVY },
+          { label: "Fuel Cost",      value: PKR(totalFuelCost),    colour: COLOURS.AMBER },
+          { label: "Maint Cost",     value: PKR(totalMaintCost),   colour: "#7C3AED" },
+          { label: "Avg L/hr",       value: avgLph != null ? `${avgLph.toFixed(2)} L/hr` : "—", colour: COLOURS.SLATE },
+          { label: "Generators",     value: genSummary.length.toString(), colour: COLOURS.GREEN },
+        ].map(c => (
+          <div key={c.label} style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", borderTop: `3px solid ${c.colour}` }}>
+            <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>{c.label}</p>
+            <p style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: COLOURS.NAVY }}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+    );
+
+    const TH: React.CSSProperties = { padding: "8px 10px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, whiteSpace: "nowrap" };
+    const TD: React.CSSProperties = { padding: "9px 10px", fontSize: "13px", color: COLOURS.NAVY, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, whiteSpace: "nowrap" };
+
+    // ── Diesel sub-tab ─────────────────────────────────────────────────────
+    const dieselView = (
+      <div>
+        {summaryCards}
+        {filterBar}
+
+        {/* Generator status table */}
+        <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", marginBottom: "20px", overflowX: "auto" }}>
+          <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>🔋 Generator Status</p>
+          {genSummary.length === 0 ? (
+            <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No generators found.</p>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Generator","Location","Last Refuel","Last Service","Days Since Refuel","Days Since Service","Total Litres","Avg L/hr"].map(h =>
+                    <th key={h} style={TH}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {genSummary.map(r => (
+                  <tr key={r.generator_id}>
+                    <td style={TD}><strong>{r.generator_label}</strong> <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{r.kva}KVA</span></td>
+                    <td style={TD}>{r.location_name}</td>
+                    <td style={TD}>{r.last_refuel_date  ? formatDateUK(r.last_refuel_date)  : "—"}</td>
+                    <td style={TD}>{r.last_service_date ? formatDateUK(r.last_service_date) : "—"}</td>
+                    <td style={TD}>{daysBadge(r.days_since_refuel,  7, 14)  ?? "—"}</td>
+                    <td style={TD}>{daysBadge(r.days_since_service, 7, 14) ?? "—"}</td>
+                    <td style={TD}>{Math.round(r.total_litres).toLocaleString("en-PK")} L</td>
+                    <td style={TD}>{NUM(r.avg_litres_per_hour, 2)} L/hr</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Fuel log table */}
+        <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", overflowX: "auto" }}>
+          <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>⛽ Diesel Refuel Log ({genFuelRows.length} entries)</p>
+          {genFuelRows.length === 0 ? (
+            <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No fuel entries for this period.</p>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Date","Generator","Location","Prev Hrs","Present Hrs","Hrs Run","Qty (L)","Rate/L","Total Cost","L/hr","Cost/hr","Remarks",""].map(h =>
+                    <th key={h} style={TH}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {genFuelRows.map(r => (
+                  <tr key={r.id}>
+                    <td style={TD}>{formatDateUK(r.refuel_date)}</td>
+                    <td style={TD}>{r.generator_label}</td>
+                    <td style={TD}>{r.location_name}</td>
+                    <td style={TD}>{r.previous_hours ?? "—"}</td>
+                    <td style={TD}>{r.present_hours}</td>
+                    <td style={TD}>{r.hours_run ?? "—"}</td>
+                    <td style={TD}>{r.qty_litres.toFixed(1)}</td>
+                    <td style={TD}>{PKR(r.rate_per_litre)}</td>
+                    <td style={TD}>{PKR(r.total_cost)}</td>
+                    <td style={TD}>{NUM(r.litres_per_hour, 2)}</td>
+                    <td style={TD}>{NUM(r.cost_per_hour, 0) !== "—" ? PKR(r.cost_per_hour) : "—"}</td>
+                    <td style={{ ...TD, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis" }}>{r.remarks ?? "—"}</td>
+                    <td style={TD}>
+                      {ctx && isAdminTier(ctx) && (
+                        <button onClick={() => setEditingGenFuel(r)}
+                          style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
+                          Edit
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    );
+
+    // ── Maintenance sub-tab ────────────────────────────────────────────────
+    const MAINT_COLS: [string, keyof GenMaintRow][] = [
+      ["Engine Oil", "engine_oil"], ["Oil Filter", "oil_filter"], ["Fuel Filter", "fuel_filter"],
+      ["Air Filter", "air_filter"], ["Radiator",   "radiator_service"], ["Periodic", "periodic_maintenance"],
+      ["Other Mech", "other_mechanical"], ["Others", "others"],
+    ];
+
+    const maintView = (
+      <div>
+        {summaryCards}
+        {filterBar}
+        <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", overflowX: "auto" }}>
+          <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.SLATE }}>🔧 Generator Maintenance Log ({genMaintRows.length} entries)</p>
+          {genMaintRows.length === 0 ? (
+            <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No maintenance entries for this period.</p>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={TH}>Date</th>
+                  <th style={TH}>Generator</th>
+                  <th style={TH}>Location</th>
+                  {MAINT_COLS.map(([h]) => <th key={h} style={TH}>{h}</th>)}
+                  <th style={TH}>Total</th>
+                  <th style={TH}>Remarks</th>
+                  <th style={TH}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {genMaintRows.map(r => (
+                  <tr key={r.id}>
+                    <td style={TD}>{formatDateUK(r.service_date)}</td>
+                    <td style={TD}>{r.generator_label}</td>
+                    <td style={TD}>{r.location_name}</td>
+                    {MAINT_COLS.map(([, key]) => (
+                      <td key={key} style={TD}>
+                        {(r[key] as number) > 0 ? PKR(r[key] as number) : <span style={{ color: COLOURS.SLATE }}>—</span>}
+                      </td>
+                    ))}
+                    <td style={{ ...TD, fontWeight: 700 }}>{PKR(r.total_cost)}</td>
+                    <td style={{ ...TD, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis" }}>{r.remarks ?? "—"}</td>
+                    <td style={TD}>
+                      {ctx && isAdminTier(ctx) && (
+                        <button onClick={() => setEditingGenMaint(r)}
+                          style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
+                          Edit
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    );
+
+    // ── Master / settings sub-tab ──────────────────────────────────────────
+    const masterView = (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <p style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>Generator Master List</p>
+          {ctx && isAdminTier(ctx) && (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => { setShowGenThresholds(v => !v); }}
+                style={{ padding: "7px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
+                ⚙ Thresholds
+              </button>
+              <button onClick={() => { setEditingGenMaster(null); setGenMasterForm({ location_id:"", kva:"", model:"", label:"", is_active:true }); setShowGenMasterForm(true); }}
+                style={{ padding: "7px 14px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                + Add Generator
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Thresholds panel */}
+        {showGenThresholds && ctx && isAdminTier(ctx) && (
+          <div style={{ background: "#FFFBEB", border: `1px solid #FDE68A`, borderRadius: "12px", padding: "20px", marginBottom: "20px" }}>
+            <p style={{ margin: "0 0 14px", fontSize: "13px", fontWeight: 700, color: COLOURS.AMBER }}>⚙ Alert Thresholds</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "12px" }}>
+              {[
+                { label: "Unusual Consumption %", key: "unusual_pct", hint: "flag if L/hr varies by this %" },
+                { label: "Service Interval (hrs)", key: "service_hours", hint: "recommended service hours" },
+                { label: "Amber (days since refuel)", key: "days_amber", hint: "shows amber warning" },
+                { label: "Red (days since refuel)", key: "days_red", hint: "shows red alert" },
+              ].map(f => (
+                <label key={f.key}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {f.label}
+                    <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, marginLeft: "4px" }}>({f.hint})</span>
+                  </span>
+                  <input type="number" min="0" value={genThreshForm[f.key as keyof typeof genThreshForm]}
+                    onChange={e => setGenThreshForm(t => ({ ...t, [f.key]: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }} />
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+              <button disabled={savingGenThresh} onClick={async () => {
+                setSavingGenThresh(true);
+                try {
+                  const res = await authFetch("/api/admin/generators?type=upsert_thresholds", {
+                    method: "POST",
+                    body: JSON.stringify(genThreshForm),
+                  });
+                  if (res.ok) { showToast("Thresholds saved"); setShowGenThresholds(false); }
+                  else { const j = await res.json(); showToast(j.error || "Failed to save", "error"); }
+                } finally { setSavingGenThresh(false); }
+              }} style={{ padding: "8px 18px", backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: savingGenThresh ? "default" : "pointer", opacity: savingGenThresh ? 0.7 : 1 }}>
+                {savingGenThresh ? "Saving…" : "Save Thresholds"}
+              </button>
+              <button onClick={() => setShowGenThresholds(false)}
+                style={{ padding: "8px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Generator master table */}
+        <div style={{ background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "12px", padding: "16px", overflowX: "auto" }}>
+          {genMaster.length === 0 ? (
+            <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No generators set up yet.</p>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Generator","Location","KVA","Model","Status",""].map(h => <th key={h} style={TH}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {genMaster.map(g => (
+                  <tr key={g.id}>
+                    <td style={TD}>{g.label || "—"}</td>
+                    <td style={TD}>{g.location_name}</td>
+                    <td style={TD}>{g.kva}</td>
+                    <td style={TD}>{g.model}</td>
+                    <td style={TD}>
+                      <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
+                        backgroundColor: g.is_active ? "#F0FDF4" : "#F9FAFB",
+                        color: g.is_active ? COLOURS.GREEN : COLOURS.SLATE }}>
+                        {g.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td style={TD}>
+                      {ctx && isAdminTier(ctx) && (
+                        <button onClick={() => {
+                          setEditingGenMaster(g);
+                          setGenMasterForm({ location_id: g.location_id, kva: String(g.kva), model: g.model, label: g.label ?? "", is_active: g.is_active });
+                          setShowGenMasterForm(true);
+                        }} style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
+                          Edit
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    );
+
+    return (
+      <div>
+        {/* Sub-tab switcher */}
+        <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+          {subTab("diesel",      "⛽ Diesel Log")}
+          {subTab("maintenance", "🔧 Maintenance")}
+          {subTab("master",      "⚙ Master / Settings")}
+        </div>
+        {genTabView === "diesel"      && dieselView}
+        {genTabView === "maintenance" && maintView}
+        {genTabView === "master"      && masterView}
+
+        {/* ── Edit Fuel modal ── */}
+        {editingGenFuel && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+            onClick={() => { if (!savingGenFuel) setEditingGenFuel(null); }}>
+            <div style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "480px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}
+              onClick={e => e.stopPropagation()}>
+              <h3 style={{ margin: "0 0 18px", fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>Edit Fuel Entry</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <label style={{ gridColumn: "1/-1" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Refuel Date</span>
+                  <DateInput value={editingGenFuel.refuel_date} onChange={e => setEditingGenFuel(f => f && ({ ...f, refuel_date: e.target.value }))} />
+                </label>
+                {[
+                  { label: "Previous Hours", key: "previous_hours" },
+                  { label: "Present Hours",  key: "present_hours" },
+                  { label: "Rate/Litre (PKR)", key: "rate_per_litre" },
+                  { label: "Qty Litres",     key: "qty_litres" },
+                ].map(f => (
+                  <label key={f.key}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{f.label}</span>
+                    <input type="number" min="0" step="0.01"
+                      value={(editingGenFuel as Record<string,unknown>)[f.key] as string ?? ""}
+                      onChange={e => setEditingGenFuel(r => r && ({ ...r, [f.key]: e.target.value }))}
+                      style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }} />
+                  </label>
+                ))}
+                <label style={{ gridColumn: "1/-1" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Remarks</span>
+                  <textarea rows={2} value={editingGenFuel.remarks ?? ""}
+                    onChange={e => setEditingGenFuel(r => r && ({ ...r, remarks: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", resize: "vertical", boxSizing: "border-box" }} />
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+                <button disabled={savingGenFuel} onClick={async () => {
+                  setSavingGenFuel(true);
+                  try {
+                    const res = await authFetch("/api/admin/generators?type=fuel", {
+                      method: "PATCH",
+                      body: JSON.stringify(editingGenFuel),
+                    });
+                    if (res.ok) { showToast("Fuel entry updated"); setEditingGenFuel(null); loadGeneratorData(); }
+                    else { const j = await res.json(); showToast(j.error || "Failed to save", "error"); }
+                  } finally { setSavingGenFuel(false); }
+                }} style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: savingGenFuel ? "default" : "pointer", opacity: savingGenFuel ? 0.7 : 1 }}>
+                  {savingGenFuel ? "Saving…" : "Save Changes"}
+                </button>
+                <button disabled={savingGenFuel} onClick={async () => {
+                  if (!window.confirm("Soft-delete this fuel entry?")) return;
+                  setSavingGenFuel(true);
+                  try {
+                    const res = await authFetch(`/api/admin/generators?type=fuel&id=${editingGenFuel.id}&reason=Deleted by admin`, { method: "DELETE" });
+                    if (res.ok) { showToast("Entry deleted"); setEditingGenFuel(null); loadGeneratorData(); }
+                    else { const j = await res.json(); showToast(j.error || "Failed", "error"); }
+                  } finally { setSavingGenFuel(false); }
+                }} style={{ padding: "9px 14px", backgroundColor: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: savingGenFuel ? "default" : "pointer" }}>
+                  Delete
+                </button>
+                <button disabled={savingGenFuel} onClick={() => setEditingGenFuel(null)}
+                  style={{ padding: "9px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Edit Maintenance modal ── */}
+        {editingGenMaint && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+            onClick={() => { if (!savingGenMaint) setEditingGenMaint(null); }}>
+            <div style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "520px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}
+              onClick={e => e.stopPropagation()}>
+              <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>Edit Maintenance Entry</h3>
+              <p style={{ margin: "0 0 18px", fontSize: "12px", color: COLOURS.SLATE }}>{editingGenMaint.generator_label} — {editingGenMaint.location_name}</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <label style={{ gridColumn: "1/-1" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Service Date</span>
+                  <DateInput value={editingGenMaint.service_date} onChange={e => setEditingGenMaint(r => r && ({ ...r, service_date: e.target.value }))} />
+                </label>
+                {[
+                  ["Engine Oil","engine_oil"], ["Oil Filter","oil_filter"], ["Fuel Filter","fuel_filter"],
+                  ["Air Filter","air_filter"], ["Radiator","radiator_service"], ["Periodic Maint","periodic_maintenance"],
+                  ["Other Mech","other_mechanical"], ["Others","others"],
+                ].map(([label, key]) => (
+                  <label key={key}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+                    <input type="number" min="0" step="0.01"
+                      value={(editingGenMaint as Record<string,unknown>)[key] as string ?? "0"}
+                      onChange={e => setEditingGenMaint(r => r && ({ ...r, [key]: parseFloat(e.target.value) || 0 }))}
+                      style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }} />
+                  </label>
+                ))}
+                <label style={{ gridColumn: "1/-1" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Remarks</span>
+                  <textarea rows={2} value={editingGenMaint.remarks ?? ""}
+                    onChange={e => setEditingGenMaint(r => r && ({ ...r, remarks: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", resize: "vertical", boxSizing: "border-box" }} />
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+                <button disabled={savingGenMaint} onClick={async () => {
+                  setSavingGenMaint(true);
+                  try {
+                    const res = await authFetch("/api/admin/generators?type=maintenance", {
+                      method: "PATCH",
+                      body: JSON.stringify(editingGenMaint),
+                    });
+                    if (res.ok) { showToast("Maintenance entry updated"); setEditingGenMaint(null); loadGeneratorData(); }
+                    else { const j = await res.json(); showToast(j.error || "Failed to save", "error"); }
+                  } finally { setSavingGenMaint(false); }
+                }} style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: savingGenMaint ? "default" : "pointer", opacity: savingGenMaint ? 0.7 : 1 }}>
+                  {savingGenMaint ? "Saving…" : "Save Changes"}
+                </button>
+                <button disabled={savingGenMaint} onClick={async () => {
+                  if (!window.confirm("Soft-delete this maintenance entry?")) return;
+                  setSavingGenMaint(true);
+                  try {
+                    const res = await authFetch(`/api/admin/generators?type=maintenance&id=${editingGenMaint.id}&reason=Deleted by admin`, { method: "DELETE" });
+                    if (res.ok) { showToast("Entry deleted"); setEditingGenMaint(null); loadGeneratorData(); }
+                    else { const j = await res.json(); showToast(j.error || "Failed", "error"); }
+                  } finally { setSavingGenMaint(false); }
+                }} style={{ padding: "9px 14px", backgroundColor: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: savingGenMaint ? "default" : "pointer" }}>
+                  Delete
+                </button>
+                <button disabled={savingGenMaint} onClick={() => setEditingGenMaint(null)}
+                  style={{ padding: "9px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Add/Edit Generator modal ── */}
+        {showGenMasterForm && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+            onClick={() => { if (!savingGenMaster) setShowGenMasterForm(false); }}>
+            <div style={{ background: "white", borderRadius: "14px", padding: "24px 28px", width: "440px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}
+              onClick={e => e.stopPropagation()}>
+              <h3 style={{ margin: "0 0 18px", fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>
+                {editingGenMaster ? "Edit Generator" : "Add Generator"}
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <label style={{ gridColumn: "1/-1" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Location</span>
+                  <select value={genMasterForm.location_id} onChange={e => setGenMasterForm(f => ({ ...f, location_id: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }}>
+                    <option value="">Select location…</option>
+                    {genMeta.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>KVA</span>
+                  <input type="number" min="1" placeholder="e.g. 100" value={genMasterForm.kva}
+                    onChange={e => setGenMasterForm(f => ({ ...f, kva: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }} />
+                </label>
+                <label>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Model</span>
+                  <input type="text" placeholder="e.g. Perkins" value={genMasterForm.model}
+                    onChange={e => setGenMasterForm(f => ({ ...f, model: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }} />
+                </label>
+                <label style={{ gridColumn: "1/-1" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Label (optional)</span>
+                  <input type="text" placeholder="e.g. Main Generator" value={genMasterForm.label}
+                    onChange={e => setGenMasterForm(f => ({ ...f, label: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }} />
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", gridColumn: "1/-1" }}>
+                  <input type="checkbox" checked={genMasterForm.is_active}
+                    onChange={e => setGenMasterForm(f => ({ ...f, is_active: e.target.checked }))} />
+                  <span style={{ fontSize: "13px", color: COLOURS.NAVY }}>Active</span>
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+                <button disabled={savingGenMaster || !genMasterForm.location_id || !genMasterForm.kva || !genMasterForm.model}
+                  onClick={async () => {
+                    setSavingGenMaster(true);
+                    try {
+                      const res = await authFetch("/api/admin/generators?type=upsert_generator", {
+                        method: "POST",
+                        body: JSON.stringify({ id: editingGenMaster?.id ?? null, ...genMasterForm }),
+                      });
+                      if (res.ok) {
+                        showToast(editingGenMaster ? "Generator updated" : "Generator added");
+                        setShowGenMasterForm(false);
+                        setEditingGenMaster(null);
+                        loadGeneratorData();
+                      } else {
+                        const j = await res.json();
+                        showToast(j.error || "Failed to save", "error");
+                      }
+                    } finally { setSavingGenMaster(false); }
+                  }}
+                  style={{ flex: 1, padding: "9px", backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "13px", cursor: (savingGenMaster || !genMasterForm.location_id || !genMasterForm.kva || !genMasterForm.model) ? "default" : "pointer", opacity: (savingGenMaster || !genMasterForm.location_id || !genMasterForm.kva || !genMasterForm.model) ? 0.6 : 1 }}>
+                  {savingGenMaster ? "Saving…" : editingGenMaster ? "Save Changes" : "Add Generator"}
+                </button>
+                <button disabled={savingGenMaster} onClick={() => { setShowGenMasterForm(false); setEditingGenMaster(null); }}
+                  style={{ padding: "9px 14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   async function loadVisitorList() {
     setLoadingVisitors(true);
     try {
@@ -992,6 +1656,7 @@ export default function AdminDataPage() {
     { id: "compliance",    label: "Compliance",    widgetKey: "admin_ops.compliance" },
     { id: "documents",     label: "Documents",     widgetKey: "admin_ops.documents" },
     { id: "operations",    label: "Operations",    widgetKey: "admin_ops.operations" },
+    { id: "generators",    label: "Generators",    widgetKey: "admin_ops.generators" },
     { id: "visitors",      label: "Visitors",      widgetKey: "admin_ops.visitors" },
   ];
   // Only show tabs that are widget-visible for this user.
@@ -4124,6 +4789,8 @@ export default function AdminDataPage() {
         {safeActiveTab === "legal" && <LegalCases />}
 
         {safeActiveTab === "visitors" && renderVisitorsTab()}
+
+        {safeActiveTab === "generators" && renderGeneratorsTab()}
 
         {safeActiveTab === "operations" && (
           <div>
