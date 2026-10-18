@@ -22,7 +22,7 @@ import { requireAuth } from "../../../lib/api-auth";
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
-async function isAdmin(email: string): Promise<boolean> {
+async function isAdmin(_email: string): Promise<boolean> {
   const sb = createServiceClient();
   const { data } = await sb.rpc("is_generator_admin");
   return !!data;
@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
     if (!generator_id || !refuel_date || !present_hours || !rate_per_litre || !qty_litres) {
       return Response.json({ error: "generator_id, refuel_date, present_hours, rate_per_litre, qty_litres are required" }, { status: 400 });
     }
+    // RPC uses auth.email() internally — do NOT pass p_entered_by
     const { error } = await sb.rpc("insert_generator_fuel", {
       p_generator_id:   generator_id,
       p_refuel_date:    refuel_date,
@@ -126,7 +127,6 @@ export async function POST(request: NextRequest) {
       p_rate_per_litre: parseFloat(rate_per_litre),
       p_qty_litres:     parseFloat(qty_litres),
       p_remarks:        remarks || null,
-      p_entered_by:     auth.email,
     });
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ ok: true });
@@ -143,6 +143,7 @@ export async function POST(request: NextRequest) {
     if (!generator_id || !service_date) {
       return Response.json({ error: "generator_id and service_date are required" }, { status: 400 });
     }
+    // RPC uses auth.email() internally — do NOT pass p_entered_by
     const { error } = await sb.rpc("insert_generator_maintenance", {
       p_generator_id:         generator_id,
       p_service_date:         service_date,
@@ -155,7 +156,6 @@ export async function POST(request: NextRequest) {
       p_other_mechanical:     parseFloat(other_mechanical || "0"),
       p_others:               parseFloat(others || "0"),
       p_remarks:              remarks || null,
-      p_entered_by:           auth.email,
     });
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ ok: true });
@@ -218,7 +218,7 @@ export async function PATCH(request: NextRequest) {
     if (!id) return Response.json({ error: "id required" }, { status: 400 });
     const { error } = await sb.rpc("update_generator_fuel", {
       p_id:             id,
-      p_generator_id:   generator_id,
+      p_generator_id:   generator_id || null,
       p_refuel_date:    refuel_date,
       p_previous_hours: previous_hours != null ? parseFloat(previous_hours) : null,
       p_present_hours:  present_hours  != null ? parseFloat(present_hours)  : null,
@@ -234,17 +234,19 @@ export async function PATCH(request: NextRequest) {
   if (type === "maintenance") {
     const { id, engine_oil, oil_filter, fuel_filter, air_filter, radiator_service, periodic_maintenance, other_mechanical, others, remarks } = body;
     if (!id) return Response.json({ error: "id required" }, { status: 400 });
-    const sb2 = createServiceClient();
-    const { error } = await sb2.from("generator_maintenance_log").update({
+    // Direct table update (no RPC needed for maintenance edits)
+    // Column is other_mechanical_work, not other_mechanical
+    const { error } = await sb.from("generator_maintenance_log").update({
       engine_oil:           parseFloat(engine_oil            || "0"),
       oil_filter:           parseFloat(oil_filter            || "0"),
       fuel_filter:          parseFloat(fuel_filter           || "0"),
       air_filter:           parseFloat(air_filter            || "0"),
       radiator_service:     parseFloat(radiator_service      || "0"),
       periodic_maintenance: parseFloat(periodic_maintenance  || "0"),
-      other_mechanical:     parseFloat(other_mechanical      || "0"),
+      other_mechanical_work: parseFloat(other_mechanical     || "0"),
       others:               parseFloat(others                || "0"),
       remarks:              remarks || null,
+      updated_at:           new Date().toISOString(),
     }).eq("id", id);
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ ok: true });
