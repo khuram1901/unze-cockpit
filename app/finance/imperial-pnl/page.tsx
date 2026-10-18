@@ -12,7 +12,7 @@
 // data quality strip. All aggregation in Postgres RPCs (migration 144).
 // ─────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ResponsiveContainer, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, ReferenceLine } from "recharts";
 import AuthWrapper from "../../lib/AuthWrapper";
 import { authFetch, supabase } from "../../lib/supabase";
@@ -605,6 +605,14 @@ export default function ImperialPnlPage() {
   // as-is; when none exists yet it is generated once automatically, so the
   // story always matches the period on screen. Regenerate replaces it.
   const [autoGenKey, setAutoGenKey] = useState("");
+  // The period/scope currently on screen — a generate request that finishes
+  // after the user has moved on must not paint its result over the new view.
+  const viewKey = `${monthFrom}|${monthTo}|${channelFilter}|${branchFilter}`;
+  const viewKeyRef = useRef(viewKey);
+  viewKeyRef.current = viewKey;
+  // Period/scope keys with a generate request in flight — the "Analysing…"
+  // state belongs to the view, not to whichever request happens to be running.
+  const inflightRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!monthFrom || !monthTo) return;
     let active = true;
@@ -617,6 +625,7 @@ export default function ImperialPnlPage() {
       setGeneratedAt(row?.generated_at || null);
       setInsightError("");
       const key = `${monthFrom}|${monthTo}|${channelFilter}|${branchFilter}`;
+      setGenerating(inflightRef.current.has(key));
       if (!row && autoGenKey !== key) {
         setAutoGenKey(key);
         generateInsights();
@@ -705,6 +714,9 @@ export default function ImperialPnlPage() {
   }
 
   async function generateInsights() {
+    const key = viewKeyRef.current;
+    if (inflightRef.current.has(key)) return;
+    inflightRef.current.add(key);
     setGenerating(true);
     setInsightError("");
     try {
@@ -715,13 +727,18 @@ export default function ImperialPnlPage() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Failed to generate commentary");
+      // Saved server-side under its own period/scope; only show it if the
+      // user is still looking at that period/scope.
+      if (viewKeyRef.current !== key) return;
       setInsights((body.insights || []) as Insight[]);
       setActions((body.actions || []) as string[]);
       setGeneratedAt(body.generated_at || new Date().toISOString());
     } catch (err) {
-      setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
+      if (viewKeyRef.current === key) setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
+    } finally {
+      inflightRef.current.delete(key);
+      setGenerating(inflightRef.current.has(viewKeyRef.current));
     }
-    setGenerating(false);
   }
 
   if (checking) return null;
