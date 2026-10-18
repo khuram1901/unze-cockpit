@@ -784,6 +784,8 @@ export default function AdminDataPage() {
   const [dashView, setDashView] = useState<"kpi" | "league" | "peak" | "alerts">("kpi");
 
   // F10 — Settings panel state
+  const [showVisitorSettings, setShowVisitorSettings] = useState(false);
+  const [showVisitorImport,   setShowVisitorImport]   = useState(false);
   type PurposeThreshold = { keyword: string; threshold_mins: number };
   type VisitorSettings  = { overstay_threshold_mins: number; office_open_hour: number; office_close_hour: number; weekly_digest_email: string; purpose_thresholds: PurposeThreshold[] };
   const [visitorSettings, setVisitorSettings]         = useState<VisitorSettings | null>(null);
@@ -1389,6 +1391,30 @@ export default function AdminDataPage() {
       <div>
         {wv("admin.visitors_dashboard") && renderVisitorDashboard()}
 
+        {/* ── Admin icon buttons (top-right) ── */}
+        {ctx && isAdminTier(ctx) && (
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px", marginBottom: "8px" }}>
+            <button
+              title="Visitor Settings"
+              onClick={() => { setShowVisitorSettings((v) => !v); setShowVisitorImport(false); }}
+              style={{
+                width: "32px", height: "32px", borderRadius: "8px", border: `1px solid ${showVisitorSettings ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                background: showVisitorSettings ? COLOURS.NAVY : COLOURS.CARD, color: showVisitorSettings ? "white" : COLOURS.SLATE,
+                cursor: "pointer", fontSize: "15px", display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >⚙️</button>
+            <button
+              title="Historical Import"
+              onClick={() => { setShowVisitorImport((v) => !v); setShowVisitorSettings(false); }}
+              style={{
+                width: "32px", height: "32px", borderRadius: "8px", border: `1px solid ${showVisitorImport ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                background: showVisitorImport ? COLOURS.NAVY : COLOURS.CARD, color: showVisitorImport ? "white" : COLOURS.SLATE,
+                cursor: "pointer", fontSize: "15px", display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >📥</button>
+          </div>
+        )}
+
         {/* ── Filter bar (single scrollable row) ── */}
         <div style={{ ...filterCardStyle, padding: "10px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", overflowX: "auto", whiteSpace: "nowrap" }}>
@@ -1459,54 +1485,67 @@ export default function AdminDataPage() {
 
         {/* Table */}
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", minWidth: "800px" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", minWidth: "700px" }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${COLOURS.HAIRLINE}`, background: COLOURS.CARD_ALT }}>
-                {["Date","Time In","Time Out","Duration","Visitor","Mobile","CNIC","Department","Host","Purpose","Status","Actions"].map((h) => (
+                {["Check In","Check Out","Visitor","CNIC","Department","Host","Purpose","Status","Actions"].map((h) => (
                   <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: COLOURS.SLATE, fontSize: "11px", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loadingVisitors && (
-                <tr><td colSpan={12}><SkeletonRows count={8} /></td></tr>
+                <tr><td colSpan={9}><SkeletonRows count={8} /></td></tr>
               )}
               {!loadingVisitors && visitorRows.length === 0 && (
-                <tr><td colSpan={12} style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No records found</td></tr>
+                <tr><td colSpan={9} style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No records found</td></tr>
               )}
               {!loadingVisitors && visitorRows.map((row) => (
                 <tr key={row.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                  <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{formatDateUK(row.visit_date)}</td>
+                  {/* Check In: date + time stacked */}
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
-                    {new Date(row.time_in).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" })}
+                    <div style={{ fontWeight: 600, fontSize: "12px", color: COLOURS.NAVY }}>{formatDateUK(row.visit_date)}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>
+                      {new Date(row.time_in).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" })}
+                    </div>
                   </td>
+                  {/* Check Out: time + duration stacked */}
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
-                    {row.time_out
-                      ? new Date(row.time_out).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" })
-                      : <span style={{ color: COLOURS.GREEN, fontWeight: 700 }}>Inside</span>}
+                    {row.time_out ? (
+                      <>
+                        <div style={{ fontSize: "12px", color: COLOURS.NAVY }}>
+                          {new Date(row.time_out).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" })}
+                        </div>
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>
+                          {row.duration_mins != null ? (Math.floor(row.duration_mins / 60) > 0 ? `${Math.floor(row.duration_mins / 60)}h ${row.duration_mins % 60}m` : `${row.duration_mins}m`) : "—"}
+                        </div>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.GREEN }}>● Inside</span>
+                    )}
                   </td>
+                  {/* Visitor: name + mobile stacked */}
                   <td style={{ padding: "8px 10px" }}>
-                    {row.duration_mins != null ? (Math.floor(row.duration_mins / 60) > 0 ? `${Math.floor(row.duration_mins / 60)}h ${row.duration_mins % 60}m` : `${row.duration_mins}m`) : "—"}
+                    <div style={{ fontWeight: 600, fontSize: "13px" }}>
+                      {row.visitor_name}
+                      {row.flag_type === "blacklist" && <span style={{ marginLeft: "4px", fontSize: "10px", color: COLOURS.RED }}>🚫</span>}
+                      {row.flag_type === "vip"       && <span style={{ marginLeft: "4px", fontSize: "10px", color: COLOURS.AMBER }}>⭐</span>}
+                    </div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>{row.mobile_masked}</div>
                   </td>
-                  <td style={{ padding: "8px 10px", fontWeight: 600 }}>
-                    {row.visitor_name}
-                    {row.flag_type === "blacklist" && <span style={{ marginLeft: "4px", fontSize: "10px", color: COLOURS.RED }}>🚫</span>}
-                    {row.flag_type === "vip"       && <span style={{ marginLeft: "4px", fontSize: "10px", color: COLOURS.AMBER }}>⭐</span>}
-                  </td>
-                  <td style={{ padding: "8px 10px", color: COLOURS.SLATE }}>{row.mobile_masked}</td>
-                  <td style={{ padding: "8px 10px", color: COLOURS.SLATE, fontFamily: "monospace", fontSize: "12px" }}>{row.cnic_masked ?? "—"}</td>
-                  <td style={{ padding: "8px 10px" }}>{row.department_name}</td>
-                  <td style={{ padding: "8px 10px" }}>{row.host_name}</td>
-                  <td style={{ padding: "8px 10px" }}>{row.purpose === "Other" ? row.purpose_other || "Other" : row.purpose}</td>
+                  <td style={{ padding: "8px 10px", color: COLOURS.SLATE, fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap" }}>{row.cnic_masked ?? "—"}</td>
+                  <td style={{ padding: "8px 10px", fontSize: "12px" }}>{row.department_name}</td>
+                  <td style={{ padding: "8px 10px", fontSize: "12px" }}>{row.host_name}</td>
+                  <td style={{ padding: "8px 10px", fontSize: "12px" }}>{row.purpose === "Other" ? row.purpose_other || "Other" : row.purpose}</td>
                   <td style={{ padding: "8px 10px" }}>
                     <span style={{
                       fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: RADII.PILL,
                       backgroundColor: row.is_inside ? "#D1FAE5" : COLOURS.HAIRLINE,
                       color: row.is_inside ? COLOURS.GREEN : COLOURS.SLATE,
-                    }}>{row.is_inside ? "Inside" : "Checked Out"}</span>
+                    }}>{row.is_inside ? "Inside" : "Out"}</span>
                   </td>
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
-                    <div style={{ display: "flex", gap: "6px" }}>
+                    <div style={{ display: "flex", gap: "4px" }}>
                       <button
                         onClick={() => setEditingVisitor(row)}
                         style={{ padding: "3px 8px", borderRadius: "5px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", fontSize: "11px" }}
@@ -1515,12 +1554,12 @@ export default function AdminDataPage() {
                         <button
                           onClick={() => handleVisitorCheckout(row.id)}
                           style={{ padding: "3px 8px", borderRadius: "5px", border: `1px solid ${COLOURS.GREEN}`, background: "#D1FAE5", color: COLOURS.GREEN, cursor: "pointer", fontSize: "11px", fontWeight: 600 }}
-                        >Check Out</button>
+                        >✓ Out</button>
                       )}
                       <button
                         onClick={() => handleVisitorDelete(row.id)}
-                        style={{ padding: "3px 8px", borderRadius: "5px", border: `1px solid #FECACA`, background: "#FEF2F2", color: COLOURS.RED, cursor: "pointer", fontSize: "11px" }}
-                      >Delete</button>
+                        style={{ padding: "3px 6px", borderRadius: "5px", border: `1px solid #FECACA`, background: "#FEF2F2", color: COLOURS.RED, cursor: "pointer", fontSize: "11px" }}
+                      >✕</button>
                     </div>
                   </td>
                 </tr>
@@ -1549,12 +1588,9 @@ export default function AdminDataPage() {
         )}
 
         {/* F10 — Settings panel (admin only) */}
-        {ctx && isAdminTier(ctx) && (
-          <details style={{ marginTop: "28px" }}>
-            <summary style={{ fontWeight: 700, color: COLOURS.SLATE, cursor: "pointer", padding: "10px 0", fontSize: "14px" }}>
-              ⚙️ Visitor Settings
-            </summary>
-            <div style={{ background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "20px", marginTop: "8px" }}>
+        {ctx && isAdminTier(ctx) && showVisitorSettings && (
+          <div style={{ marginTop: "16px" }}>
+            <div style={{ background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "20px" }}>
               {!visitorSettings ? (
                 <p style={{ margin: 0, color: COLOURS.SLATE, fontSize: "13px" }}>Loading…</p>
               ) : (
@@ -1647,16 +1683,13 @@ export default function AdminDataPage() {
                 </>
               )}
             </div>
-          </details>
+          </div>
         )}
 
         {/* Historical Import panel */}
-        {ctx && isAdminTier(ctx) && (
-          <details style={{ marginTop: "28px" }}>
-            <summary style={{ fontWeight: 700, color: COLOURS.SLATE, cursor: "pointer", padding: "10px 0", fontSize: "14px" }}>
-              📥 Historical Import (Excel)
-            </summary>
-            <div style={{ background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "20px", marginTop: "8px" }}>
+        {ctx && isAdminTier(ctx) && showVisitorImport && (
+          <div style={{ marginTop: "16px" }}>
+            <div style={{ background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "20px" }}>
               <p style={{ margin: "0 0 8px", fontWeight: 600, color: COLOURS.NAVY }}>Bulk import from Excel / CSV</p>
               <p style={{ margin: "0 0 12px", fontSize: "13px", color: COLOURS.SLATE }}>
                 Upload historical visitor records. Required columns: <code>visit_date</code>, <code>visitor_name</code>, <code>mobile</code>.<br/>
@@ -1761,7 +1794,7 @@ export default function AdminDataPage() {
                 </div>
               )}
             </div>
-          </details>
+          </div>
         )}
 
         {/* Edit modal */}
