@@ -39,7 +39,8 @@ export async function GET(request: NextRequest) {
     p_status:       sp.get("status")     || null,
     p_limit:        parseInt(sp.get("limit")  || "50",  10),
     p_offset:       parseInt(sp.get("offset") || "0",   10),
-    p_caller_email: auth.email,   // lets the RPC resolve the caller's role under service key
+    // p_caller_email added in migration 278 — uncomment after applying that migration
+    // p_caller_email: auth.email,
   });
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
