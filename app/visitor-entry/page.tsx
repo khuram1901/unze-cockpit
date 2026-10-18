@@ -275,7 +275,9 @@ export default function VisitorEntryPage() {
   // ── Returning visitor autofill ────────────────────────────────────────────
   async function lookupVisitor(params: { cnic?: string; mobile?: string }) {
     try {
-      const qs = params.cnic ? `cnic=${params.cnic}` : `mobile=${params.mobile}`;
+      const qs = params.cnic
+        ? `cnic=${params.cnic}`
+        : `mobile=${encodeURIComponent(params.mobile ?? "")}`;
       const res = await apiFetch(`/api/visitors/lookup?${qs}`);
       if (!res.ok) return;
       const data = await res.json();
@@ -315,7 +317,9 @@ export default function VisitorEntryPage() {
   }, [form.cnic]);
 
   // Trigger autofill when mobile is valid, 800ms debounce
+  // Skip if CNIC is already filled — CNIC lookup already ran and mobile was autofilled from it
   useEffect(() => {
+    if (normaliseCnic(form.cnic).length === 13) return; // CNIC lookup already handled it
     const mobile = normaliseMobile(form.mobile);
     if (!/^\+923\d{9}$/.test(mobile)) return;
     const t = setTimeout(() => lookupVisitor({ mobile }), 800);
