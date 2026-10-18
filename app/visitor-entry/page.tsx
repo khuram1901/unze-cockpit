@@ -190,6 +190,12 @@ export default function VisitorEntryPage() {
   const [currentVisitors, setCurrentVisitors] = useState<CurrentVisitor[]>([]);
   const [checkingOut, setCheckingOut] = useState<Set<string>>(new Set());
   const [loadingCurrent, setLoadingCurrent] = useState(false);
+  const [returningVisitor, setReturningVisitor] = useState<{
+    name: string;
+    host_name: string;
+    visit_date: string | null;
+    purpose: string | null;
+  } | null>(null);
 
   const deptRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -269,7 +275,9 @@ export default function VisitorEntryPage() {
   // ── Returning visitor autofill ────────────────────────────────────────────
   async function lookupVisitor(params: { cnic?: string; mobile?: string }) {
     try {
-      const qs = params.cnic ? `cnic=${params.cnic}` : `mobile=${params.mobile}`;
+      const qs = params.cnic
+        ? `cnic=${params.cnic}`
+        : `mobile=${encodeURIComponent(params.mobile ?? "")}`;
       const res = await apiFetch(`/api/visitors/lookup?${qs}`);
       if (!res.ok) return;
       const data = await res.json();
@@ -278,14 +286,23 @@ export default function VisitorEntryPage() {
       else setFlagInfo(null);
       // Autofill fields from most recent visit (don't overwrite what the user already typed)
       if (data.found) {
+        setReturningVisitor({
+          name:       data.visitor_name || "",
+          host_name:  data.host_name    || "",
+          visit_date: data.visit_date   || null,
+          purpose:    data.purpose      || null,
+        });
         setForm((f) => ({
           ...f,
           visitor_name: f.visitor_name || data.visitor_name || "",
+          mobile:       f.mobile       || data.mobile       || "",
           department:   f.department   || data.department_name || "",
           host_id:      f.host_id      || data.host_member_id  || "",
           host_name:    f.host_name    || data.host_name       || "",
           purpose:      f.purpose      || data.purpose         || "",
         }));
+      } else {
+        setReturningVisitor(null);
       }
     } catch { /* non-blocking */ }
   }
@@ -293,14 +310,16 @@ export default function VisitorEntryPage() {
   // Trigger autofill when CNIC is complete (13 digits), 800ms debounce
   useEffect(() => {
     const cnic = normaliseCnic(form.cnic);
-    if (cnic.length !== 13) { setFlagInfo(null); return; }
+    if (cnic.length !== 13) { setFlagInfo(null); setReturningVisitor(null); return; }
     const t = setTimeout(() => lookupVisitor({ cnic }), 800);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.cnic]);
 
   // Trigger autofill when mobile is valid, 800ms debounce
+  // Skip if CNIC is already filled — CNIC lookup already ran and mobile was autofilled from it
   useEffect(() => {
+    if (normaliseCnic(form.cnic).length === 13) return; // CNIC lookup already handled it
     const mobile = normaliseMobile(form.mobile);
     if (!/^\+923\d{9}$/.test(mobile)) return;
     const t = setTimeout(() => lookupVisitor({ mobile }), 800);
@@ -572,6 +591,32 @@ export default function VisitorEntryPage() {
             </div>
           ))}
         </div>
+
+        {/* Returning visitor banner */}
+        {returningVisitor && (
+          <div style={{
+            padding: "10px 14px", borderRadius: 8, marginBottom: 12,
+            background: "#EFF6FF",
+            border: `1px solid #BFDBFE`,
+            color: "#1D4ED8",
+            fontSize: 13,
+          }}>
+            <span style={{ fontWeight: 700 }}>↩ Returning visitor</span>
+            {returningVisitor.host_name && (
+              <span style={{ fontWeight: 400 }}>
+                {" — last visited"}
+                {returningVisitor.visit_date
+                  ? ` on ${formatDateUK(returningVisitor.visit_date)}`
+                  : ""}
+                {` to see ${returningVisitor.host_name}`}
+                {returningVisitor.purpose ? ` (${returningVisitor.purpose})` : ""}
+              </span>
+            )}
+            <span style={{ fontWeight: 400, display: "block", fontSize: 12, marginTop: 2, color: "#3B82F6" }}>
+              Details filled in automatically — please verify before saving.
+            </span>
+          </div>
+        )}
 
         {/* Flag banner */}
         {flagInfo && (
