@@ -1833,6 +1833,35 @@ export default function AdminDataPage() {
                   />
                 </div>
               ))}
+              {/* Time In / Time Out editors */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                {(["time_in", "time_out"] as const).map((field) => {
+                  const raw = editingVisitor[field];
+                  const hhmm = raw
+                    ? new Date(raw).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" })
+                    : "";
+                  return (
+                    <div key={field}>
+                      <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px", textTransform: "uppercase" }}>
+                        {field === "time_in" ? "Time In (PKT)" : "Time Out (PKT)"}
+                      </label>
+                      <input
+                        type="time"
+                        defaultValue={hhmm}
+                        onChange={(e) => {
+                          const t = e.target.value; // "HH:MM"
+                          if (!t) { if (field === "time_out") setEditingVisitor((v) => v ? { ...v, time_out: null } : v); return; }
+                          // Reconstruct ISO timestamp: visit_date + entered time in PKT → UTC
+                          const [hh, mm] = t.split(":").map(Number);
+                          const base = new Date(`${editingVisitor.visit_date}T${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}:00+05:00`);
+                          setEditingVisitor((v) => v ? { ...v, [field]: base.toISOString() } : v);
+                        }}
+                        style={{ ...inputStyle, display: "block", width: "100%", boxSizing: "border-box" }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
               <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
                 <button onClick={() => setEditingVisitor(null)} style={{ flex: 1, padding: "10px", borderRadius: RADII.PILL, border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer" }}>Cancel</button>
                 <button onClick={handleVisitorEdit} disabled={savingVisitor} style={{ flex: 2, ...primaryButtonStyle, padding: "10px" }}>
