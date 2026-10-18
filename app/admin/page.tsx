@@ -1657,7 +1657,7 @@ export default function AdminDataPage() {
 
     return (
       <div>
-        {/* Sub-tab switcher */
+        {/* Sub-tab switcher */}
         <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
           {subTab("diesel",      "⛽ Diesel Log")}
           {subTab("maintenance", "🔧 Maintenance")}
