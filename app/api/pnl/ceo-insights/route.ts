@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { canViewIfplPnl, canViewRestaurantsPnl, canViewFinance, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
 
@@ -69,6 +70,22 @@ export async function POST(request: NextRequest) {
     }
 
     const db = createServiceClient();
+
+    // Same gate as the page that shows the commentary (18/10/2026 — this
+    // route only checked that the caller was signed in, so any member could
+    // pull a full AI analysis of any company's P&L).
+    const { data: member } = await db.from("members").select("id, role, department, company").eq("email", auth.email).maybeSingle();
+    let overrides: PermOverrides | null = null;
+    if (member?.id) {
+      const { data: perms } = await db.from("member_permissions").select("*").eq("member_id", member.id).maybeSingle();
+      overrides = (perms as PermOverrides) || null;
+    }
+    const ctx: UserCtx = { email: auth.email, role: member?.role ?? null, department: member?.department ?? null, company: member?.company ?? null, overrides };
+    const allowed = company === "IFPL" ? canViewIfplPnl(ctx)
+      : company === "BARANH" || company === "HD" ? canViewRestaurantsPnl(ctx)
+      : canViewFinance(ctx);
+    if (!allowed) return Response.json({ error: "Not authorised to generate commentary for this company." }, { status: 403 });
+
     let summary: Record<string, unknown>;
     let businessContext: string;
 
@@ -100,20 +117,28 @@ You are briefing the CEO on branch profitability, food cost discipline, expense 
       // Imperial Footwear — Unze London retail (plan vs actual).
       const channelFilter = typeof channel === "string" && channel ? channel : "All";
       const branchFilter = typeof branch === "string" && branch ? branch : "All";
-      const [kpiRes, leagueRes, lineRes] = await Promise.all([
+      // Same Postgres-computed figures the page shows, so the commentary and
+      // the cards can never disagree (ifpl_period_summary / ifpl_yoy_stores
+      // added 18/10/2026).
+      const [kpiRes, leagueRes, lineRes, sumRes, yoyRes] = await Promise.all([
         db.rpc("ifpl_kpi_by_month", { p_from: from, p_to: to, p_channel: channelFilter, p_branch: branchFilter }),
         db.rpc("ifpl_branch_league", { p_from: from, p_to: to }),
         db.rpc("ifpl_line_totals", { p_from: from, p_to: to, p_channel: channelFilter, p_branch: branchFilter }),
+        db.rpc("ifpl_period_summary", { p_from: from, p_to: to, p_channel: channelFilter, p_branch: branchFilter }),
+        db.rpc("ifpl_yoy_stores", { p_from: from, p_to: to }),
       ]);
       if (kpiRes.error) return Response.json({ error: kpiRes.error.message }, { status: 500 });
       summary = {
-        scope: branchFilter !== "All" ? `${branchFilter} branch only` : channelFilter !== "All" ? `${channelFilter} channel only` : "Whole company (all branches)",
+        scope: branchFilter !== "All" ? `${branchFilter} branch only` : channelFilter !== "All" ? `${channelFilter} channel only` : "Whole company (all locations)",
+        period: { from, to },
+        headline: sumRes.data ?? null,
         monthly_plan_vs_actual: kpiRes.data,
         branch_league: leagueRes.data || [],
+        like_for_like_vs_last_year: yoyRes.data || [],
         expense_lines: lineRes.data || [],
-        note: "Amounts are PKR. Every figure has projection (plan) and actual — variance vs plan is central. Highly seasonal retail: Nov-Mar are the peak months.",
+        note: "Amounts are PKR. Every figure has projection (plan) and actual — variance vs plan is central. 'headline' holds the period totals, channel totals (online / retail / cost centres), stars, watch list and the items already flagged under 'attention' — refer to them by name. like_for_like_vs_last_year compares each store with the same months last year (channel 'Total' = company like-for-like; is_new = no comparison). Highly seasonal retail: Nov-Mar are the peak months.",
       };
-      businessContext = `The company: Imperial Footwear (brand "Unze London") — Pakistani footwear retailer with ~32 branches across malls and cities plus a large Online PK channel (~24% of sales). Highly seasonal (wedding season Nov-Dec, Eid ~Mar). Head Office and warehouses are cost centres. You are briefing the CEO on plan-vs-actual discipline, branch performance, channel mix and seasonality risk.
+      businessContext = `The company: Imperial Footwear (brand "Unze London") — Pakistani footwear retailer with 34 retail stores across malls and cities plus a large Online PK channel (~24% of sales). Highly seasonal (wedding season Nov-Dec, Eid ~Mar). Head Office and warehouses are cost centres. You are briefing the CEO on plan-vs-actual discipline, branch performance, channel mix and seasonality risk.
 
 Market context (Pakistan retail, as of July 2026):
 - Footwear market growing ~6.5% CAGR; overall retail ~8.2% CAGR.
@@ -150,7 +175,7 @@ Market context (Pakistan retail, as of July 2026):
         content: company === "BARANH" || company === "HD"
           ? `You are a sharp CFO briefing the CEO of a Pakistani restaurant group. Analyse the monthly P&L data below and produce 4-6 insights (each tagged good / watch / urgent) and 3-5 concrete actions. Be direct and specific — quote figures in PKR millions (divide raw amounts by 1,000,000, one decimal). Focus on: food cost % trajectory, branch winners and losers (are losses structural or seasonal?), expense creep vs sales, head-office/warehouse allocation burden, and what the market context means for pricing. No fluff.\n\n${businessContext}\n\nInternal data (JSON):\n${JSON.stringify(summary)}`
           : company === "IFPL"
-          ? `You are a sharp CFO briefing the CEO of a fast-growing Pakistani footwear retailer. Analyse the plan-vs-actual P&L data below and produce 4-6 insights (each tagged good / watch / urgent) and 3-5 concrete actions. Be direct and specific — quote figures in PKR millions (divide raw amounts by 1,000,000, one decimal). Focus on: variance vs plan, branch winners and losers, online vs retail margin mix, seasonality dependence, overhead discipline. No fluff.\n\n${businessContext}\n\nInternal data (JSON):\n${JSON.stringify(summary)}`
+          ? `You are a sharp CFO briefing the CEO of a fast-growing Pakistani footwear retailer. Analyse the plan-vs-actual P&L data below for the period ${from} to ${to} ONLY and produce 4-6 insights (each tagged good / watch / urgent) and 3-5 concrete actions. Be direct and specific — quote figures in PKR millions (divide raw amounts by 1,000,000, one decimal) and name stores. Cover, in this order: (1) the period's headline vs plan, (2) channel totals — Online PK vs the retail stores vs head-office/warehouse cost, (3) the watch list — which stores are loss-making or far off plan and whether that looks structural or seasonal, (4) like-for-like growth vs last year and what new stores add, (5) overhead discipline. No fluff, no generic advice.\n\n${businessContext}\n\nInternal data (JSON):\n${JSON.stringify(summary)}`
           : `You are a sharp CFO briefing the CEO of a Pakistani pole and smart-meter manufacturer. Analyse the monthly P&L data below and produce 4-6 insights (each tagged good / watch / urgent) and 3-5 concrete actions. Be direct and specific — quote figures in PKR millions (divide raw amounts by 1,000,000, one decimal). Focus on: margin trajectory, loss-making months, plant-level performance differences, cost structure shifts, and how the market context creates risk or opportunity. No fluff.\n\n${MARKET_CONTEXT}\n\nInternal data (JSON):\n${JSON.stringify(summary)}`,
       }],
     });

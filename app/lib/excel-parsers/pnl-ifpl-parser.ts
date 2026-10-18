@@ -148,7 +148,8 @@ function channelFor(branch: string): string {
   const b = branch.toLowerCase();
   if (b === "online pk") return "Online PK";
   if (b.includes("head office") || b.includes("warehouse")) return "Cost centre";
-  if (b.includes("uk") || b.includes("green street")) return "UK";
+  // Whole-word match — "sukkur" contains "uk" and was filed under UK (18/10/2026).
+  if (/\buk\b/.test(b) || b.includes("green street")) return "UK";
   return "Retail";
 }
 

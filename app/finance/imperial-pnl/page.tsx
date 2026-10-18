@@ -30,23 +30,53 @@ type KpiRow = {
   proj_overheads: number; act_overheads: number;
   proj_final: number; act_final: number;
 };
-type LeagueRow = { branch: string; channel: string; proj_sales: number; act_sales: number; act_gp: number; act_final: number };
-type LineTotal = { line: string; category: string; projection: number; actual: number };
+// ifpl_store_league() — ranked trading locations plus ONE aggregated
+// "rest" row (is_rest) so the page never adds stores up itself.
+type LeagueRow = {
+  rank: number; branch: string; channel: string; location_id: string | null; months: number | null;
+  proj_sales: number; act_sales: number; act_gp: number; act_final: number;
+  variance_pct: number | null; margin_pct: number | null; on_watch: boolean; watch_reason: string | null; is_rest: boolean;
+};
+// ifpl_period_summary() — every headline figure for the selected period/scope.
+type Attention = { severity: "good" | "watch" | "urgent"; kind: string; title: string; detail: string };
+type Summary = {
+  totals: { months: number; sales: number; proj_sales: number; gp: number; proj_gp: number; overheads: number; proj_overheads: number; final: number; proj_final: number };
+  channels: {
+    online: { sales: number; proj_sales: number; final: number };
+    retail: { stores: number; sales: number; proj_sales: number; gp: number; final: number };
+    cost_centres: { final: number; items: { branch: string; final: number }[] };
+    company: { sales: number; proj_sales: number; gp: number; final: number };
+  };
+  stars: { top_store: { branch: string; final: number } | null; best_margin: { branch: string; margin_pct: number } | null; best_beat: { branch: string; beat_pct: number } | null };
+  watch: { count: number; loss_making: { branch: string; final: number; sales: number; months: number }[]; off_plan: { branch: string; variance_pct: number; sales: number; proj_sales: number }[] };
+  overheads: { line: string; actual: number; projection: number; variance_pct: number | null }[];
+  below_line: { line: string; actual: number }[];
+  attention: Attention[];
+};
+type FyRow = { fy: string; fy_start_year: number; net_sales: number; months: number; is_live: boolean };
+type YoyRow = { branch: string; channel: string; months_compared: number; sales: number; lfl_sales: number | null; ly_sales: number | null; growth_pct: number | null; final: number; ly_final: number | null; is_new: boolean };
+type Coverage = {
+  first_month: string | null; last_month: string | null; current_month: string; months: string[];
+  rejected: { month: string; uploaded_at: string; reason: string }[]; missing: string[]; last_upload_at: string | null; warnings: number;
+};
 type ValidationRow = { month: string; file_name: string; status: string; checks_passed: number; checks_failed: number; warnings: number; uploaded_at: string };
 type CheckDetail = { name: string; expected: number; reported: number; diff: number; blocking: boolean };
 type CheckIssue = { month: string; check_name: string; expected: number; reported: number; diff: number; blocking: boolean; status: string };
 type RestatedItem = { scope: string; line: string; old_value: number; new_value: number };
-type UploadResult = { month: string; accepted: boolean; summary: string; failed?: CheckDetail[]; warnings?: CheckDetail[]; restated?: RestatedItem[] };
+type UploadResult = { month: string; accepted: boolean; summary: string; failed?: CheckDetail[]; warnings?: CheckDetail[]; restated?: RestatedItem[]; previous_status?: "accepted" | "rejected" | null; previous_uploaded_at?: string | null };
 type Insight = { title: string; detail: string; severity: "good" | "watch" | "urgent" };
 
-// Net sales by financial year from the workbook's Sales Growth sheet
-// (historic years don't exist at line level in the database).
-const FY_HISTORY = [
-  { fy: "21-22", sales: 927_277_513 },
-  { fy: "22-23", sales: 1_262_859_897 },
-  { fy: "23-24", sales: 1_600_223_174 },
-  { fy: "24-25", sales: 2_576_900_112 },
-];
+// Fiscal year starts in July: Q1 Jul–Sep, Q2 Oct–Dec, Q3 Jan–Mar, Q4 Apr–Jun.
+const fiscalQuarterStart = (m: string) => {
+  const [y, mo] = m.split("-").map(Number);
+  const qStartMonth = [7, 10, 1, 4].find((q) => mo >= q && mo <= q + 2) as number;
+  return `${y}-${String(qStartMonth).padStart(2, "0")}-01`;
+};
+const addMonths = (m: string, n: number) => {
+  const [y, mo] = m.split("-").map(Number);
+  const d = new Date(Date.UTC(y, mo - 1 + n, 1));
+  return d.toISOString().slice(0, 10);
+};
 
 const MONTH_LABEL = (m: string) => {
   const d = new Date(m + "T00:00:00Z");
@@ -66,6 +96,9 @@ const fmtMShort = (n: number | null | undefined) => {
   return (Math.round((n / 1_000_000) * 10) / 10).toLocaleString() + "m";
 };
 const fmtPct = (n: number) => (Math.round(n * 10) / 10) + "%";
+// Headline cards carry the currency so a figure can never be mistaken for
+// thousands or millions.
+const fmtPKRFull = (n: number | null | undefined) => (n === null || n === undefined || Number.isNaN(n) ? "—" : `PKR ${fmtM(n)}`);
 const toM = (n: number) => Math.round(n / 100_000) / 10;
 
 const PRESETS = ["Month", "Quarter", "YTD", "Custom"] as const;
@@ -326,8 +359,11 @@ export default function ImperialPnlPage() {
   const [loading, setLoading] = useState(true);
   const [allMonths, setAllMonths] = useState<string[]>([]);
   const [kpiRows, setKpiRows] = useState<KpiRow[]>([]);
-  const [league, setLeague] = useState<LeagueRow[]>([]);
-  const [lineTotals, setLineTotals] = useState<LineTotal[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [leagueRows, setLeagueRows] = useState<LeagueRow[]>([]);
+  const [fyBars, setFyBars] = useState<FyRow[]>([]);
+  const [yoyRows, setYoyRows] = useState<YoyRow[]>([]);
+  const [coverage, setCoverage] = useState<Coverage | null>(null);
   const [validationRows, setValidationRows] = useState<ValidationRow[]>([]);
 
   const [channelFilter, setChannelFilter] = useState("All");
@@ -382,13 +418,50 @@ export default function ImperialPnlPage() {
     auditWarnings?: string[];
   } | null>(null);
 
-  const { monthFrom, monthTo } = useMemo(() => {
-    if (allMonths.length === 0) return { monthFrom: "", monthTo: "" };
+  // Period presets (Khuram, 18/10/2026): Month = the current calendar month,
+  // Quarter = the current FISCAL quarter (Jul–Sep, Oct–Dec, Jan–Mar, Apr–Jun),
+  // YTD = 1 January of this year to today. Fiscal-year views live under
+  // Custom. When the current month has no accepted data yet, the preset
+  // falls back to the latest month that does and says so (periodNote).
+  const { monthFrom, monthTo, periodNote } = useMemo(() => {
+    if (allMonths.length === 0 || !coverage) return { monthFrom: "", monthTo: "", periodNote: "" };
+    const first = allMonths[0];
     const last = allMonths[allMonths.length - 1];
-    if (preset === "Custom") return { monthFrom: customFrom || allMonths[0], monthTo: customTo || last };
-    const n = preset === "Month" ? 1 : preset === "Quarter" ? 3 : allMonths.length;
-    return { monthFrom: allMonths[Math.max(0, allMonths.length - n)], monthTo: last };
-  }, [allMonths, preset, customFrom, customTo]);
+    const cur = coverage.current_month;
+    const has = (m: string) => allMonths.includes(m);
+    const clamp = (m: string) => (m < first ? first : m > last ? last : m);
+    const gapNote = () => {
+      const rejected = coverage.rejected.map((r) => MONTH_LABEL(r.month));
+      const missing = coverage.missing.map(MONTH_LABEL);
+      const parts: string[] = [];
+      if (rejected.length) parts.push(`${rejected.join(", ")} ${rejected.length > 1 ? "were" : "was"} rejected`);
+      if (missing.length) parts.push(`${missing.join(", ")} not uploaded yet`);
+      return parts.length ? ` (${parts.join("; ")})` : "";
+    };
+    if (preset === "Custom") return { monthFrom: customFrom || first, monthTo: customTo || last, periodNote: "" };
+    if (preset === "Month") {
+      if (has(cur)) return { monthFrom: cur, monthTo: cur, periodNote: "" };
+      return { monthFrom: last, monthTo: last, periodNote: `${MONTH_LABEL(cur)} has no accepted data yet — showing ${MONTH_LABEL(last)}, the latest month available${gapNote()}.` };
+    }
+    if (preset === "Quarter") {
+      const qs = fiscalQuarterStart(cur);
+      const qe = addMonths(qs, 2);
+      const inQ = allMonths.filter((m) => m >= qs && m <= qe);
+      if (inQ.length > 0) {
+        const note = inQ.length < 3 && qe <= cur ? `Quarter ${MONTH_LABEL(qs)}–${MONTH_LABEL(qe)}: ${inQ.length} of 3 months loaded${gapNote()}.` : inQ.length < 3 ? `Quarter ${MONTH_LABEL(qs)}–${MONTH_LABEL(qe)} so far (${inQ.length} of 3 months)${gapNote()}.` : "";
+        return { monthFrom: inQ[0], monthTo: inQ[inQ.length - 1], periodNote: note };
+      }
+      const lqs = fiscalQuarterStart(last);
+      const lq = allMonths.filter((m) => m >= lqs && m <= addMonths(lqs, 2));
+      return { monthFrom: lq[0], monthTo: lq[lq.length - 1], periodNote: `No data yet for the current quarter (${MONTH_LABEL(qs)}–${MONTH_LABEL(qe)}) — showing the latest quarter with data, ${MONTH_LABEL(lq[0])}–${MONTH_LABEL(lq[lq.length - 1])}${gapNote()}.` };
+    }
+    // YTD — calendar year to date, clamped to the data we actually hold.
+    const jan = `${cur.slice(0, 4)}-01-01`;
+    const from = clamp(jan);
+    const to = clamp(cur);
+    const note = to < cur ? `Year to date: ${MONTH_LABEL(from)}–${MONTH_LABEL(to)} — nothing accepted after ${MONTH_LABEL(to)} yet${gapNote()}.` : "";
+    return { monthFrom: from, monthTo: to, periodNote: note };
+  }, [allMonths, coverage, preset, customFrom, customTo]);
 
   // Defensive numeric coercion — Postgres numeric can serialise as strings.
   const numKpi = (r: Record<string, unknown>): KpiRow => {
@@ -406,25 +479,28 @@ export default function ImperialPnlPage() {
     return out as unknown as T;
   };
 
-  // Full-range rows (filter-independent) — month list for the presets, and
-  // the FY 25-26 total for the growth story so it doesn't collapse when a
-  // narrow preset is selected.
-  const [fyRows, setFyRows] = useState<KpiRow[]>([]);
+  // Filter-independent data: which months exist (drives the presets), what
+  // was rejected or is missing, and net sales by fiscal year for the growth
+  // story — all computed in Postgres.
   useEffect(() => {
     let active = true;
     async function loadAll() {
-      const { data, error } = await supabase.rpc("ifpl_kpi_by_month", { p_from: "2000-01-01", p_to: "2100-01-01", p_channel: "All", p_branch: "All" });
+      const [covRes, fyRes] = await Promise.all([
+        supabase.rpc("ifpl_data_coverage"),
+        supabase.rpc("ifpl_sales_by_fy"),
+      ]);
       if (!active) return;
-      if (!error) {
-        const rows = ((data || []) as Record<string, unknown>[]).map(numKpi);
-        setAllMonths(rows.map((r) => r.month));
-        setFyRows(rows);
+      if (!covRes.error && covRes.data) {
+        const cov = covRes.data as Coverage;
+        setCoverage(cov);
+        setAllMonths(cov.months || []);
       }
+      if (!fyRes.error) setFyBars(((fyRes.data || []) as Record<string, unknown>[]).map((r) => numRow<FyRow>(r, ["fy"])));
       setLoading(false);
     }
     loadAll();
     return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [pnlRefresh]);
 
   // ── BS: load available months ────────────────────────────────────────
@@ -506,25 +582,29 @@ export default function ImperialPnlPage() {
     if (!monthFrom || !monthTo) return;
     let active = true;
     async function load() {
-      const [kpiRes, leagueRes, lineRes, valRes] = await Promise.all([
+      const [kpiRes, sumRes, leagueRes, valRes, yoyRes] = await Promise.all([
         supabase.rpc("ifpl_kpi_by_month", { p_from: monthFrom, p_to: monthTo, p_channel: channelFilter, p_branch: branchFilter }),
-        supabase.rpc("ifpl_branch_league", { p_from: monthFrom, p_to: monthTo }),
-        supabase.rpc("ifpl_line_totals", { p_from: monthFrom, p_to: monthTo, p_channel: channelFilter, p_branch: branchFilter }),
+        supabase.rpc("ifpl_period_summary", { p_from: monthFrom, p_to: monthTo, p_channel: channelFilter, p_branch: branchFilter }),
+        supabase.rpc("ifpl_store_league", { p_from: monthFrom, p_to: monthTo, p_sort: sortKey, p_desc: sortDesc }),
         supabase.rpc("ifpl_validation_summary"),
+        supabase.rpc("ifpl_yoy_stores", { p_from: monthFrom, p_to: monthTo }),
       ]);
       if (!active) return;
       setKpiRows(((kpiRes.data || []) as Record<string, unknown>[]).map(numKpi));
-      setLeague(((leagueRes.data || []) as Record<string, unknown>[]).map((r) => numRow<LeagueRow>(r, ["branch", "channel"])));
-      setLineTotals(((lineRes.data || []) as Record<string, unknown>[]).map((r) => numRow<LineTotal>(r, ["line", "category"])));
+      setSummary((sumRes.data as Summary) || null);
+      setLeagueRows(((leagueRes.data || []) as Record<string, unknown>[]).map((r) => numRow<LeagueRow>(r, ["branch", "channel", "location_id", "watch_reason"])));
       setValidationRows(((valRes.data || []) as Record<string, unknown>[]).map((r) => numRow<ValidationRow>(r, ["month", "file_name", "status", "uploaded_at"])));
+      setYoyRows(((yoyRes.data || []) as Record<string, unknown>[]).map((r) => numRow<YoyRow>(r, ["branch", "channel", "location_id"])));
     }
     load();
     return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthFrom, monthTo, channelFilter, branchFilter, pnlRefresh]);
+     
+  }, [monthFrom, monthTo, channelFilter, branchFilter, sortKey, sortDesc, pnlRefresh]);
 
-  // Saved AI commentary for this exact period + scope — shown as-is on
-  // every visit; only Regenerate replaces it.
+  // AI commentary for this exact period + scope. A saved analysis is shown
+  // as-is; when none exists yet it is generated once automatically, so the
+  // story always matches the period on screen. Regenerate replaces it.
+  const [autoGenKey, setAutoGenKey] = useState("");
   useEffect(() => {
     if (!monthFrom || !monthTo) return;
     let active = true;
@@ -536,9 +616,15 @@ export default function ImperialPnlPage() {
       setActions((row?.actions || []) as string[]);
       setGeneratedAt(row?.generated_at || null);
       setInsightError("");
+      const key = `${monthFrom}|${monthTo}|${channelFilter}|${branchFilter}`;
+      if (!row && autoGenKey !== key) {
+        setAutoGenKey(key);
+        generateInsights();
+      }
     }
     loadSaved();
     return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthFrom, monthTo, channelFilter, branchFilter]);
 
   // The workbook (~9.4 MB) is over Vercel's 4.5 MB request-body cap, so the
@@ -588,13 +674,9 @@ export default function ImperialPnlPage() {
         mapped.push({ month: "", accepted: false, summary: `⚠ ${w}`, failed: [], warnings: [] });
       }
       setUploadResults(mapped);
-      const { data } = await supabase.rpc("ifpl_kpi_by_month", { p_from: "2000-01-01", p_to: "2100-01-01", p_channel: "All", p_branch: "All" });
-      const fresh = ((data || []) as Record<string, unknown>[]).map(numKpi);
-      setAllMonths(fresh.map((r) => r.month));
-      setFyRows(fresh);
-      // Reload the detail data even when the month list is unchanged
-      // (re-upload of existing months).
-      if (mapped.some((m) => m.accepted)) setPnlRefresh((n) => n + 1);
+      // Reload coverage, FY bars and every card — a re-upload of an existing
+      // month changes figures without changing the month list.
+      setPnlRefresh((n) => n + 1);
     } catch (err) {
       setUploadResults([{ month: "", accepted: false, summary: err instanceof Error ? err.message : "Could not read this file" }]);
     } finally {
@@ -646,34 +728,21 @@ export default function ImperialPnlPage() {
 
   /* ── Derived data (shaping only) ── */
 
-  const channels = ["All", ...new Set(league.map((l) => l.channel))];
-  const branchOptions = ["All", ...league.map((l) => l.branch).sort()];
-
-  const sum = (f: (r: KpiRow) => number) => kpiRows.reduce((s, r) => s + f(r), 0);
-  const totSales = sum((r) => r.act_sales);
-  const totProjSales = sum((r) => r.proj_sales);
-  const totGp = sum((r) => r.act_gp);
-  const totProjGp = sum((r) => r.proj_gp);
-  const totOverheads = sum((r) => r.act_overheads);
-  const totProjOverheads = sum((r) => r.proj_overheads);
-  const totFinal = sum((r) => r.act_final);
+  // Every figure below comes from ifpl_period_summary / ifpl_store_league —
+  // this block only renames and shapes, it never adds anything up.
+  const channels = ["All", "Retail", "Online PK", "Cost centre"];
+  const t = summary?.totals;
+  const totSales = t?.sales ?? 0;
+  const totProjSales = t?.proj_sales ?? 0;
+  const totGp = t?.gp ?? 0;
+  const totProjGp = t?.proj_gp ?? 0;
+  const totOverheads = t?.overheads ?? 0;
+  const totProjOverheads = t?.proj_overheads ?? 0;
+  const totFinal = t?.final ?? 0;
   const salesVarPct = totProjSales ? ((totSales - totProjSales) / totProjSales) * 100 : null;
   const overheadVarPct = totProjOverheads ? ((totOverheads - totProjOverheads) / totProjOverheads) * 100 : null;
 
-  // Attention signals — branches badly off plan or loss-making (period
-  // league, so they respect the date filter), plus the latest month's miss.
-  const tradingBranches = league.filter((l) => l.channel !== "Cost centre");
-  const offPlan = tradingBranches
-    .filter((l) => l.proj_sales > 1_000_000 && l.act_sales < l.proj_sales * 0.8)
-    .sort((a, b) => (a.act_sales / a.proj_sales) - (b.act_sales / b.proj_sales));
-  const lossBranches = tradingBranches.filter((l) => l.act_final < -100_000).sort((a, b) => a.act_final - b.act_final);
-  const latest = kpiRows[kpiRows.length - 1];
-  const attention: string[] = [];
-  if (offPlan.length > 0) attention.push(offPlan.slice(0, 3).map((l) => `${l.branch} ${fmtPct((1 - l.act_sales / l.proj_sales) * 100)} below plan`).join(" · "));
-  if (lossBranches.length > 0) attention.push(`${lossBranches.length} branch${lossBranches.length > 1 ? "es" : ""} loss-making (worst: ${lossBranches[0].branch} ${fmtM(lossBranches[0].act_final)})`);
-  if (latest && latest.proj_sales > 0 && latest.act_sales < latest.proj_sales * 0.9) {
-    attention.push(`${MONTH_LABEL(latest.month)} missed plan by ${fmtM(latest.proj_sales - latest.act_sales)} (${fmtPct((1 - latest.act_sales / latest.proj_sales) * 100)})`);
-  }
+  const attention: Attention[] = summary?.attention ?? [];
 
   const planData = kpiRows.map((r) => ({
     month: MONTH_LABEL(r.month),
@@ -685,68 +754,62 @@ export default function ImperialPnlPage() {
     month: MONTH_LABEL(r.month),
     final: toM(r.act_final),
   }));
-  const growthData = [
-    ...FY_HISTORY.map((h) => ({ fy: h.fy, sales: toM(h.sales), current: false })),
-    // Filter-independent: FY 25-26 total from the full-range fetch, so a
-    // Month/Quarter preset can't make the current-year bar collapse.
-    { fy: "25-26*", sales: toM(fyRows.reduce((s, r) => s + r.act_sales, 0)), current: true },
-  ];
+  // Net sales by fiscal year (ifpl_sales_by_fy): history from the workbook's
+  // Sales Growth sheet, live years summed in Postgres. A partial year is
+  // starred and labelled with how many months it holds.
+  const growthData = fyBars.map((f) => ({
+    fy: f.is_live && f.months < 12 ? `${f.fy}*` : f.fy,
+    sales: toM(f.net_sales),
+    current: f.is_live && f.months < 12,
+    months: f.months,
+  }));
 
-  // League rows with computed columns; the table shows Top 10 by default,
-  // with Watch list / All tabs — summary first, detail on demand.
-  const allLeagueRows = tradingBranches
-    .map((l) => ({
-      branch: l.branch,
-      channel: l.channel,
-      sales: l.act_sales,
-      projSales: l.proj_sales,
-      gp: l.act_gp,
-      variance: l.proj_sales ? ((l.act_sales - l.proj_sales) / l.proj_sales) * 100 : null,
-      margin: l.act_sales ? (l.act_gp / l.act_sales) * 100 : null,
-      contribution: l.act_final,
-    }))
-    .sort((a, b) => {
-      const va = a[sortKey] ?? -Infinity;
-      const vb = b[sortKey] ?? -Infinity;
-      return sortDesc ? (vb as number) - (va as number) : (va as number) - (vb as number);
-    });
-  const watchRows = allLeagueRows.filter((l) => l.contribution < -100_000 || (l.variance !== null && l.variance < -20));
+  // League rows — ranked server-side by the chosen sort; the "rest" row is
+  // the server's aggregate of ranks 11+.
+  const allLeagueRows = leagueRows.filter((l) => !l.is_rest).map((l) => ({
+    rank: l.rank,
+    branch: l.branch,
+    channel: l.channel,
+    sales: l.act_sales,
+    projSales: l.proj_sales,
+    gp: l.act_gp,
+    variance: l.variance_pct,
+    margin: l.margin_pct,
+    contribution: l.act_final,
+    onWatch: l.on_watch,
+    watchReason: l.watch_reason,
+  }));
+  const restRow = leagueRows.find((l) => l.is_rest) || null;
+  const watchRows = allLeagueRows.filter((l) => l.onWatch);
   const searchActive = search.trim().length > 0;
   const searched = allLeagueRows.filter((l) => l.branch.toLowerCase().includes(search.toLowerCase()));
-  const visibleRows = searchActive ? searched : leagueTab === "top" ? allLeagueRows.slice(0, 10) : leagueTab === "watch" ? watchRows : allLeagueRows;
-  const restRows = !searchActive && leagueTab === "top" ? allLeagueRows.slice(10) : [];
-  const restSales = restRows.reduce((s, r) => s + r.sales, 0);
-  const restGp = restRows.reduce((s, r) => s + r.gp, 0);
-  const restContribution = restRows.reduce((s, r) => s + r.contribution, 0);
+  const visibleRows = searchActive ? searched : leagueTab === "top" ? allLeagueRows.filter((l) => l.rank <= 10) : leagueTab === "watch" ? watchRows : allLeagueRows;
+  const showRestRow = !searchActive && leagueTab === "top" && restRow !== null;
+  const branchOptions = ["All", ...allLeagueRows.map((l) => l.branch).sort(), ...(summary?.channels.cost_centres.items.map((c) => c.branch) ?? [])];
 
-  const costCentres = league.filter((l) => l.channel === "Cost centre");
-  const costCentreTotal = costCentres.reduce((s, l) => s + l.act_final, 0);
+  const costCentres = summary?.channels.cost_centres.items ?? [];
+  const costCentreTotal = summary?.channels.cost_centres.final ?? 0;
   const maxLeagueSales = Math.max(1, ...allLeagueRows.map((l) => l.sales));
   const maxContribution = Math.max(1, ...allLeagueRows.map((l) => Math.abs(l.contribution)));
 
-  // Channel totals + stars for the summary cards — filter-independent
-  // (always the whole company over the selected period).
-  const onlineTotal = tradingBranches.filter((l) => l.channel === "Online PK");
-  const retailTotal = tradingBranches.filter((l) => l.channel !== "Online PK");
-  const onlineSales = onlineTotal.reduce((s, l) => s + l.act_sales, 0);
-  const onlineContribution = onlineTotal.reduce((s, l) => s + l.act_final, 0);
-  const retailSales = retailTotal.reduce((s, l) => s + l.act_sales, 0);
-  const retailContribution = retailTotal.reduce((s, l) => s + l.act_final, 0);
-  const companySales = onlineSales + retailSales;
-  const companyProjSales = tradingBranches.reduce((s, l) => s + l.proj_sales, 0);
-  const companyGp = tradingBranches.reduce((s, l) => s + l.act_gp, 0);
-  const companyFinal = tradingBranches.reduce((s, l) => s + l.act_final, 0) + costCentreTotal;
+  // Channel totals + stars (whole company over the selected period).
+  const ch = summary?.channels;
+  const onlineSales = ch?.online.sales ?? 0;
+  const onlineContribution = ch?.online.final ?? 0;
+  const retailStores = ch?.retail.stores ?? 0;
+  const retailSales = ch?.retail.sales ?? 0;
+  const retailContribution = ch?.retail.final ?? 0;
+  const companySales = ch?.company.sales ?? 0;
+  const companyProjSales = ch?.company.proj_sales ?? 0;
+  const companyGp = ch?.company.gp ?? 0;
+  const companyFinal = ch?.company.final ?? 0;
 
-  const retailByContribution = [...retailTotal].sort((a, b) => b.act_final - a.act_final);
-  const topStore = retailByContribution[0];
-  const bestMargin = [...tradingBranches]
-    .filter((l) => l.act_sales > 20_000_000)
-    .sort((a, b) => (b.act_gp / b.act_sales) - (a.act_gp / a.act_sales))[0];
-  const bestBeat = [...tradingBranches]
-    .filter((l) => l.proj_sales > 5_000_000)
-    .sort((a, b) => (b.act_sales / b.proj_sales) - (a.act_sales / a.proj_sales))[0];
-  const worstLosses = watchRows.filter((l) => l.contribution < -100_000).sort((a, b) => a.contribution - b.contribution).slice(0, 3);
-  const worstOffPlan = watchRows.filter((l) => l.variance !== null && l.variance < -20).sort((a, b) => (a.variance as number) - (b.variance as number)).slice(0, 2);
+  const topStore = summary?.stars.top_store ?? null;
+  const bestMargin = summary?.stars.best_margin ?? null;
+  const bestBeat = summary?.stars.best_beat ?? null;
+  const worstLosses = (summary?.watch.loss_making ?? []).slice(0, 3);
+  const worstOffPlan = (summary?.watch.off_plan ?? []).slice(0, 2);
+  const watchCount = summary?.watch.count ?? 0;
 
   const marginChip = (pct: number | null) => {
     if (pct === null) return { bg: COLOURS.TRACK, fg: COLOURS.SLATE, label: "—" };
@@ -755,15 +818,22 @@ export default function ImperialPnlPage() {
     return { bg: COLOURS.DANGER_SOFT, fg: COLOURS.RED, label: fmtPct(pct) };
   };
 
-  const overheadLines = lineTotals
-    .filter((l) => l.category === "overhead" && l.actual > 0)
-    .sort((a, b) => b.actual - a.actual)
-    .slice(0, 6);
+  const overheadLines = summary?.overheads ?? [];
   const maxOverhead = Math.max(1, ...overheadLines.map((l) => l.actual));
-  const belowLines = lineTotals.filter((l) => l.category.startsWith("below"));
+  const belowLines = summary?.below_line ?? [];
 
-  const allValidated = validationRows.length > 0 && validationRows.every((v) => v.status === "accepted");
-  const totalWarnings = validationRows.reduce((s, v) => s + (v.warnings || 0), 0);
+  // Like-for-like (ifpl_yoy_stores): same months last year, comparable
+  // stores only; new stores listed separately.
+  const lflTotal = yoyRows.find((r) => r.channel === "Total") || null;
+  const lflRows = yoyRows.filter((r) => r.channel !== "Total" && !r.is_new && r.growth_pct !== null);
+  const newStores = yoyRows.filter((r) => r.channel !== "Total" && r.is_new);
+  const lflBest = lflRows.slice(0, 3);
+  const lflWorst = [...lflRows].reverse().slice(0, 3);
+
+  const rejectedMonths = coverage?.rejected ?? [];
+  const missingMonths = coverage?.missing ?? [];
+  const allValidated = validationRows.length > 0 && rejectedMonths.length === 0;
+  const totalWarnings = coverage?.warnings ?? 0;
 
   const severityColour = (s: Insight["severity"]) => s === "good" ? COLOURS.GREEN : s === "watch" ? COLOURS.AMBER : COLOURS.RED;
   const severitySoft = (s: Insight["severity"]) => s === "good" ? COLOURS.SUCCESS_SOFT : s === "watch" ? COLOURS.WARNING_SOFT : COLOURS.DANGER_SOFT;
@@ -857,7 +927,11 @@ export default function ImperialPnlPage() {
             {uploadResults.map((r, i) => (
               <div key={i} style={{ marginTop: "8px", padding: "8px 12px", borderRadius: RADII.SM, background: r.accepted ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT }}>
                 <div style={{ fontSize: "12px", fontWeight: 600, color: r.accepted ? COLOURS.GREEN : COLOURS.RED }}>
-                  {r.month ? MONTH_LABEL(r.month) + " — " : ""}{r.accepted ? "Accepted — " : "Rejected — "}{r.summary}
+                  {r.month ? MONTH_LABEL(r.month) + " — " : ""}
+                  {r.accepted
+                    ? r.previous_status === "rejected" ? "✓ Data fixed — this month's earlier rejected upload is replaced: " : r.previous_status === "accepted" ? "✓ Replaced previous figures" + (r.previous_uploaded_at ? ` (uploaded ${formatDateUK(r.previous_uploaded_at.slice(0, 10))})` : "") + ": " : "Accepted — "
+                    : "✗ Rejected — nothing saved for this month" + (r.previous_status === "accepted" ? " (previously accepted figures remain in use)" : "") + ": "}
+                  {r.summary}
                 </div>
                 {(r.failed || []).length > 0 && (
                   <div style={{ fontSize: "12px", color: COLOURS.RED, lineHeight: 1.6, marginTop: "4px" }}>
@@ -906,7 +980,7 @@ export default function ImperialPnlPage() {
                 <span style={{ width: "1px", height: "18px", background: COLOURS.HAIRLINE, margin: "0 3px" }} />
                 <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>BRANCH</span>
                 <select value={branchFilter} onChange={(e) => { setBranchFilter(e.target.value); setChannelFilter("All"); }} style={{ padding: "5px 9px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "12px", maxWidth: "180px" }}>
-                  {branchOptions.map((b) => <option key={b} value={b}>{b === "All" ? `All ${branchOptions.length - 1} branches` : b}</option>)}
+                  {branchOptions.map((b) => <option key={b} value={b}>{b === "All" ? `All ${branchOptions.length - 1} locations` : b}</option>)}
                 </select>
                 <span style={{ width: "1px", height: "18px", background: COLOURS.HAIRLINE, margin: "0 3px" }} />
                 <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>PERIOD</span>
@@ -934,27 +1008,49 @@ export default function ImperialPnlPage() {
                 )}
               </div>
               <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "5px" }}>
-                Showing {branchFilter !== "All" ? branchFilter : channelFilter === "All" ? "the whole company" : channelFilter} · {MONTH_LABEL(monthFrom)} to {MONTH_LABEL(monthTo)} — every card obeys these filters
+                Showing {branchFilter !== "All" ? branchFilter : channelFilter === "All" ? "the whole company" : channelFilter === "Retail" ? `${retailStores} retail stores` : channelFilter} · {monthFrom === monthTo ? MONTH_LABEL(monthFrom) : `${MONTH_LABEL(monthFrom)} to ${MONTH_LABEL(monthTo)}`} — every card obeys these filters
               </div>
+              {periodNote && (
+                <div style={{ fontSize: "11px", color: COLOURS.AMBER, fontWeight: 600, marginTop: "3px" }}>⚠ {periodNote}</div>
+              )}
             </div>
 
             {/* ── Attention banner ── */}
-            {show("imperial_pnl.attention_banner") && attention.length > 0 && (
-              <div style={{ ...cardStyle, marginBottom: "10px", background: COLOURS.DANGER_SOFT, border: `1px solid ${COLOURS.RED}` }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.RED, marginBottom: "3px" }}>Needs your attention</div>
-                <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{attention.join(" · ")}</div>
-              </div>
+            {show("imperial_pnl.attention_banner") && (
+              attention.length > 0 ? (
+                <div style={{ ...cardStyle, marginBottom: "10px", background: attention.some((a) => a.severity === "urgent") ? COLOURS.DANGER_SOFT : COLOURS.WARNING_SOFT, border: `1px solid ${attention.some((a) => a.severity === "urgent") ? COLOURS.RED : COLOURS.AMBER}` }}>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: attention.some((a) => a.severity === "urgent") ? COLOURS.RED : COLOURS.AMBER, marginBottom: "6px" }}>
+                    Needs your attention — {attention.length} item{attention.length > 1 ? "s" : ""} for {monthFrom === monthTo ? MONTH_LABEL(monthFrom) : `${MONTH_LABEL(monthFrom)}–${MONTH_LABEL(monthTo)}`}
+                  </div>
+                  <div style={{ display: "grid", gap: "5px" }}>
+                    {attention.map((a, i) => (
+                      <div key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "12px", lineHeight: 1.5 }}>
+                        <span style={{ flexShrink: 0, marginTop: "4px", width: "8px", height: "8px", borderRadius: "50%", background: a.severity === "urgent" ? COLOURS.RED : COLOURS.AMBER }} />
+                        <div>
+                          <span style={{ fontWeight: 700, color: a.severity === "urgent" ? COLOURS.RED : COLOURS.INK_700 }}>{a.title}</span>
+                          <span style={{ color: COLOURS.INK_700 }}> — {a.detail}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : summary ? (
+                <div style={{ ...cardStyle, marginBottom: "10px", background: COLOURS.SUCCESS_SOFT, border: `1px solid ${COLOURS.GREEN}`, padding: "8px 14px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.GREEN }}>✓ Nothing needs attention</span>
+                  <span style={{ fontSize: "12px", color: COLOURS.INK_700 }}> — no rejected uploads, no stores loss-making or badly off plan, margin and overheads within plan for this period.</span>
+                </div>
+              ) : null
             )}
 
             {/* ── KPI cards ── */}
             {show("imperial_pnl.kpi_cards") && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px", marginBottom: "10px" }}>
               <div style={{ ...cardStyle, padding: "10px 12px" }}>
-                <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Net sales — {preset === "Month" ? MONTH_LABEL(monthTo) : "period"}</div>
-                <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>{fmtM(totSales)}</div>
+                <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Net sales — {monthFrom === monthTo ? MONTH_LABEL(monthTo) : `${t?.months ?? 0} months`}</div>
+                <div style={{ fontSize: "20px", fontWeight: 700, color: COLOURS.NAVY, whiteSpace: "nowrap" }}>{fmtPKRFull(totSales)}</div>
                 {salesVarPct !== null && (
                   <div style={{ fontSize: "11px", color: salesVarPct >= 0 ? COLOURS.GREEN : COLOURS.RED }}>
-                    {salesVarPct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(salesVarPct))} vs plan {fmtM(totProjSales)}
+                    {salesVarPct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(salesVarPct))} vs plan {fmtPKRFull(totProjSales)}
                   </div>
                 )}
               </div>
@@ -965,7 +1061,7 @@ export default function ImperialPnlPage() {
               </div>
               <div style={{ ...cardStyle, padding: "10px 12px" }}>
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Overheads</div>
-                <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>{fmtM(totOverheads)}</div>
+                <div style={{ fontSize: "20px", fontWeight: 700, color: COLOURS.NAVY, whiteSpace: "nowrap" }}>{fmtPKRFull(totOverheads)}</div>
                 {overheadVarPct !== null && (
                   <div style={{ fontSize: "11px", color: overheadVarPct <= 0 ? COLOURS.GREEN : COLOURS.RED }}>
                     {overheadVarPct <= 0 ? "▼" : "▲"} {fmtPct(Math.abs(overheadVarPct))} vs plan
@@ -974,7 +1070,7 @@ export default function ImperialPnlPage() {
               </div>
               <div style={{ ...cardStyle, padding: "10px 12px" }}>
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Final profit</div>
-                <div style={{ fontSize: "22px", fontWeight: 700, color: totFinal >= 0 ? COLOURS.GREEN : COLOURS.RED }}>{totFinal >= 0 ? "+" : ""}{fmtM(totFinal)}</div>
+                <div style={{ fontSize: "20px", fontWeight: 700, color: totFinal >= 0 ? COLOURS.GREEN : COLOURS.RED, whiteSpace: "nowrap" }}>{totFinal >= 0 ? "+" : ""}{fmtPKRFull(totFinal)}</div>
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{totSales ? fmtPct((totFinal / totSales) * 100) + " of net sales" : ""}</div>
               </div>
             </div>
@@ -1023,7 +1119,7 @@ export default function ImperialPnlPage() {
               </div>
               <div style={cardStyle}>
                 <div style={sectionTitle}>Growth story</div>
-                <div style={sectionCaption}>Net sales by financial year · 25-26* is the live database total for the fiscal year to date</div>
+                <div style={sectionCaption}>Net sales by financial year (July–June) · * = fiscal year in progress, live database total so far</div>
                 <div style={{ height: "200px" }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={growthData}>
@@ -1032,7 +1128,7 @@ export default function ImperialPnlPage() {
                       <YAxis tick={{ fontSize: 11 }} />
                       <Tooltip />
                       <Bar dataKey="sales" name="Net sales (m)">
-                        {growthData.map((d, i) => <Cell key={i} fill={COLOURS.BLUE} fillOpacity={d.current ? 1 : 0.45 + i * 0.12} />)}
+                        {growthData.map((d, i) => <Cell key={i} fill={COLOURS.BLUE} fillOpacity={d.current ? 1 : Math.min(0.95, 0.45 + i * 0.1)} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -1054,26 +1150,26 @@ export default function ImperialPnlPage() {
                   <div style={{ fontSize: "11px", color: COLOURS.GREEN, fontWeight: 700, marginBottom: "2px" }}>CHANNEL TOTALS</div>
                   <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7 }}>
                     Online PK: {fmtM(onlineSales)} → <b>{onlineContribution >= 0 ? "+" : ""}{fmtM(onlineContribution)}</b><br />
-                    {retailTotal.length} retail stores: {fmtM(retailSales)} → <b>{retailContribution >= 0 ? "+" : ""}{fmtM(retailContribution)}</b><br />
+                    {retailStores} retail stores: {fmtM(retailSales)} → <b>{retailContribution >= 0 ? "+" : ""}{fmtM(retailContribution)}</b><br />
                     <span style={{ color: COLOURS.RED }}>HO + warehouses: {fmtM(costCentreTotal)}</span>
                   </div>
                 </div>
                 <div style={{ background: COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, padding: "9px 11px" }}>
                   <div style={{ fontSize: "11px", color: COLOURS.GREEN, fontWeight: 700, marginBottom: "2px" }}>STARS</div>
                   <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7 }}>
-                    {topStore && <>{topStore.branch} +{fmtM(topStore.act_final)} (top store)<br /></>}
-                    {bestMargin && <>{bestMargin.branch} {fmtPct((bestMargin.act_gp / bestMargin.act_sales) * 100)} GP (best margin)<br /></>}
-                    {bestBeat && <>{bestBeat.branch} +{fmtPct((bestBeat.act_sales / bestBeat.proj_sales - 1) * 100)} vs plan (best beat)</>}
+                    {topStore && <>{topStore.branch} +{fmtM(topStore.final)} (top store)<br /></>}
+                    {bestMargin && <>{bestMargin.branch} {fmtPct(bestMargin.margin_pct)} GP (best margin)<br /></>}
+                    {bestBeat && <>{bestBeat.branch} +{fmtPct(bestBeat.beat_pct)} vs plan (best beat)</>}
                   </div>
                 </div>
-                <div style={{ background: watchRows.length > 0 ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, padding: "9px 11px" }}>
-                  <div style={{ fontSize: "11px", color: watchRows.length > 0 ? COLOURS.RED : COLOURS.GREEN, fontWeight: 700, marginBottom: "2px" }}>
-                    {watchRows.length > 0 ? `WATCH LIST — ${watchRows.length} STORE${watchRows.length > 1 ? "S" : ""}` : "WATCH LIST — CLEAR"}
+                <div style={{ background: watchCount > 0 ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, padding: "9px 11px" }}>
+                  <div style={{ fontSize: "11px", color: watchCount > 0 ? COLOURS.RED : COLOURS.GREEN, fontWeight: 700, marginBottom: "2px" }}>
+                    {watchCount > 0 ? `WATCH LIST — ${watchCount} STORE${watchCount > 1 ? "S" : ""}` : "WATCH LIST — CLEAR"}
                   </div>
                   <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7 }}>
-                    {watchRows.length === 0 && "No loss-making or badly off-plan stores in this period."}
-                    {worstLosses.length > 0 && <>{worstLosses.length} loss-making: {worstLosses.map((l) => `${l.branch} ${fmtM(l.contribution)}`).join(", ")}<br /></>}
-                    {worstOffPlan.length > 0 && <>Far off plan: {worstOffPlan.map((l) => `${l.branch} ${fmtPct(l.variance as number)}`).join(", ")}</>}
+                    {watchCount === 0 && "No loss-making or badly off-plan stores in this period."}
+                    {worstLosses.length > 0 && <>{summary?.watch.loss_making.length} loss-making — worst: {worstLosses.map((l) => `${l.branch} ${fmtM(l.final)}`).join(", ")}<br /></>}
+                    {worstOffPlan.length > 0 && <>Far off plan: {worstOffPlan.map((l) => `${l.branch} ${fmtPct(l.variance_pct)}`).join(", ")}</>}
                   </div>
                 </div>
               </div>
@@ -1116,14 +1212,14 @@ export default function ImperialPnlPage() {
                     {visibleRows.map((r) => {
                       const chip = marginChip(r.margin);
                       const selected = branchFilter === r.branch;
-                      const rank = allLeagueRows.indexOf(r) + 1;
                       return (
                         <tr
                           key={r.branch}
                           onClick={() => { setBranchFilter(selected ? "All" : r.branch); setChannelFilter("All"); }}
-                          style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer", background: selected ? COLOURS.INFO_SOFT : r.contribution < -100_000 || (r.variance !== null && r.variance < -20) ? COLOURS.WARNING_SOFT : "transparent" }}
+                          title={r.watchReason ? `Watch: ${r.watchReason}` : undefined}
+                          style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer", background: selected ? COLOURS.INFO_SOFT : r.onWatch ? COLOURS.WARNING_SOFT : "transparent" }}
                         >
-                          <td style={{ color: COLOURS.INK_400, fontSize: "12px" }}>{rank}</td>
+                          <td style={{ color: COLOURS.INK_400, fontSize: "12px" }}>{r.rank}</td>
                           <td style={{ padding: "7px 0", fontWeight: 600 }}>{r.branch}{r.channel === "Online PK" ? " 🌐" : ""}</td>
                           <td>
                             {fmtM(r.sales)}{" "}
@@ -1140,20 +1236,20 @@ export default function ImperialPnlPage() {
                         </tr>
                       );
                     })}
-                    {restRows.length > 0 && (
+                    {showRestRow && restRow && (
                       <tr onClick={() => setLeagueTab("all")} style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer", background: COLOURS.CARD_ALT }}>
                         <td></td>
-                        <td style={{ padding: "7px 0", fontWeight: 600, color: COLOURS.SLATE }}>{restRows.length} other stores</td>
-                        <td style={{ color: COLOURS.SLATE }}>{fmtM(restSales)}</td>
-                        <td style={{ color: COLOURS.INK_400 }}>—</td>
-                        <td style={{ color: COLOURS.SLATE }}>{restSales > 0 ? fmtPct((restGp / restSales) * 100) : "—"}</td>
-                        <td style={{ color: restContribution >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 600 }}>{restContribution >= 0 ? "+" : ""}{fmtM(restContribution)} · tap for all</td>
+                        <td style={{ padding: "7px 0", fontWeight: 600, color: COLOURS.SLATE }}>{restRow.branch}</td>
+                        <td style={{ color: COLOURS.SLATE }}>{fmtM(restRow.act_sales)}</td>
+                        <td style={{ color: restRow.variance_pct === null ? COLOURS.INK_400 : restRow.variance_pct >= 0 ? COLOURS.GREEN : COLOURS.RED }}>{restRow.variance_pct === null ? "—" : `${restRow.variance_pct >= 0 ? "+" : ""}${fmtPct(restRow.variance_pct)}`}</td>
+                        <td style={{ color: COLOURS.SLATE }}>{restRow.margin_pct === null ? "—" : fmtPct(restRow.margin_pct)}</td>
+                        <td style={{ color: restRow.act_final >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 600 }}>{restRow.act_final >= 0 ? "+" : ""}{fmtM(restRow.act_final)} · tap for all</td>
                       </tr>
                     )}
                     {costCentres.length > 0 && !searchActive && leagueTab !== "watch" && (
                       <tr style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, background: COLOURS.CARD_ALT }}>
                         <td></td>
-                        <td style={{ padding: "7px 0", fontWeight: 600, color: COLOURS.INK_400 }}>Cost centres (HO + {costCentres.length - 1} warehouse{costCentres.length > 2 ? "s" : ""})</td>
+                        <td style={{ padding: "7px 0", fontWeight: 600, color: COLOURS.INK_400 }} title={costCentres.map((c) => `${c.branch} ${fmtM(c.final)}`).join(" · ")}>Cost centres ({costCentres.map((c) => c.branch).join(", ")})</td>
                         <td style={{ color: COLOURS.INK_400 }}>—</td>
                         <td style={{ color: COLOURS.INK_400 }}>—</td>
                         <td style={{ color: COLOURS.INK_400 }}>—</td>
@@ -1164,17 +1260,79 @@ export default function ImperialPnlPage() {
                       <tr style={{ borderTop: `2px solid ${COLOURS.NAVY}`, background: COLOURS.CARD_ALT }}>
                         <td></td>
                         <td style={{ padding: "7px 0", fontWeight: 700 }}>Whole company</td>
-                        <td style={{ fontWeight: 700 }}>{fmtM(companySales)}</td>
+                        <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{fmtPKRFull(companySales)}</td>
                         <td style={{ color: companySales >= companyProjSales ? COLOURS.GREEN : COLOURS.RED, fontWeight: 700 }}>
                           {companyProjSales > 0 ? `${companySales >= companyProjSales ? "+" : ""}${fmtPct(((companySales - companyProjSales) / companyProjSales) * 100)}` : "—"}
                         </td>
                         <td style={{ fontWeight: 700 }}>{companySales > 0 ? fmtPct((companyGp / companySales) * 100) : "—"}</td>
-                        <td style={{ color: companyFinal >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 700 }}>{companyFinal >= 0 ? "+" : ""}{fmtM(companyFinal)}</td>
+                        <td style={{ color: companyFinal >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 700, whiteSpace: "nowrap" }}>{companyFinal >= 0 ? "+" : ""}{fmtPKRFull(companyFinal)}</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
+            </div>
+            )}
+
+            {/* ── Like-for-like growth (new insight, 18/10/2026) ── */}
+            {show("imperial_pnl.like_for_like") && (
+            <div style={{ ...cardStyle, marginBottom: "10px" }}>
+              <div style={sectionTitle}>Like-for-like growth — same months last year</div>
+              <div style={sectionCaption}>
+                Separates real growth from growth bought by opening stores: each store is compared only with months it also traded last year; new stores are listed, not counted.
+              </div>
+              {yoyRows.length === 0 && <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No data for this period.</p>}
+              {lflTotal && lflTotal.ly_sales !== null && lflTotal.ly_sales > 0 ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px", marginBottom: "10px" }}>
+                  <div style={{ background: (lflTotal.growth_pct ?? 0) >= 0 ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, borderRadius: RADII.SM, padding: "9px 11px" }}>
+                    <div style={{ fontSize: "11px", color: (lflTotal.growth_pct ?? 0) >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 700 }}>LIKE-FOR-LIKE SALES</div>
+                    <div style={{ fontSize: "20px", fontWeight: 700, color: (lflTotal.growth_pct ?? 0) >= 0 ? COLOURS.GREEN : COLOURS.RED }}>{(lflTotal.growth_pct ?? 0) >= 0 ? "+" : ""}{fmtPct(lflTotal.growth_pct ?? 0)}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.INK_700 }}>{fmtPKRFull(lflTotal.lfl_sales)} vs {fmtPKRFull(lflTotal.ly_sales)} last year · {lflRows.length} comparable stores</div>
+                  </div>
+                  <div style={{ background: COLOURS.INFO_SOFT, borderRadius: RADII.SM, padding: "9px 11px" }}>
+                    <div style={{ fontSize: "11px", color: COLOURS.NAVY, fontWeight: 700 }}>NEW STORES (NO LAST-YEAR COMPARISON)</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>
+                      {newStores.length === 0 ? "None in this period." : `${newStores.length}: ${newStores.map((r) => `${r.branch} ${fmtM(r.sales)}`).join(", ")}`}
+                    </div>
+                  </div>
+                  <div style={{ background: COLOURS.CARD_ALT, borderRadius: RADII.SM, padding: "9px 11px" }}>
+                    <div style={{ fontSize: "11px", color: COLOURS.GREEN, fontWeight: 700 }}>FASTEST GROWING</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{lflBest.map((r) => `${r.branch} +${fmtPct(r.growth_pct as number)}`).join(" · ") || "—"}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.RED, fontWeight: 700, marginTop: "4px" }}>SHRINKING</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{lflWorst.filter((r) => (r.growth_pct as number) < 0).map((r) => `${r.branch} ${fmtPct(r.growth_pct as number)}`).join(" · ") || "No store below last year"}</div>
+                  </div>
+                </div>
+              ) : yoyRows.length > 0 ? (
+                <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No matching months last year for this period — like-for-like becomes available once a store has traded the same months in both years.</p>
+              ) : null}
+              {lflRows.length > 0 && (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse", minWidth: "520px" }}>
+                    <thead>
+                      <tr style={{ color: COLOURS.SLATE, textAlign: "left", fontSize: "11px" }}>
+                        <th style={{ fontWeight: 600, padding: "4px 0" }}>Store</th>
+                        <th style={{ fontWeight: 600 }}>Months compared</th>
+                        <th style={{ fontWeight: 600, textAlign: "right" }}>This year</th>
+                        <th style={{ fontWeight: 600, textAlign: "right" }}>Last year</th>
+                        <th style={{ fontWeight: 600, textAlign: "right" }}>Growth</th>
+                        <th style={{ fontWeight: 600, textAlign: "right" }}>Contribution now</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lflRows.map((r) => (
+                        <tr key={r.branch} style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
+                          <td style={{ padding: "5px 0", fontWeight: 600 }}>{r.branch}{r.channel === "Online PK" ? " 🌐" : ""}</td>
+                          <td style={{ color: COLOURS.SLATE }}>{r.months_compared}</td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{fmtM(r.lfl_sales)}</td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap", color: COLOURS.SLATE }}>{fmtM(r.ly_sales)}</td>
+                          <td style={{ textAlign: "right", fontWeight: 700, color: (r.growth_pct as number) >= 0 ? COLOURS.GREEN : COLOURS.RED }}>{(r.growth_pct as number) >= 0 ? "+" : ""}{fmtPct(r.growth_pct as number)}</td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap", color: r.final >= 0 ? COLOURS.GREEN : COLOURS.RED }}>{r.final >= 0 ? "+" : ""}{fmtM(r.final)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
             )}
 
@@ -1186,7 +1344,7 @@ export default function ImperialPnlPage() {
                 <div style={sectionCaption}>Largest overheads for the selected scope and period</div>
                 {overheadLines.length === 0 && <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No overhead activity in this selection.</p>}
                 {overheadLines.map((l) => {
-                  const varPct = l.projection ? ((l.actual - l.projection) / Math.abs(l.projection)) * 100 : null;
+                  const varPct = l.variance_pct;
                   const over = varPct !== null && varPct > 5;
                   return (
                     <div key={l.line} style={{ marginBottom: "9px" }}>
@@ -1259,11 +1417,21 @@ export default function ImperialPnlPage() {
                     ✓ {validationRows.length} months loaded and validated
                   </span>
                 ) : (
-                  validationRows.filter((v) => v.status !== "accepted").map((v) => (
-                    <button key={v.month} onClick={toggleIssues} style={{ background: COLOURS.DANGER_SOFT, color: COLOURS.RED, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600, border: `1px solid ${COLOURS.RED}`, cursor: "pointer" }}>
-                      {MONTH_LABEL(v.month)} rejected {showIssues ? "▲" : "▼"}
-                    </button>
-                  ))
+                  <>
+                    <span style={{ background: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
+                      ✓ {allMonths.length} months loaded
+                    </span>
+                    {rejectedMonths.map((v) => (
+                      <button key={v.month} onClick={toggleIssues} title={v.reason} style={{ background: COLOURS.DANGER_SOFT, color: COLOURS.RED, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600, border: `1px solid ${COLOURS.RED}`, cursor: "pointer" }}>
+                        ✗ {MONTH_LABEL(v.month)} rejected — {v.reason.length > 60 ? v.reason.slice(0, 57) + "…" : v.reason} {showIssues ? "▲" : "▼"}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {missingMonths.length > 0 && (
+                  <span style={{ background: COLOURS.WARNING_SOFT, color: COLOURS.AMBER, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
+                    Not uploaded: {missingMonths.map(MONTH_LABEL).join(", ")}
+                  </span>
                 )}
                 {totalWarnings > 0 && (
                   <button
@@ -1273,9 +1441,9 @@ export default function ImperialPnlPage() {
                     {totalWarnings} data-quality warning{totalWarnings > 1 ? "s" : ""} in the source file {showIssues ? "▲" : "▼"}
                   </button>
                 )}
-                {validationRows.length > 0 && (
+                {coverage?.last_upload_at && (
                   <span style={{ fontSize: "11px", color: COLOURS.INK_400 }}>
-                    Last upload {formatDateUK(validationRows[validationRows.length - 1].uploaded_at.slice(0, 10))}
+                    Last upload {formatDateUK(coverage.last_upload_at.slice(0, 10))}
                   </span>
                 )}
                 <span style={{ width: "1px", height: "16px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
