@@ -42,6 +42,7 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "unze_pnl.kpi_cards", label: "KPI cards", page: "Unze P&L" },
   { key: "unze_pnl.charts", label: "Charts (sales, bridge, margins, cost structure)", page: "Unze P&L" },
   { key: "unze_pnl.plant_scoreboard", label: "Plant scoreboard", page: "Unze P&L" },
+  { key: "unze_pnl.true_profit", label: "True plant profit (after HO)", page: "Unze P&L" },
   { key: "unze_pnl.expense_watch", label: "Expense watch", page: "Unze P&L" },
   { key: "unze_pnl.commentary", label: "CEO commentary (AI)", page: "Unze P&L" },
   { key: "unze_pnl.footer", label: "Data quality + market context footer", page: "Unze P&L" },

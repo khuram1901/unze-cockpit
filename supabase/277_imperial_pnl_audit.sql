@@ -248,7 +248,8 @@ returns table(branch_name text, channel text, months int, proj_sales numeric, ac
 language sql immutable as $$
   select * from jsonb_to_recordset(j) as x(branch_name text, channel text, months int, proj_sales numeric, act_sales numeric, act_gp numeric, act_final numeric);
 $$;
-revoke execute on function public._ifpl_stores_from(jsonb) from anon, public;
+revoke execute on function public._ifpl_stores_from(jsonb) from anon, authenticated, public;
+alter function public._ifpl_stores_from(jsonb) set search_path = public; -- re-audit 18/10: advisor flagged mutable search_path
 
 create or replace function public.ifpl_period_summary(p_from date, p_to date, p_channel text default 'All', p_branch text default 'All')
 returns jsonb language plpgsql stable security definer set search_path = public as $$

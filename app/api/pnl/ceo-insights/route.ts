@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
-import { canViewIfplPnl, canViewRestaurantsPnl, canViewFinance, type UserCtx, type PermOverrides } from "../../../lib/permissions";
+import { canViewIfplPnl, canViewRestaurantsPnl, canViewUnzePnl, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     const ctx: UserCtx = { email: auth.email, role: member?.role ?? null, department: member?.department ?? null, company: member?.company ?? null, overrides };
     const allowed = company === "IFPL" ? canViewIfplPnl(ctx)
       : company === "BARANH" || company === "HD" ? canViewRestaurantsPnl(ctx)
-      : canViewFinance(ctx);
+      : canViewUnzePnl(ctx);
     if (!allowed) return Response.json({ error: "Not authorised to generate commentary for this company." }, { status: 403 });
 
     let summary: Record<string, unknown>;

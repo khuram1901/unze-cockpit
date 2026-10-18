@@ -4,6 +4,23 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.10 — 2026-10-18 (minor bump)
+
+**Unze P&L page audit + fix — named access, Smart Meters plant, Supabase computes everything, plant-level balance sheets**
+
+- Access is now strictly Khuram, Kamran, Sania and Shakeel: new Access Matrix toggle `can_view_unze_pnl` (Admin/CEO by role, PA never), enforced in the database on every P&L and balance-sheet RPC (they were callable by any signed-in user). Uploads and the AI route check the same rule.
+- Plants live in `pnl_plants`; **Smart Meters** added as a plant with its own P&L and Balance Sheet. The workbook parser accepts a Smart Meters column; older files still parse.
+- `utpl_period_summary`, `utpl_plant_true_profit`, `utpl_data_coverage`, `utpl_plants` replace all JavaScript aggregation on the page (11 reduces removed).
+- Period presets: Month / Quarter (fiscal) / YTD / Custom, with fallback note — same model as Imperial P&L.
+- "Needs attention" is a structured, DB-built list (months not uploaded, rejected uploads with reason, loss streak, sales/margin vs run-rate, HO over 10% of sales, idle plants, accepted-with-warnings, restatements).
+- New insight: **True plant profit after head-office allocation** (widget `unze_pnl.true_profit`).
+- Re-upload reports "Data fixed" / "Replaced previous figures"; data strip names failed/warned checks and missing months.
+- AI commentary auto-generates per period/plant and is period-safe; PKR prefix on headline figures.
+- Balance Sheet tab: statement chooser (Whole company / per plant); upload form has "Statement for". Fixes the BS upload, which would have failed after the unique index changed to (company, month, plant).
+- Migration 279 (`supabase/279_unze_pnl_audit.sql`); docs `docs/unze-pnl/DECISIONS.md`.
+
+---
+
 ## v4.9 — 2026-10-18 (patch)
 
 **Visitors: returning visitor banner fix (CNIC lookup race condition)**

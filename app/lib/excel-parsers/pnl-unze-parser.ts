@@ -111,28 +111,41 @@ function valuesByHeader(row: unknown[], headers: { label: string; col: number }[
   return out;
 }
 
+// Header-cell → stored plant code. Returns null for anything that isn't a
+// plant column.
+function canonicalPlant(label: string): string | null {
+  const u = label.toUpperCase().replace(/\s+/g, " ").trim();
+  if (["FEDMIC", "MEPCO", "PESCO", "HO", "TOTAL"].includes(u)) return u === "TOTAL" ? "Total" : u;
+  if (["SMART METERS", "SMART METER", "SMARTMETERS", "SMART METERS PLANT", "SM"].includes(u)) return "SMART METERS";
+  return null;
+}
+
 export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnzePnl {
   const wb = XLSX.read(buffer, { type: "buffer" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const data: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
 
-  // Locate the plant header row (FEDMIC/MEPCO/PESCO/HO/Total).
+  // Locate the plant header row (FEDMIC/MEPCO/PESCO/[SMART METERS]/HO/Total).
+  // Smart Meters (added 18/10/2026) is optional — older workbooks don't have
+  // the column; any of the spellings below is stored as "SMART METERS".
   let headerRowIdx = -1;
   let headers: { label: string; col: number }[] = [];
   for (let r = 0; r < Math.min(15, data.length); r++) {
     const row = data[r];
     const found = row
-      .map((cell, col) => ({ label: str(cell).trim(), col }))
-      .filter((c) => ["FEDMIC", "MEPCO", "PESCO", "HO", "Total"].includes(c.label));
-    if (found.length === 5) {
+      .map((cell, col) => ({ label: canonicalPlant(str(cell).trim()), col }))
+      .filter((c) => c.label !== null) as { label: string; col: number }[];
+    const labels = new Set(found.map((c) => c.label));
+    if (["FEDMIC", "MEPCO", "PESCO", "HO", "Total"].every((l) => labels.has(l)) && found.length === labels.size) {
       headerRowIdx = r;
       headers = found.sort((a, b) => a.col - b.col);
       break;
     }
   }
   if (headerRowIdx === -1) {
-    throw new Error("Could not find the plant header row (FEDMIC / MEPCO / PESCO / HO / Total). This doesn't look like a Unze Trading branchwise P&L export.");
+    throw new Error("Could not find the plant header row (FEDMIC / MEPCO / PESCO / Smart Meters / HO / Total). This doesn't look like a Unze Trading branchwise P&L export.");
   }
+  const operatingPlants = headers.map((h) => h.label).filter((l) => l !== "HO" && l !== "Total");
 
   // Month, from the Excel serial number in the "From Date:" row. Read as a
   // raw serial (not a JS Date) — converting via cellDates drags in
@@ -160,7 +173,7 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
       // Bound against the FULL header set (so PESCO's right edge is the
       // Total column, not +Infinity) — then only keep the 3 operating plants.
       const vals = valuesByHeader(row, headers);
-      for (const plant of ["FEDMIC", "MEPCO", "PESCO"]) {
+      for (const plant of operatingPlants) {
         if (vals[plant] !== undefined) allocationPct.push({ plant, pct: vals[plant] });
       }
     }
@@ -214,7 +227,7 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
 
   // ── Hard validation checks (all must pass for acceptance) ─────────────────
   const checks: PnlCheck[] = [];
-  const plants = ["FEDMIC", "MEPCO", "PESCO"];
+  const plants = operatingPlants;
 
   for (const canonical of Object.values(SUMMARY_LINE_MAP)) {
     const vals = summaryByLine[canonical];
@@ -245,7 +258,7 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
 
   // Ledger-to-summary rollup — the most powerful check: every individual
   // account code line must sum to exactly the final net profit per plant.
-  for (const plant of ["FEDMIC", "MEPCO", "PESCO", "HO"]) {
+  for (const plant of [...operatingPlants, "HO"]) {
     const ledgerSum = ledgerLines.filter((l) => l.plant === plant).reduce((s, l) => s + l.amount, 0);
     const expected = -(t("Net Profit Final", plant) || 0);
     checks.push({
