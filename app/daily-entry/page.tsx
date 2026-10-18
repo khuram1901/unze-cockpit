@@ -326,10 +326,11 @@ export default function DailyEntryPage() {
       .then((json) => {
         const d = json.data as LastRefuelFull | null;
         if (d) {
-          setGenFuel((g) => ({ ...g, previous_hours: d.previous_hours != null ? String(d.previous_hours) : "" }));
+          // pre-fill next entry's "Opening Hours" from the last entry's CLOSING meter reading (present_hours)
+          setGenFuel((g) => ({ ...g, previous_hours: d.present_hours != null ? String(d.present_hours) : "" }));
           setGenFuelPrevEditable(!!d.is_seed);
           if (!d.is_seed) {
-            setLastRefuelData({ previous_hours: d.previous_hours ?? null, present_hours: d.present_hours ?? null, refuel_date: d.refuel_date ?? null, is_seed: false });
+            setLastRefuelData({ previous_hours: d.previous_hours ?? null, present_hours: d.present_hours ?? null, refuel_date: d.refuel_date ?? null, is_seed: d.is_seed });
           } else {
             setLastRefuelData(null);
           }
@@ -433,9 +434,10 @@ export default function DailyEntryPage() {
       .then((j) => {
         const d = j.data as LastRefuelFull | null;
         if (d) {
-          setGenFuel((g) => ({ ...g, previous_hours: d.previous_hours != null ? String(d.previous_hours) : "" }));
-          setGenFuelPrevEditable(false);
-          setLastRefuelData({ previous_hours: d.previous_hours ?? null, present_hours: d.present_hours ?? null, refuel_date: d.refuel_date ?? null, is_seed: false });
+          // after save: pre-fill next entry's opening from just-saved present_hours
+          setGenFuel((g) => ({ ...g, previous_hours: d.present_hours != null ? String(d.present_hours) : "" }));
+          setGenFuelPrevEditable(!!d.is_seed);
+          setLastRefuelData({ previous_hours: d.previous_hours ?? null, present_hours: d.present_hours ?? null, refuel_date: d.refuel_date ?? null, is_seed: d.is_seed });
           setGenLastRefuel(d);
         }
       });
