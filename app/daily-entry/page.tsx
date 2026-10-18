@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
-import { isDailyEntryOnly } from "../lib/permissions";
+import { isDailyEntryOnly, canAccessGeneratorEntry } from "../lib/permissions";
 import { authFetch, supabase } from "../lib/supabase";
 import DateInput from "../lib/DateInput";
 import { COLOURS, RADII, PageHeader, useToast, primaryButtonStyle, inputStyle, kpiGrid } from "../lib/SharedUI";
@@ -15,8 +15,9 @@ import { useMobile } from "../lib/useMobile";
 type Vehicle  = { id: string; name: string; plate_number: string; odometer_unit: string };
 type Branch   = { id: string; name: string; system_kw: number | null };
 type Location = { id: string; name: string; entity: string; default_disco: string | null };
+type GenLocation = { location_id: string; location_name: string; generator_id: string; kva: number; model: string; label: string | null };
 
-type FormType = "fuel" | "solar" | "utility" | "maintenance" | "tasks" | "legal";
+type FormType = "fuel" | "solar" | "utility" | "maintenance" | "tasks" | "legal" | "gen_fuel" | "gen_maintenance";
 
 type MyTask = {
   id: string;
@@ -80,6 +81,25 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export default function DailyEntryPage() {
   const { checking, ctx } = useRequireCapability("admin_entry");
   const entryOnly = ctx ? isDailyEntryOnly(ctx) : false;
+  const canGenEntry = ctx ? canAccessGeneratorEntry(ctx) : false;
+
+  // ── Generator meta & forms ─────────────────────────────────────────────
+  const [genMeta, setGenMeta] = useState<GenLocation[]>([]);
+  const [loadingGenMeta, setLoadingGenMeta] = useState(false);
+  const [genLastRefuel, setGenLastRefuel] = useState<{ previous_hours: number | null; present_hours: number | null } | null>(null);
+  const [genFuel, setGenFuel] = useState({
+    generator_id: "", refuel_date: today,
+    previous_hours: "", present_hours: "",
+    rate_per_litre: "", qty_litres: "", remarks: "",
+  });
+  const [submittingGenFuel, setSubmittingGenFuel] = useState(false);
+  const [genMaint, setGenMaint] = useState({
+    generator_id: "", service_date: today,
+    engine_oil: "", oil_filter: "", fuel_filter: "", air_filter: "",
+    radiator_service: "", periodic_maintenance: "", other_mechanical: "", others: "",
+    remarks: "",
+  });
+  const [submittingGenMaint, setSubmittingGenMaint] = useState(false);
   const isMobile = useMobile();
   const { show: showToast, element: toastElement } = useToast();
 
@@ -272,6 +292,31 @@ export default function DailyEntryPage() {
     setLoadingCases(false);
   }
 
+  // ── Generator meta load ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!canGenEntry || checking) return;
+    setLoadingGenMeta(true);
+    authFetch("/api/admin/generators?type=meta")
+      .then((r) => r.json())
+      .then((json) => {
+        const rows: GenLocation[] = json.data || [];
+        setGenMeta(rows);
+        if (rows.length) {
+          setGenFuel((f) => ({ ...f, generator_id: rows[0].generator_id }));
+          setGenMaint((m) => ({ ...m, generator_id: rows[0].generator_id }));
+        }
+        setLoadingGenMeta(false);
+      });
+  }, [canGenEntry, checking]);
+
+  // Auto-fetch last refuel when generator changes
+  useEffect(() => {
+    if (!genFuel.generator_id) return;
+    authFetch(`/api/admin/generators?type=last_refuel&generator_id=${genFuel.generator_id}`)
+      .then((r) => r.json())
+      .then((json) => setGenLastRefuel(json.data ?? null));
+  }, [genFuel.generator_id]);
+
   async function submitLegalUpdate() {
     if (!selectedCaseId || !legalForm.description) return;
     setSavingLegal(true);
@@ -336,6 +381,48 @@ export default function DailyEntryPage() {
   }
 
   // ── Submit handlers ────────────────────────────────────────────────
+  async function submitGenFuel(e: React.FormEvent) {
+    e.preventDefault();
+    const { generator_id, refuel_date, previous_hours, present_hours, rate_per_litre, qty_litres, remarks } = genFuel;
+    if (!generator_id || !refuel_date || !present_hours || !rate_per_litre || !qty_litres) {
+      showToast("Please fill all required fields.", "error"); return;
+    }
+    setSubmittingGenFuel(true);
+    const res = await authFetch("/api/admin/generators?type=fuel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ generator_id, refuel_date, previous_hours: previous_hours || null, present_hours, rate_per_litre, qty_litres, remarks }),
+    });
+    const json = await res.json();
+    setSubmittingGenFuel(false);
+    if (!res.ok) { showToast(json.error || "Failed to save fuel entry.", "error"); return; }
+    showToast("Generator fuel entry saved.", "success");
+    setGenFuel((f) => ({ ...f, previous_hours: "", present_hours: "", qty_litres: "", remarks: "" }));
+    // Refresh last refuel hint
+    authFetch(`/api/admin/generators?type=last_refuel&generator_id=${generator_id}`)
+      .then((r) => r.json())
+      .then((json) => setGenLastRefuel(json.data ?? null));
+  }
+
+  async function submitGenMaint(e: React.FormEvent) {
+    e.preventDefault();
+    const { generator_id, service_date, engine_oil, oil_filter, fuel_filter, air_filter, radiator_service, periodic_maintenance, other_mechanical, others, remarks } = genMaint;
+    if (!generator_id || !service_date) {
+      showToast("Please select a generator and service date.", "error"); return;
+    }
+    setSubmittingGenMaint(true);
+    const res = await authFetch("/api/admin/generators?type=maintenance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ generator_id, service_date, engine_oil, oil_filter, fuel_filter, air_filter, radiator_service, periodic_maintenance, other_mechanical, others, remarks }),
+    });
+    const json = await res.json();
+    setSubmittingGenMaint(false);
+    if (!res.ok) { showToast(json.error || "Failed to save maintenance entry.", "error"); return; }
+    showToast("Generator maintenance entry saved.", "success");
+    setGenMaint((m) => ({ ...m, engine_oil: "", oil_filter: "", fuel_filter: "", air_filter: "", radiator_service: "", periodic_maintenance: "", other_mechanical: "", others: "", remarks: "" }));
+  }
+
   function compressImage(file: File): Promise<File> {
     return new Promise((resolve) => {
       const img = new Image();
@@ -531,6 +618,10 @@ export default function DailyEntryPage() {
     { id: "utility",     label: "Utilities",    emoji: "🔌" },
     { id: "maintenance", label: "Maintenance",  emoji: "🔧" },
     { id: "tasks",       label: "My Tasks",     emoji: "✅" },
+    ...(canGenEntry ? [
+      { id: "gen_fuel"         as FormType, label: "Gen Fuel",    emoji: "⚡" },
+      { id: "gen_maintenance"  as FormType, label: "Gen Service", emoji: "🔩" },
+    ] : []),
   ];
 
   const btnSt = (id: FormType): React.CSSProperties => ({
@@ -1380,6 +1471,185 @@ export default function DailyEntryPage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── GEN FUEL ── */}
+        {activeForm === "gen_fuel" && canGenEntry && (
+          <form onSubmit={submitGenFuel}>
+            <div style={sectionCard}>
+              <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 16px" }}>⚡ Generator Fuel</h2>
+
+              {/* Generator picker — grouped by location */}
+              <Field label="Generator *">
+                {loadingGenMeta ? (
+                  <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Loading generators…</div>
+                ) : genMeta.length === 0 ? (
+                  <div style={{ fontSize: "13px", color: COLOURS.RED }}>No generators configured.</div>
+                ) : (
+                  <select value={genFuel.generator_id}
+                    onChange={(e) => setGenFuel({ ...genFuel, generator_id: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}>
+                    {/* Group by location */}
+                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g.location_name])).entries()).map(([locId, locName]) => (
+                      <optgroup key={locId} label={locName}>
+                        {genMeta.filter((g) => g.location_id === locId).map((g) => (
+                          <option key={g.generator_id} value={g.generator_id}>
+                            {g.label || `${g.kva} kVA – ${g.model}`}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                )}
+              </Field>
+
+              <div style={{ marginTop: "12px" }}>
+                <Field label="Date *">
+                  <DateInput value={genFuel.refuel_date} onChange={(e) => setGenFuel((f) => ({ ...f, refuel_date: e.target.value }))} />
+                </Field>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginTop: "12px" }}>
+                <Field label="Previous Hours">
+                  <input type="number" step="0.1" min="0" placeholder={genLastRefuel?.present_hours != null ? `Last: ${genLastRefuel.present_hours}` : "e.g. 1240.5"}
+                    value={genFuel.previous_hours}
+                    onChange={(e) => setGenFuel({ ...genFuel, previous_hours: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                </Field>
+                <Field label="Present Hours *">
+                  <input type="number" step="0.1" min="0" placeholder="e.g. 1268.0"
+                    value={genFuel.present_hours}
+                    onChange={(e) => setGenFuel({ ...genFuel, present_hours: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                </Field>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginTop: "12px" }}>
+                <Field label="Rate (PKR/L) *">
+                  <input type="number" step="0.01" min="0" placeholder="e.g. 310.00"
+                    value={genFuel.rate_per_litre}
+                    onChange={(e) => setGenFuel({ ...genFuel, rate_per_litre: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                </Field>
+                <Field label="Quantity (Litres) *">
+                  <input type="number" step="0.1" min="0" placeholder="e.g. 45.0"
+                    value={genFuel.qty_litres}
+                    onChange={(e) => setGenFuel({ ...genFuel, qty_litres: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                </Field>
+              </div>
+
+              {/* Computed amount */}
+              {genFuel.rate_per_litre && genFuel.qty_litres && (
+                <div style={{ marginTop: "10px", padding: "10px 14px", backgroundColor: "#F0FDF4", borderRadius: "8px", border: `1px solid ${COLOURS.GREEN}22` }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.GREEN }}>
+                    PKR {(parseFloat(genFuel.rate_per_litre) * parseFloat(genFuel.qty_litres)).toLocaleString("en-PK", { maximumFractionDigits: 0 })}
+                  </span>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "6px" }}>total amount</span>
+                </div>
+              )}
+
+              <div style={{ marginTop: "12px" }}>
+                <Field label="Remarks (optional)">
+                  <textarea value={genFuel.remarks} onChange={(e) => setGenFuel({ ...genFuel, remarks: e.target.value })}
+                    rows={2} placeholder="Any notes about this refuel…"
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const }} />
+                </Field>
+              </div>
+            </div>
+
+            <button type="submit" disabled={submittingGenFuel} style={{ ...primaryButtonStyle, width: "100%", padding: "14px", fontSize: "15px", opacity: submittingGenFuel ? 0.6 : 1 }}>
+              {submittingGenFuel ? "Saving…" : "Save Generator Fuel"}
+            </button>
+          </form>
+        )}
+
+        {/* ── GEN MAINTENANCE ── */}
+        {activeForm === "gen_maintenance" && canGenEntry && (
+          <form onSubmit={submitGenMaint}>
+            <div style={sectionCard}>
+              <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 16px" }}>🔩 Generator Service</h2>
+
+              {/* Generator picker */}
+              <Field label="Generator *">
+                {loadingGenMeta ? (
+                  <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Loading generators…</div>
+                ) : genMeta.length === 0 ? (
+                  <div style={{ fontSize: "13px", color: COLOURS.RED }}>No generators configured.</div>
+                ) : (
+                  <select value={genMaint.generator_id}
+                    onChange={(e) => setGenMaint({ ...genMaint, generator_id: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}>
+                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g.location_name])).entries()).map(([locId, locName]) => (
+                      <optgroup key={locId} label={locName}>
+                        {genMeta.filter((g) => g.location_id === locId).map((g) => (
+                          <option key={g.generator_id} value={g.generator_id}>
+                            {g.label || `${g.kva} kVA – ${g.model}`}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                )}
+              </Field>
+
+              <div style={{ marginTop: "12px" }}>
+                <Field label="Service Date *">
+                  <DateInput value={genMaint.service_date} onChange={(e) => setGenMaint((m) => ({ ...m, service_date: e.target.value }))} />
+                </Field>
+              </div>
+
+              {/* Cost fields — 2 per row on mobile, 3 on desktop */}
+              <div style={{ marginTop: "16px", marginBottom: "4px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>Service costs (PKR) — leave 0 if not done</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: "10px", marginTop: "8px" }}>
+                {[
+                  { key: "engine_oil",           label: "Engine Oil" },
+                  { key: "oil_filter",            label: "Oil Filter" },
+                  { key: "fuel_filter",           label: "Fuel Filter" },
+                  { key: "air_filter",            label: "Air Filter" },
+                  { key: "radiator_service",      label: "Radiator" },
+                  { key: "periodic_maintenance",  label: "Periodic Maint." },
+                  { key: "other_mechanical",      label: "Other Mechanical" },
+                  { key: "others",                label: "Others" },
+                ].map(({ key, label }) => (
+                  <div key={key}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>{label}</label>
+                    <input type="number" step="0.01" min="0" placeholder="0"
+                      value={(genMaint as Record<string, string>)[key]}
+                      onChange={(e) => setGenMaint((m) => ({ ...m, [key]: e.target.value }))}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Total cost */}
+              {(() => {
+                const keys = ["engine_oil","oil_filter","fuel_filter","air_filter","radiator_service","periodic_maintenance","other_mechanical","others"];
+                const total = keys.reduce((sum, k) => sum + (parseFloat((genMaint as Record<string,string>)[k] || "0") || 0), 0);
+                if (total <= 0) return null;
+                return (
+                  <div style={{ marginTop: "10px", padding: "10px 14px", backgroundColor: "#F0FDF4", borderRadius: "8px", border: `1px solid ${COLOURS.GREEN}22` }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.GREEN }}>PKR {total.toLocaleString("en-PK", { maximumFractionDigits: 0 })}</span>
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "6px" }}>total service cost</span>
+                  </div>
+                );
+              })()}
+
+              <div style={{ marginTop: "12px" }}>
+                <Field label="Remarks (optional)">
+                  <textarea value={genMaint.remarks} onChange={(e) => setGenMaint({ ...genMaint, remarks: e.target.value })}
+                    rows={2} placeholder="Work done, parts replaced, engineer name…"
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const }} />
+                </Field>
+              </div>
+            </div>
+
+            <button type="submit" disabled={submittingGenMaint} style={{ ...primaryButtonStyle, width: "100%", padding: "14px", fontSize: "15px", opacity: submittingGenMaint ? 0.6 : 1 }}>
+              {submittingGenMaint ? "Saving…" : "Save Service Record"}
+            </button>
+          </form>
         )}
 
         {toastElement}

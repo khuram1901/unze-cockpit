@@ -685,6 +685,13 @@ export function canAccessAdminEntry(u: UserCtx): boolean {
   return false;
 }
 
+// ── Generator Entry (fuel/maintenance tab on /daily-entry) ──────────
+// Off by default — granted to Admin dept members via admin_ops.generators_entry widget.
+// Admin tier always has access.
+export function canAccessGeneratorEntry(u: UserCtx): boolean {
+  return isAdminTier(u) || widgetVisible(u, "admin_ops.generators_entry", false);
+}
+
 // ── Daily-entry-only restricted mode ────────────────────────────────
 // True ONLY when can_access_admin_entry is the user's sole capability.
 // We check every meaningful permission so that Sunaina (who also has
