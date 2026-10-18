@@ -100,6 +100,16 @@ export async function GET(request: NextRequest) {
     return Response.json({ summary: summaryRes.data ?? [], maint_by_cat: maintCatRes.data ?? [] });
   }
 
+  // ── analytics: per-location fuel + maintenance infographics ──────────────
+  if (type === "analytics") {
+    const { data, error } = await sb.rpc("get_generator_analytics", {
+      p_date_from: searchParams.get("from") || null,
+      p_date_to:   searchParams.get("to")   || null,
+    });
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ data: data ?? [] });
+  }
+
   return Response.json({ error: "Unknown type" }, { status: 400 });
 }
 

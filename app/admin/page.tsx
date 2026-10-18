@@ -82,7 +82,7 @@ type UtilityLocation = {
 type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations" | "legal" | "visitors" | "generators";
 
 // ── Generator types ───────────────────────────────────────────────────
-type GenTabView = "diesel" | "maintenance" | "master";
+type GenTabView = "diesel" | "maintenance" | "master" | "analytics";
 
 type GenFuelRow = {
   id: string; generator_label: string; location_name: string;
@@ -868,6 +868,25 @@ export default function AdminDataPage() {
   const [savingGenMaster, setSavingGenMaster] = useState(false);
   const [savingGenThresh, setSavingGenThresh] = useState(false);
 
+  // ── Generator Analytics state ──────────────────────────────────────────────
+  type GenAnalyticsRow = {
+    location_id: string; location_name: string; generator_count: number;
+    total_litres: number; total_fuel_cost: number; total_hours_run: number;
+    avg_litres_per_hr: number | null; avg_cost_per_hr: number | null;
+    total_maint_cost: number; maint_event_count: number;
+    fuel_share_pct: number; maint_share_pct: number; efficiency_rank: number;
+  };
+  const [analyticsRows, setAnalyticsRows]     = useState<GenAnalyticsRow[]>([]);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [analyticsError, setAnalyticsError]   = useState<string | null>(null);
+  const TODAY = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = () => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); };
+  const xMonthsAgo   = (n: number) => { const d = new Date(); d.setMonth(d.getMonth() - n); return d.toISOString().slice(0, 10); };
+  const startOfYear  = () => `${new Date().getFullYear()}-01-01`;
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<"month" | "q3" | "ytd" | "custom">("month");
+  const [analyticsFrom, setAnalyticsFrom]     = useState<string>(firstOfMonth());
+  const [analyticsTo, setAnalyticsTo]         = useState<string>(TODAY);
+
   async function loadGeneratorData() {
     setLoadingGen(true);
     try {
@@ -933,8 +952,30 @@ export default function AdminDataPage() {
       return <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px", backgroundColor: bg, color }}>{days}d ago</span>;
     };
 
+    // ── Fetch analytics ────────────────────────────────────────────────────────
+    const fetchGenAnalytics = async (from: string, to: string) => {
+      setLoadingAnalytics(true);
+      setAnalyticsError(null);
+      try {
+        const r = await fetch(`/api/admin/generators?type=analytics&from=${from}&to=${to}`);
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error ?? "Failed");
+        setAnalyticsRows(j.data ?? []);
+      } catch (e: unknown) {
+        setAnalyticsError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoadingAnalytics(false);
+      }
+    };
+
+    // Fetch analytics when analytics tab is active
+    // (triggered via useEffect on genTabView in outer scope — call explicitly on mount for analytics)
     const subTab = (id: GenTabView, label: string) => (
-      <button key={id} onClick={() => { setGenTabView(id); setGenActiveCard(null); }} style={{
+      <button key={id} onClick={() => {
+        setGenTabView(id);
+        setGenActiveCard(null);
+        if (id === "analytics") fetchGenAnalytics(analyticsFrom, analyticsTo);
+      }} style={{
         padding: "6px 16px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
         backgroundColor: genTabView === id ? COLOURS.NAVY : "transparent",
         color:           genTabView === id ? "white"      : COLOURS.SLATE,
@@ -1345,17 +1386,288 @@ export default function AdminDataPage() {
       </div>
     );
 
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ANALYTICS VIEW
+    // Pure SVG/CSS charts. All calculations in Postgres (GOLDEN RULE).
+    // ─────────────────────────────────────────────────────────────────────────
+    const PALETTE = ["#0F1720","#0F7B5F","#B4791F","#3B82F6","#8B5CF6","#EC4899","#06B6D4","#F59E0B"];
+
+    const fmtK = (n: number) => n >= 1_000_000 ? `${(n/1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n/1_000).toFixed(0)}K` : String(Math.round(n));
+    const fmtPKR = (n: number) => `PKR ${fmtK(n)}`;
+    const fmtL   = (n: number) => `${fmtK(n)} L`;
+
+    // Donut chart (pure SVG)
+    const DonutChart = ({ data, title }: { data: {label:string;value:number;color:string}[]; title:string }) => {
+      const total = data.reduce((s, d) => s + d.value, 0);
+      if (total === 0) return (
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"8px" }}>
+          <div style={{ fontSize:"12px", fontWeight:700, color:COLOURS.NAVY, textTransform:"uppercase", letterSpacing:"0.05em" }}>{title}</div>
+          <div style={{ fontSize:"12px", color:COLOURS.SLATE }}>No data</div>
+        </div>
+      );
+      let angle = -90;
+      const segments = data.map(d => {
+        const sweep = (d.value / total) * 360;
+        const rad = (a: number) => (a * Math.PI) / 180;
+        const x1 = 50 + 40 * Math.cos(rad(angle));
+        const y1 = 50 + 40 * Math.sin(rad(angle));
+        angle += sweep;
+        const x2 = 50 + 40 * Math.cos(rad(angle));
+        const y2 = 50 + 40 * Math.sin(rad(angle));
+        const large = sweep > 180 ? 1 : 0;
+        return { ...d, path: `M 50 50 L ${x1.toFixed(2)} ${y1.toFixed(2)} A 40 40 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`, pct: ((d.value/total)*100).toFixed(1) };
+      });
+      return (
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"10px" }}>
+          <div style={{ fontSize:"12px", fontWeight:700, color:COLOURS.NAVY, textTransform:"uppercase", letterSpacing:"0.05em" }}>{title}</div>
+          <svg viewBox="0 0 100 100" style={{ width:"160px", height:"160px" }}>
+            {segments.map((seg, i) => (
+              <path key={i} d={seg.path} fill={seg.color} stroke="white" strokeWidth="1.5">
+                <title>{seg.label}: {seg.pct}%</title>
+              </path>
+            ))}
+            <circle cx="50" cy="50" r="25" fill="white" />
+            <text x="50" y="53" textAnchor="middle" fontSize="8" fontWeight="700" fill={COLOURS.NAVY}>Fleet</text>
+          </svg>
+          <div style={{ display:"flex", flexDirection:"column", gap:"4px", width:"100%", maxWidth:"200px" }}>
+            {segments.map((seg, i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"11px" }}>
+                <div style={{ width:"10px", height:"10px", borderRadius:"2px", background:seg.color, flexShrink:0 }} />
+                <span style={{ color:COLOURS.NAVY, fontWeight:600, flex:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{seg.label}</span>
+                <span style={{ color:COLOURS.SLATE, fontWeight:700 }}>{seg.pct}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    // Horizontal bar (for per-location metric cards)
+    const MiniBar = ({ value, max, color }: { value: number; max: number; color: string }) => {
+      const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+      return (
+        <div style={{ height:"6px", background:COLOURS.HAIRLINE, borderRadius:"3px", overflow:"hidden" }}>
+          <div style={{ height:"100%", width:`${pct}%`, background:color, borderRadius:"3px", transition:"width 0.4s" }} />
+        </div>
+      );
+    };
+
+    // Efficiency ranking medal
+    const RankBadge = ({ rank }: { rank: number }) => {
+      const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
+      return <span style={{ fontSize: rank <= 3 ? "20px" : "13px", fontWeight: 700, color: COLOURS.NAVY }}>{medal}</span>;
+    };
+
+    const maxFuelCost  = Math.max(...analyticsRows.map(r => r.total_fuel_cost), 1);
+    const maxMaintCost = Math.max(...analyticsRows.map(r => r.total_maint_cost), 1);
+    const maxLitres    = Math.max(...analyticsRows.map(r => r.total_litres), 1);
+    const maxLperHr    = Math.max(...analyticsRows.map(r => r.avg_litres_per_hr ?? 0), 1);
+    const maxCostPerHr = Math.max(...analyticsRows.map(r => r.avg_cost_per_hr ?? 0), 1);
+
+    // Date filter quick-select
+    const setAnalyticsPeriodFn = (period: "month" | "q3" | "ytd" | "custom") => {
+      setAnalyticsPeriod(period);
+      let from = analyticsFrom;
+      let to   = TODAY;
+      if (period === "month") { from = firstOfMonth(); }
+      if (period === "q3")    { from = xMonthsAgo(3); }
+      if (period === "ytd")   { from = startOfYear(); }
+      setAnalyticsFrom(from);
+      setAnalyticsTo(to);
+      if (period !== "custom") fetchGenAnalytics(from, to);
+    };
+
+    const analyticsView = (
+      <div>
+        {/* Date filter strip */}
+        <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"14px 16px", marginBottom:"20px", display:"flex", alignItems:"center", gap:"10px", flexWrap:"wrap" }}>
+          <span style={{ fontSize:"11px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", color:COLOURS.SLATE }}>Period</span>
+          {(["month","q3","ytd","custom"] as const).map(p => (
+            <button key={p} onClick={() => setAnalyticsPeriodFn(p)} style={{
+              padding:"6px 14px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer",
+              background: analyticsPeriod === p ? COLOURS.NAVY : "transparent",
+              color:      analyticsPeriod === p ? "white"      : COLOURS.SLATE,
+              border:`1px solid ${analyticsPeriod === p ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+            }}>
+              {p === "month" ? "This Month" : p === "q3" ? "Last 3 Months" : p === "ytd" ? "YTD" : "Custom"}
+            </button>
+          ))}
+          {analyticsPeriod === "custom" && (
+            <>
+              <input type="date" value={analyticsFrom} onChange={e => setAnalyticsFrom(e.target.value)}
+                style={{ padding:"6px 10px", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"8px", fontSize:"12px" }} />
+              <span style={{ color:COLOURS.SLATE, fontSize:"12px" }}>→</span>
+              <input type="date" value={analyticsTo} onChange={e => setAnalyticsTo(e.target.value)}
+                style={{ padding:"6px 10px", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"8px", fontSize:"12px" }} />
+              <button onClick={() => fetchGenAnalytics(analyticsFrom, analyticsTo)} style={{
+                padding:"6px 16px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer",
+                background:COLOURS.NAVY, color:"white", border:"none",
+              }}>Apply</button>
+            </>
+          )}
+          <span style={{ marginLeft:"auto", fontSize:"11px", color:COLOURS.SLATE }}>
+            {analyticsFrom} → {analyticsTo}
+          </span>
+        </div>
+
+        {/* Loading / error */}
+        {loadingAnalytics && (
+          <div style={{ textAlign:"center", padding:"40px", color:COLOURS.SLATE, fontSize:"14px" }}>
+            Loading analytics…
+          </div>
+        )}
+        {analyticsError && !loadingAnalytics && (
+          <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:"10px", padding:"14px 16px", color:"#B3261E", fontSize:"13px", marginBottom:"20px" }}>
+            ⚠ {analyticsError}
+          </div>
+        )}
+
+        {!loadingAnalytics && analyticsRows.length === 0 && !analyticsError && (
+          <div style={{ textAlign:"center", padding:"60px", color:COLOURS.SLATE, fontSize:"14px" }}>
+            No data for selected period. Try a wider date range.
+          </div>
+        )}
+
+        {!loadingAnalytics && analyticsRows.length > 0 && (
+          <>
+            {/* ── Efficiency Ranking Strip ─────────────────────────────── */}
+            <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"18px 20px", marginBottom:"20px" }}>
+              <div style={{ fontSize:"12px", fontWeight:700, color:COLOURS.NAVY, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:"14px" }}>
+                🏆 Efficiency Ranking — Cost per Hour (PKR)
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
+                {[...analyticsRows].sort((a,b) => a.efficiency_rank - b.efficiency_rank).map(r => {
+                  const costPerHr = r.avg_cost_per_hr ?? 0;
+                  const barPct    = maxCostPerHr > 0 ? (costPerHr / maxCostPerHr) * 100 : 0;
+                  const barColor  = r.efficiency_rank === 1 ? COLOURS.GREEN : r.efficiency_rank === 2 ? "#3B82F6" : r.efficiency_rank === 3 ? "#8B5CF6" : COLOURS.SLATE;
+                  return (
+                    <div key={r.location_id} style={{ display:"grid", gridTemplateColumns:"30px 1fr auto 90px", alignItems:"center", gap:"10px" }}>
+                      <RankBadge rank={r.efficiency_rank} />
+                      <div>
+                        <div style={{ fontSize:"13px", fontWeight:700, color:COLOURS.NAVY }}>{r.location_name}</div>
+                        <div style={{ height:"6px", background:COLOURS.HAIRLINE, borderRadius:"3px", overflow:"hidden", marginTop:"4px" }}>
+                          <div style={{ height:"100%", width:`${barPct}%`, background:barColor, borderRadius:"3px" }} />
+                        </div>
+                      </div>
+                      <div style={{ fontSize:"13px", fontWeight:700, color:barColor, textAlign:"right", whiteSpace:"nowrap" }}>
+                        PKR {costPerHr.toFixed(0)}/hr
+                      </div>
+                      <div style={{ fontSize:"11px", color:COLOURS.SLATE, textAlign:"right" }}>
+                        {r.total_hours_run.toFixed(0)} hrs
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Donut Charts Row ──────────────────────────────────────── */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px", marginBottom:"20px" }}>
+              <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"20px", display:"flex", justifyContent:"center" }}>
+                <DonutChart
+                  title="⛽ Fuel Cost Share"
+                  data={analyticsRows.map((r,i) => ({ label:r.location_name, value:r.total_fuel_cost, color:PALETTE[i % PALETTE.length] }))}
+                />
+              </div>
+              <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"20px", display:"flex", justifyContent:"center" }}>
+                <DonutChart
+                  title="🔧 Maintenance Cost Share"
+                  data={analyticsRows.map((r,i) => ({ label:r.location_name, value:r.total_maint_cost, color:PALETTE[i % PALETTE.length] }))}
+                />
+              </div>
+            </div>
+
+            {/* ── Per-Location Metric Cards ─────────────────────────────── */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:"14px" }}>
+              {[...analyticsRows].sort((a,b) => a.efficiency_rank - b.efficiency_rank).map((r,i) => {
+                const totalCost = r.total_fuel_cost + r.total_maint_cost;
+                const fuelRatio = totalCost > 0 ? (r.total_fuel_cost / totalCost * 100) : 0;
+                const maintRatio = totalCost > 0 ? (r.total_maint_cost / totalCost * 100) : 0;
+                const accent = PALETTE[i % PALETTE.length];
+                return (
+                  <div key={r.location_id} style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+                    {/* Card header */}
+                    <div style={{ background:accent, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <div>
+                        <div style={{ fontSize:"14px", fontWeight:700, color:"white" }}>{r.location_name}</div>
+                        <div style={{ fontSize:"11px", color:"rgba(255,255,255,0.75)" }}>{r.generator_count} generator{r.generator_count !== 1 ? "s" : ""}</div>
+                      </div>
+                      <RankBadge rank={r.efficiency_rank} />
+                    </div>
+                    {/* Metric grid */}
+                    <div style={{ padding:"14px 16px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
+                      {[
+                        { label:"Total Litres",    value:fmtL(r.total_litres),          sub:"consumed", color:COLOURS.NAVY },
+                        { label:"Fuel Cost",       value:fmtPKR(r.total_fuel_cost),     sub:`${r.fuel_share_pct}% of fleet`, color:COLOURS.NAVY },
+                        { label:"Maint Cost",      value:fmtPKR(r.total_maint_cost),    sub:`${r.maint_event_count} events`, color:COLOURS.AMBER },
+                        { label:"Hours Run",       value:`${r.total_hours_run.toFixed(0)} hr`, sub:"total",       color:COLOURS.NAVY },
+                      ].map(m => (
+                        <div key={m.label} style={{ background:"#F8FAFC", borderRadius:"8px", padding:"10px 12px" }}>
+                          <div style={{ fontSize:"10px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em", color:COLOURS.SLATE, marginBottom:"4px" }}>{m.label}</div>
+                          <div style={{ fontSize:"16px", fontWeight:700, color:m.color }}>{m.value}</div>
+                          <div style={{ fontSize:"10px", color:COLOURS.SLATE, marginTop:"2px" }}>{m.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Efficiency bars */}
+                    <div style={{ padding:"0 16px 14px" }}>
+                      <div style={{ fontSize:"10px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em", color:COLOURS.SLATE, marginBottom:"8px" }}>Efficiency Indicators</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
+                        <div>
+                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", marginBottom:"3px" }}>
+                            <span style={{ color:COLOURS.SLATE }}>L/hr (avg)</span>
+                            <span style={{ fontWeight:700, color:COLOURS.NAVY }}>{(r.avg_litres_per_hr ?? 0).toFixed(2)}</span>
+                          </div>
+                          <MiniBar value={r.avg_litres_per_hr ?? 0} max={maxLperHr} color="#3B82F6" />
+                        </div>
+                        <div>
+                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", marginBottom:"3px" }}>
+                            <span style={{ color:COLOURS.SLATE }}>PKR/hr (avg)</span>
+                            <span style={{ fontWeight:700, color:COLOURS.NAVY }}>{(r.avg_cost_per_hr ?? 0).toFixed(0)}</span>
+                          </div>
+                          <MiniBar value={r.avg_cost_per_hr ?? 0} max={maxCostPerHr} color={accent} />
+                        </div>
+                        <div>
+                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", marginBottom:"3px" }}>
+                            <span style={{ color:COLOURS.SLATE }}>Fuel vs Maint split</span>
+                            <span style={{ fontWeight:700, color:COLOURS.NAVY }}>{fuelRatio.toFixed(0)}% / {maintRatio.toFixed(0)}%</span>
+                          </div>
+                          <div style={{ height:"6px", borderRadius:"3px", overflow:"hidden", display:"flex" }}>
+                            <div style={{ height:"100%", width:`${fuelRatio}%`, background:COLOURS.NAVY }} />
+                            <div style={{ height:"100%", width:`${maintRatio}%`, background:COLOURS.AMBER }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Total cost footer */}
+                    <div style={{ borderTop:`1px solid ${COLOURS.HAIRLINE}`, padding:"10px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span style={{ fontSize:"11px", color:COLOURS.SLATE, fontWeight:600 }}>Total Operating Cost</span>
+                      <span style={{ fontSize:"14px", fontWeight:700, color:COLOURS.NAVY }}>PKR {fmtK(totalCost)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
+    // END ANALYTICS VIEW
+
     return (
       <div>
-        {/* Sub-tab switcher */}
+        {/* Sub-tab switcher */
         <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
           {subTab("diesel",      "⛽ Diesel Log")}
           {subTab("maintenance", "🔧 Maintenance")}
           {subTab("master",      "⚙ Master / Settings")}
+          {subTab("analytics",   "📊 Analytics")}
         </div>
         {genTabView === "diesel"      && dieselView}
         {genTabView === "maintenance" && maintView}
         {genTabView === "master"      && masterView}
+        {genTabView === "analytics"   && analyticsView}
 
         {/* ── Edit Fuel modal ── */}
         {editingGenFuel && (
