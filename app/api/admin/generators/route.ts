@@ -302,7 +302,10 @@ export async function DELETE(request: NextRequest) {
 
   if (!id) return Response.json({ error: "id required" }, { status: 400 });
 
-  const sb = createServiceClient();
+  // Must use createUserClient (not createServiceClient) so auth.email() works
+  // inside soft_delete_generator_fuel / soft_delete_generator_maintenance RPCs,
+  // which call is_generator_admin() internally.
+  const sb = createUserClient(request);
 
   if (type === "fuel") {
     const { error } = await sb.rpc("soft_delete_generator_fuel", { p_id: id, p_reason: reason });
