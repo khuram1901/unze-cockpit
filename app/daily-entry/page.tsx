@@ -1546,15 +1546,11 @@ export default function DailyEntryPage() {
                   <select value={genFuel.generator_id}
                     onChange={(e) => setGenFuel({ ...genFuel, generator_id: e.target.value })}
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}>
-                    {/* Group by location */}
-                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g.location_name])).entries()).map(([locId, locName]) => (
-                      <optgroup key={locId} label={locName}>
-                        {genMeta.filter((g) => g.location_id === locId).map((g) => (
-                          <option key={g.generator_id} value={g.generator_id}>
-                            {g.label || `${g.kva} kVA – ${g.model}`}
-                          </option>
-                        ))}
-                      </optgroup>
+                    {/* One option per location; value = first generator at that location */}
+                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g])).entries()).map(([locId, g]) => (
+                      <option key={locId} value={g.generator_id}>
+                        {g.location_name}
+                      </option>
                     ))}
                   </select>
                 )}
@@ -1658,14 +1654,11 @@ export default function DailyEntryPage() {
                   <select value={genMaint.generator_id}
                     onChange={(e) => setGenMaint({ ...genMaint, generator_id: e.target.value })}
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}>
-                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g.location_name])).entries()).map(([locId, locName]) => (
-                      <optgroup key={locId} label={locName}>
-                        {genMeta.filter((g) => g.location_id === locId).map((g) => (
-                          <option key={g.generator_id} value={g.generator_id}>
-                            {g.label || `${g.kva} kVA – ${g.model}`}
-                          </option>
-                        ))}
-                      </optgroup>
+                    {/* One option per location; value = first generator at that location */}
+                    {Array.from(new Map(genMeta.map((g) => [g.location_id, g])).entries()).map(([locId, g]) => (
+                      <option key={locId} value={g.generator_id}>
+                        {g.location_name}
+                      </option>
                     ))}
                   </select>
                 )}

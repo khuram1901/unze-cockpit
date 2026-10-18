@@ -848,7 +848,7 @@ export default function AdminDataPage() {
   const [genSummary, setGenSummary]         = useState<GenSummaryRow[]>([]);
   const [genMaster, setGenMaster]           = useState<GenMasterRow[]>([]);
   const [genThresholds, setGenThresholds]   = useState<GenThresholds | null>(null);
-  const [genMeta, setGenMeta]               = useState<{id:string;name:string;generators:{id:string;label:string;kva:number;model:string}[]}[]>([]);
+  const [genMeta, setGenMeta]               = useState<{location_id:string;location_name:string;generator_id:string;kva:number;model:string;label:string|null}[]>([]);
   const [loadingGen, setLoadingGen]         = useState(false);
   const [genDateFrom, setGenDateFrom]       = useState<string>(() => { const d = new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); });
   const [genDateTo, setGenDateTo]           = useState<string>(() => new Date().toISOString().slice(0,10));
@@ -888,18 +888,16 @@ export default function AdminDataPage() {
       if (summ.summary?.[0]) {
         // thresholds come from the first summary row — extract from meta instead
       }
-      // load master list separately
-      const masterRows = (meta.data ?? []).flatMap((loc: {id:string;name:string;generators:{id:string;label:string;kva:number;model:string}[]}) =>
-        loc.generators.map((g) => ({
-          id: g.id,
-          location_id: loc.id,
-          location_name: loc.name,
-          kva: g.kva,
-          model: g.model,
-          label: g.label,
-          is_active: true,
-        }))
-      );
+      // build master list from flat rows
+      const masterRows = (meta.data ?? []).map((g: {location_id:string;location_name:string;generator_id:string;kva:number;model:string;label:string|null}) => ({
+        id: g.generator_id,
+        location_id: g.location_id,
+        location_name: g.location_name,
+        kva: g.kva,
+        model: g.model,
+        label: g.label,
+        is_active: true,
+      }));
       setGenMaster(masterRows);
     } finally {
       setLoadingGen(false);
@@ -918,11 +916,12 @@ export default function AdminDataPage() {
     const PKR = (n: number | null | undefined) => n == null ? "—" : `PKR ${Math.round(n).toLocaleString("en-PK")}`;
     const NUM = (n: number | null | undefined, dp = 1) => n == null ? "—" : n.toFixed(dp);
 
-    // All locations for the filter dropdown
-    const allLocations = genMeta;
-    // Generators for the selected location
+    // Unique locations from flat rows
+    const allLocations = Array.from(new Map(genMeta.map(g => [g.location_id, g.location_name])).entries())
+      .map(([id, name]) => ({ id, name }));
+    // Generators for the selected location (for sub-filter)
     const locGens = genLocFilter
-      ? (genMeta.find((l: {id:string;name:string;generators:{id:string;label:string;kva:number;model:string}[]}) => l.id === genLocFilter)?.generators ?? [])
+      ? genMeta.filter(g => g.location_id === genLocFilter)
       : [];
 
     // Status badge helper
@@ -947,13 +946,13 @@ export default function AdminDataPage() {
         <select value={genLocFilter} onChange={e => { setGenLocFilter(e.target.value); setGenGenFilter(""); }}
           style={{ padding: "7px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", minWidth: "140px" }}>
           <option value="">All Locations</option>
-          {allLocations.map((l: {id:string;name:string;generators:{id:string;label:string;kva:number;model:string}[]}) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          {allLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
-        {locGens.length > 0 && (
+        {locGens.length > 1 && (
           <select value={genGenFilter} onChange={e => setGenGenFilter(e.target.value)}
             style={{ padding: "7px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", minWidth: "140px" }}>
             <option value="">All Generators</option>
-            {locGens.map((g: {id:string;label:string;kva:number;model:string}) => <option key={g.id} value={g.id}>{g.label || `${g.kva}KVA ${g.model}`}</option>)}
+            {locGens.map(g => <option key={g.generator_id} value={g.generator_id}>{g.label || `${g.kva} kVA – ${g.model}`}</option>)}
           </select>
         )}
         <DateInput value={genDateFrom} onChange={e => setGenDateFrom(e.target.value)} />
@@ -1405,7 +1404,7 @@ export default function AdminDataPage() {
                   <select value={genMasterForm.location_id} onChange={e => setGenMasterForm(f => ({ ...f, location_id: e.target.value }))}
                     style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }}>
                     <option value="">Select location…</option>
-                    {genMeta.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    {allLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>
                 </label>
                 <label>
