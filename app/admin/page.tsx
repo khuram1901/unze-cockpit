@@ -1772,12 +1772,6 @@ export default function AdminDataPage() {
                       style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }} />
                   </label>
                 ))}
-                <label style={{ gridColumn: "1/-1" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Remarks</span>
-                  <textarea rows={2} value={editingGenMaint.remarks ?? ""}
-                    onChange={e => setEditingGenMaint(r => r && ({ ...r, remarks: e.target.value }))}
-                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "13px", resize: "vertical", boxSizing: "border-box" }} />
-                </label>
               </div>
               <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
                 <button disabled={savingGenMaint} onClick={async () => {
