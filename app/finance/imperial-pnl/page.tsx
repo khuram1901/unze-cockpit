@@ -420,7 +420,7 @@ export default function ImperialPnlPage() {
 
   // Period presets (Khuram, 18/10/2026): Month = the current calendar month,
   // Quarter = the current FISCAL quarter (Jul–Sep, Oct–Dec, Jan–Mar, Apr–Jun),
-  // YTD = 1 January of this year to today. Fiscal-year views live under
+  // YTD = the rolling 12 months ending in the current month. Fiscal-year views live under
   // Custom. When the current month has no accepted data yet, the preset
   // falls back to the latest month that does and says so (periodNote).
   const { monthFrom, monthTo, periodNote } = useMemo(() => {
@@ -455,11 +455,13 @@ export default function ImperialPnlPage() {
       const lq = allMonths.filter((m) => m >= lqs && m <= addMonths(lqs, 2));
       return { monthFrom: lq[0], monthTo: lq[lq.length - 1], periodNote: `No data yet for the current quarter (${MONTH_LABEL(qs)}–${MONTH_LABEL(qe)}) — showing the latest quarter with data, ${MONTH_LABEL(lq[0])}–${MONTH_LABEL(lq[lq.length - 1])}${gapNote()}.` };
     }
-    // YTD — calendar year to date, clamped to the data we actually hold.
-    const jan = `${cur.slice(0, 4)}-01-01`;
-    const from = clamp(jan);
+      // YTD (Khuram, 18/10/2026): the rolling twelve months ending in the
+    // current month — Nov 25 → Oct 26 when today is in Oct 26 — clamped to
+    // the data we actually hold.
+    const start = addMonths(cur, -11);
+    const from = clamp(start);
     const to = clamp(cur);
-    const note = to < cur ? `Year to date: ${MONTH_LABEL(from)}–${MONTH_LABEL(to)} — nothing accepted after ${MONTH_LABEL(to)} yet${gapNote()}.` : "";
+    const note = to < cur ? `Last 12 months: ${MONTH_LABEL(from)}–${MONTH_LABEL(to)} — nothing loaded after ${MONTH_LABEL(to)} yet${gapNote()}.` : from > start ? `Last 12 months: data starts ${MONTH_LABEL(from)}.` : "";
     return { monthFrom: from, monthTo: to, periodNote: note };
   }, [allMonths, coverage, preset, customFrom, customTo]);
 

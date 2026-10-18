@@ -144,7 +144,7 @@ const chgLabel = (cur: number, prev: number | null | undefined): { text: string;
 
 // Period presets (Khuram, 18/10/2026 — same model as the Imperial P&L):
 // Month = current calendar month, Quarter = current FISCAL quarter (Jul–Sep,
-// Oct–Dec, Jan–Mar, Apr–Jun), YTD = 1 January → today, fiscal years via Custom.
+// Oct–Dec, Jan–Mar, Apr–Jun), YTD = the rolling 12 months ending in the current month, fiscal years via Custom.
 const PRESETS = ["Month", "Quarter", "YTD", "Custom"] as const;
 const fiscalQuarterStart = (m: string) => {
   const [y, mo] = m.split("-").map(Number);
@@ -583,10 +583,13 @@ export default function ProfitAndLossPage() {
       const lq = allMonths.filter((m) => m >= lqs && m <= addMonths(lqs, 2));
       return { monthFrom: lq[0], monthTo: lq[lq.length - 1], periodNote: `No data yet for the current quarter (${MONTH_LABEL(qs)}–${MONTH_LABEL(qe)}) — showing the latest quarter with data, ${MONTH_LABEL(lq[0])}–${MONTH_LABEL(lq[lq.length - 1])}${gapNote()}.` };
     }
-    const jan = `${cur.slice(0, 4)}-01-01`;
-    const from = clamp(jan);
+    // YTD (Khuram, 18/10/2026): the rolling twelve months ending in the
+    // current month — Nov 25 → Oct 26 when today is in Oct 26 — clamped to
+    // the data we actually hold.
+    const start = addMonths(cur, -11);
+    const from = clamp(start);
     const to = clamp(cur);
-    const note = to < cur ? `Year to date: ${MONTH_LABEL(from)}–${MONTH_LABEL(to)} — nothing loaded after ${MONTH_LABEL(to)} yet${gapNote()}.` : "";
+    const note = to < cur ? `Last 12 months: ${MONTH_LABEL(from)}–${MONTH_LABEL(to)} — nothing loaded after ${MONTH_LABEL(to)} yet${gapNote()}.` : from > start ? `Last 12 months: data starts ${MONTH_LABEL(from)}.` : "";
     return { monthFrom: from, monthTo: to, periodNote: note };
   }, [allMonths, coverage, preset, customFrom, customTo]);
 
