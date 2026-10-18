@@ -1,29 +1,12 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../../lib/supabase-server";
 import { requireAuth } from "../../../../../lib/api-auth";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID } from "../../../../../lib/constants";
+import { hasBankingAccess } from "../../../../../lib/banking-access";
 import { parseCashFlowPDF } from "../../../../../lib/pdf-parsers/cash-flow-parser";
-import { isAdmin } from "../../../../../lib/admin-config";
 
 // ── Auth helper (same as ../route.ts) ────────────────────────────────────────
 
-async function checkBankingAccess(
-  email: string,
-  supabase: ReturnType<typeof createServiceClient>,
-): Promise<boolean> {
-  if (isAdmin(email.toLowerCase())) return true;
-  const { data: member } = await supabase
-    .from("members")
-    .select("id")
-    .eq("email", email)
-    .single();
-  if (!member) return false;
-  const { data: perm } = await supabase
-    .from("member_permissions")
-    .select("can_access_banking")
-    .eq("member_id", member.id)
-    .single();
-  return perm?.can_access_banking === true;
-}
 
 // ── POST /api/banking/cash-sheets/pdf/parse ──────────────────────────────────
 // Parses a cash sheet PDF that is ALREADY in Supabase Storage (uploaded by the
@@ -39,7 +22,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  if (!(await checkBankingAccess(auth.email, supabase))) {
+  if (!(await hasBankingAccess(auth.email))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
@@ -81,11 +64,13 @@ export async function POST(request: NextRequest) {
     pdc_total: null, closing_after_pdc: null, transactions: [], pdc_buckets: [],
   };
   let parseWarning: string | null = null;
+  let detectedCompany: string | null = null;
 
   try {
     const results = await parseCashFlowPDF(buffer);
     if (results.length > 0) {
       const r = results[0];
+      detectedCompany = r.company;
       parsed = {
         opening: r.openingBalanceTotal,
         closing: r.closingBalanceUnzeTrading,
@@ -102,5 +87,53 @@ export async function POST(request: NextRequest) {
     console.warn("cash-sheets/pdf/parse: parse warning (non-fatal):", parseWarning);
   }
 
-  return Response.json({ ok: true, path, parsed, parseWarning });
+  // ── 18/10/2026: named checks, so the user is told WHICH figure failed
+  // before anything is saved (the DB guard still enforces on save).
+  const company = path.split("/")[0];
+  const sheetDate = path.slice(-14, -4); // YYYY-MM-DD from .../YYYY-MM-DD.pdf
+  const checks: { level: "error" | "warning"; message: string }[] = [];
+  const f = (n: number | null) => n == null ? "—" : "PKR " + Math.round(n).toLocaleString("en-PK");
+
+  const unread: string[] = [];
+  if (parsed.opening == null || (parsed.opening === 0 && parsed.payments === 0)) unread.push("opening balance");
+  if (parsed.closing == null) unread.push("closing balance");
+  if (parsed.receipts == null || parsed.receipts === 0) unread.push("total receipts");
+  if (parsed.payments == null || parsed.payments === 0) unread.push("total payments");
+  if (unread.length > 0) {
+    checks.push({ level: "error", message: `Could not read the ${unread.join(", ")} from the PDF. Enter the figure${unread.length > 1 ? "s" : ""} manually.` });
+  } else {
+    const eq = Math.abs((parsed.opening ?? 0) + (parsed.receipts ?? 0) - (parsed.payments ?? 0) - (parsed.closing ?? 0));
+    if (eq > 100) {
+      checks.push({ level: "error", message: `Figures don't add up: opening ${f(parsed.opening)} + receipts ${f(parsed.receipts)} − payments ${f(parsed.payments)} ≠ closing ${f(parsed.closing)} (out by ${f(eq)}).` });
+    }
+  }
+
+  // Chain check against the previous available day (weekends/holidays are
+  // simply the previous row — no calendar assumptions).
+  const COMPANY_ID_MAP: Record<string, string> = { UTPL: UTPL_COMPANY_ID, IFPL: IFPL_COMPANY_ID, BRNH: BRNH_COMPANY_ID, HD: HD_COMPANY_ID, KKJ: KKJ_COMPANY_ID };
+  const companyId = COMPANY_ID_MAP[company];
+  if (companyId && parsed.opening != null) {
+    const { data: prev } = await supabase
+      .from("daily_cash_position")
+      .select("position_date, closing_balance")
+      .eq("company_id", companyId)
+      .lt("position_date", sheetDate)
+      .order("position_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (prev && Math.abs(Number(prev.closing_balance) - parsed.opening) > 100) {
+      const d = String(prev.position_date).split("-").reverse().join("/");
+      checks.push({ level: "error", message: `Opening ${f(parsed.opening)} doesn't match ${d} closing ${f(Number(prev.closing_balance))} (out by ${f(Math.abs(Number(prev.closing_balance) - parsed.opening))}). Check the PDF is the right day/company.` });
+    }
+  }
+
+  // Mis-filed PDF (e.g. a UTPL sheet uploaded under IFPL — happened 24/06/2026)
+  const EXPECTED: Record<string, string> = { UTPL: "unze", IFPL: "imperial", BRNH: "baranh", HD: "dolci", KKJ: "kkj" };
+  if (detectedCompany && detectedCompany !== "unknown" && EXPECTED[company] && detectedCompany !== EXPECTED[company]) {
+    checks.push({ level: "error", message: `This PDF looks like a ${detectedCompany.toUpperCase()} cash sheet, but you are uploading it under ${company}.` });
+  }
+
+  if (parseWarning) checks.push({ level: "warning", message: parseWarning });
+
+  return Response.json({ ok: true, path, parsed, parseWarning, checks });
 }

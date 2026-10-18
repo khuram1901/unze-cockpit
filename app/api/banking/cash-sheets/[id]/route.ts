@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../lib/supabase-server";
 import { requireAuth } from "../../../../lib/api-auth";
-import { isAdmin } from "../../../../lib/admin-config";
-import { CEO_EMAIL, CEO2_EMAIL } from "../../../../lib/permissions";
+import { hasBankingAccess, hasCashSheetReadAccess } from "../../../../lib/banking-access";
 import {
   UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID,
 } from "../../../../lib/constants";
@@ -18,53 +17,9 @@ const COMPANY_ID_MAP: Record<string, string> = {
 };
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
-const RESTAURANT_COMPANIES = ["BRNH", "HD", "KKJ"];
 
-async function checkBankingAccess(
-  email: string,
-  supabase: ReturnType<typeof createServiceClient>,
-): Promise<boolean> {
-  if (isAdmin(email.toLowerCase())) return true;
-  const { data: member } = await supabase
-    .from("members")
-    .select("id")
-    .eq("email", email)
-    .single();
-  if (!member) return false;
-  const { data: perm } = await supabase
-    .from("member_permissions")
-    .select("can_access_banking")
-    .eq("member_id", member.id)
-    .single();
-  return perm?.can_access_banking === true;
-}
 
 // Read-only: banking users + restaurants_pnl users for restaurant companies
-async function checkReadAccess(
-  email: string,
-  supabase: ReturnType<typeof createServiceClient>,
-  company?: string,
-): Promise<boolean> {
-  if (isAdmin(email.toLowerCase())) return true;
-  // CEO accounts have full finance read access via their role,
-  // not via an explicit member_permissions row
-  const CEO_EMAILS = [CEO_EMAIL, CEO2_EMAIL].map((e) => e.toLowerCase());
-  if (CEO_EMAILS.includes(email.toLowerCase())) return true;
-  const { data: member } = await supabase
-    .from("members")
-    .select("id")
-    .eq("email", email)
-    .single();
-  if (!member) return false;
-  const { data: perm } = await supabase
-    .from("member_permissions")
-    .select("can_access_banking, can_view_restaurants_pnl")
-    .eq("member_id", member.id)
-    .single();
-  if (perm?.can_access_banking === true) return true;
-  if (perm?.can_view_restaurants_pnl === true && company && RESTAURANT_COMPANIES.includes(company)) return true;
-  return false;
-}
 
 // ── GET /api/banking/cash-sheets/[id] ─────────────────────────────────────────
 
@@ -80,28 +35,30 @@ export async function GET(
   const supabase = createServiceClient();
 
   // Fetch sheet first so we can pass company to the auth check
+  // Header + line sums from the view (migration 276) — sums are not done here.
   const { data, error } = await supabase
-    .from("cash_sheet_uploads")
-    .select("*, cash_sheet_transactions(*)")
+    .from("cash_sheet_uploads_with_totals")
+    .select("*")
     .eq("id", id)
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   if (!data) return Response.json({ error: "Not found" }, { status: 404 });
 
-  if (!(await checkReadAccess(auth.email, supabase, data.company))) {
+  if (!(await hasCashSheetReadAccess(auth.email, data.company))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
-  // Split and sort transactions
-  type Txn = { txn_type: string; sort_order: number; created_at: string };
-  const txns: Txn[] = data.cash_sheet_transactions || [];
-  const receipts = txns
-    .filter((t) => t.txn_type === "receipt")
-    .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
-  const payments = txns
-    .filter((t) => t.txn_type === "payment")
-    .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+  // Lines, ordered by the database
+  const { data: txns, error: txnErr } = await supabase
+    .from("cash_sheet_transactions")
+    .select("*")
+    .eq("sheet_id", id)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (txnErr) return Response.json({ error: txnErr.message }, { status: 500 });
+  const receipts = (txns ?? []).filter((t) => t.txn_type === "receipt");
+  const payments = (txns ?? []).filter((t) => t.txn_type === "payment");
 
   // Generate signed URL for PDF if present
   let pdf_signed_url: string | null = null;
@@ -115,9 +72,11 @@ export async function GET(
   return Response.json({
     data: {
       ...data,
-      cash_sheet_transactions: undefined,
       receipts,
       payments,
+      // DB-computed line sums (view columns) — the page shows these, never sums lines itself
+      line_receipts_pkr: Number(data.line_receipts_pkr ?? 0),
+      line_payments_pkr: Number(data.line_payments_pkr ?? 0),
       pdf_signed_url,
     },
   });
@@ -135,7 +94,7 @@ export async function PATCH(
   const { id } = await context.params;
 
   const supabase = createServiceClient();
-  if (!(await checkBankingAccess(auth.email, supabase))) {
+  if (!(await hasBankingAccess(auth.email))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
@@ -168,7 +127,7 @@ export async function DELETE(
   const { id } = await context.params;
 
   const supabase = createServiceClient();
-  if (!(await checkBankingAccess(auth.email, supabase))) {
+  if (!(await hasBankingAccess(auth.email))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 

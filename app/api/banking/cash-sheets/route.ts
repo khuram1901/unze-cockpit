@@ -1,61 +1,14 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { hasBankingAccess, hasCashSheetReadAccess } from "../../../lib/banking-access";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID } from "../../../lib/constants";
-import { isAdmin } from "../../../lib/admin-config";
-import { CEO_EMAIL, CEO2_EMAIL } from "../../../lib/permissions";
 import { isCashSheetRejection } from "../../../lib/cash-position-errors";
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
-const RESTAURANT_COMPANIES = ["BRNH", "HD", "KKJ"];
 
-async function checkBankingAccess(
-  email: string,
-  supabase: ReturnType<typeof createServiceClient>,
-): Promise<boolean> {
-  if (isAdmin(email.toLowerCase())) return true;
-  // CEO accounts have full banking access via role, not via member_permissions row
-  const CEO_EMAILS = [CEO_EMAIL, CEO2_EMAIL].map((e) => e.toLowerCase());
-  if (CEO_EMAILS.includes(email.toLowerCase())) return true;
-  const { data: member } = await supabase
-    .from("members")
-    .select("id")
-    .eq("email", email)
-    .single();
-  if (!member) return false;
-  const { data: perm } = await supabase
-    .from("member_permissions")
-    .select("can_access_banking")
-    .eq("member_id", member.id)
-    .single();
-  return perm?.can_access_banking === true;
-}
 
 // Read-only access: banking users + restaurant-pnl users (for BRNH/HD/KKJ only)
-async function checkReadAccess(
-  email: string,
-  supabase: ReturnType<typeof createServiceClient>,
-  company?: string,
-): Promise<boolean> {
-  if (isAdmin(email.toLowerCase())) return true;
-  // CEO accounts have full finance read access via role, not via member_permissions row
-  const CEO_EMAILS = [CEO_EMAIL, CEO2_EMAIL].map((e) => e.toLowerCase());
-  if (CEO_EMAILS.includes(email.toLowerCase())) return true;
-  const { data: member } = await supabase
-    .from("members")
-    .select("id")
-    .eq("email", email)
-    .single();
-  if (!member) return false;
-  const { data: perm } = await supabase
-    .from("member_permissions")
-    .select("can_access_banking, can_view_restaurants_pnl")
-    .eq("member_id", member.id)
-    .single();
-  if (perm?.can_access_banking === true) return true;
-  if (perm?.can_view_restaurants_pnl === true && company && RESTAURANT_COMPANIES.includes(company)) return true;
-  return false;
-}
 
 // ── GET /api/banking/cash-sheets?company=IFPL&month=2026-07 ──────────────────
 
@@ -69,14 +22,16 @@ export async function GET(request: NextRequest) {
   const company = searchParams.get("company") || "UTPL";
   const month = searchParams.get("month"); // e.g. "2026-07"
 
-  if (!(await checkReadAccess(auth.email, supabase, company))) {
+  if (!(await hasCashSheetReadAccess(auth.email, company))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
+  // Line sums and counts come from the cash_sheet_uploads_with_totals view
+  // (migration 276) — nothing is summed in the page.
   const SELECT = `id, company, sheet_date, source, pdf_storage_path,
     opening_balance_pkr, closing_balance_pkr, receipts_pkr, payments_pkr,
     notes, uploaded_by, created_at,
-    cash_sheet_transactions ( id, txn_type, amount_pkr )`;
+    line_receipts_pkr, line_payments_pkr, receipt_count, payment_count`;
 
   let result;
 
@@ -86,7 +41,7 @@ export async function GET(request: NextRequest) {
     const lastDay = new Date(y, m, 0).getDate();
     const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     result = await supabase
-      .from("cash_sheet_uploads")
+      .from("cash_sheet_uploads_with_totals")
       .select(SELECT)
       .eq("company", company)
       .gte("sheet_date", start)
@@ -94,7 +49,7 @@ export async function GET(request: NextRequest) {
       .order("sheet_date", { ascending: false });
   } else {
     result = await supabase
-      .from("cash_sheet_uploads")
+      .from("cash_sheet_uploads_with_totals")
       .select(SELECT)
       .eq("company", company)
       .order("sheet_date", { ascending: false })
@@ -129,7 +84,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  if (!(await checkBankingAccess(auth.email, supabase))) {
+  if (!(await hasBankingAccess(auth.email))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
@@ -171,7 +126,57 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: `company must be one of: ${VALID_COMPANIES.join(", ")}` }, { status: 400 });
   }
 
-  // 1. Upsert sheet header — upsert so that re-uploads for the same date update
+  // ── 18/10/2026: fail-safe order ──────────────────────────────────────────
+  // The daily position is written FIRST, because daily_cash_position_guard()
+  // (migration 273) is where the figures are validated: opening + receipts −
+  // payments = closing, and the chain with the neighbouring days. If that
+  // rejects, nothing is saved — no half-saved sheet with wrong totals. Only
+  // then are the sheet header, lines and PDC buckets stored, and the Banking
+  // copy of the totals is kept in step by the mirror trigger (migration 276).
+  const COMPANY_ID_MAP: Record<string, string> = {
+    UTPL: UTPL_COMPANY_ID, IFPL: IFPL_COMPANY_ID, BRNH: BRNH_COMPANY_ID, HD: HD_COMPANY_ID, KKJ: KKJ_COMPANY_ID,
+  };
+  const companyId = COMPANY_ID_MAP[company];
+
+  const missing: string[] = [];
+  if (typeof opening_balance_pkr !== "number") missing.push("opening balance");
+  if (typeof closing_balance_pkr !== "number") missing.push("closing balance");
+  if (typeof total_receipts !== "number") missing.push("total receipts");
+  if (typeof total_payments !== "number") missing.push("total payments");
+  if (missing.length > 0) {
+    return Response.json(
+      { error: `Cash sheet not saved — could not read the ${missing.join(", ")} from the PDF. Enter the figure${missing.length > 1 ? "s" : ""} manually and save again.` },
+      { status: 422 },
+    );
+  }
+
+  // 1. Daily position (validated by the DB guard) — the source of truth
+  const { error: dcpErr } = await supabase
+    .from("daily_cash_position")
+    .upsert(
+      {
+        company_id: companyId,
+        position_date: sheet_date,
+        opening_balance: opening_balance_pkr,
+        total_receipts: total_receipts,
+        total_payments: total_payments,
+        closing_balance: closing_balance_pkr,
+        post_dated_total: post_dated_total ?? 0,
+        closing_after_post_dated: closing_after_post_dated ?? closing_balance_pkr,
+        source: "manual",
+        uploaded_by: auth.email,
+      },
+      { onConflict: "company_id,position_date" }
+    );
+  if (dcpErr) {
+    console.error("daily_cash_position upsert failed:", dcpErr.message);
+    return Response.json(
+      { error: isCashSheetRejection(dcpErr.message) ? dcpErr.message : "Could not save the daily position: " + dcpErr.message },
+      { status: isCashSheetRejection(dcpErr.message) ? 422 : 500 },
+    );
+  }
+
+  // 2. Sheet header — upsert so that re-uploads for the same date update
   //    rather than conflict, and so Finance-tab rows are enriched rather than duplicated.
   const { data: sheet, error: sheetErr } = await supabase
     .from("cash_sheet_uploads")
@@ -179,10 +184,10 @@ export async function POST(request: NextRequest) {
       {
         company,
         sheet_date,
-        opening_balance_pkr: opening_balance_pkr ?? null,
-        closing_balance_pkr: closing_balance_pkr ?? null,
-        receipts_pkr: total_receipts ?? null,
-        payments_pkr: total_payments ?? null,
+        opening_balance_pkr,
+        closing_balance_pkr,
+        receipts_pkr: total_receipts,
+        payments_pkr: total_payments,
         notes: notes || null,
         pdf_storage_path: pdf_storage_path || null,
         uploaded_by: auth.email,
@@ -197,7 +202,12 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: sheetErr.message }, { status: 500 });
   }
 
-  // 2. Replace transactions (delete then re-insert for idempotency on re-upload)
+  // Link the position to its sheet (used by the Finance pages' drill-down)
+  await supabase.from("daily_cash_position")
+    .update({ cash_sheet_id: sheet.id })
+    .eq("company_id", companyId).eq("position_date", sheet_date);
+
+  // 3. Replace transactions (delete then re-insert for idempotency on re-upload)
   if (transactions.length > 0) {
     await supabase.from("cash_sheet_transactions").delete().eq("sheet_id", sheet.id);
     const rows = transactions.map((t, i) => ({
@@ -222,72 +232,23 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 3. Mirror to daily_cash_position so the Banking overview chart stays current.
-  //    Only write when we have at least one balance figure — avoids a blank placeholder row.
-  const hasBalance =
-    opening_balance_pkr != null ||
-    closing_balance_pkr != null ||
-    total_receipts != null ||
-    total_payments != null;
-
-  if (hasBalance) {
-    const COMPANY_ID_MAP: Record<string, string> = {
-      UTPL: UTPL_COMPANY_ID,
-      IFPL: IFPL_COMPANY_ID,
-      BRNH: BRNH_COMPANY_ID,
-      HD:   HD_COMPANY_ID,
-      KKJ:  KKJ_COMPANY_ID,
-    };
-    const companyId = COMPANY_ID_MAP[company];
-    const { error: dcpErr } = await supabase
-      .from("daily_cash_position")
-      .upsert(
-        {
+  // 4. Replace the day's PDC maturity buckets (feeds the Finance pages' PDC
+  //    outlook) — same replace-not-append rule as the finance ingestion path.
+  if (pdc_buckets.length > 0) {
+    await supabase.from("pdc_maturity_buckets")
+      .delete().eq("company_id", companyId).eq("position_date", sheet_date);
+    const { error: pdcErr } = await supabase.from("pdc_maturity_buckets").insert(
+      pdc_buckets
+        .filter((b) => b && typeof b.amount === "number" && /^\d{4}-\d{2}-\d{2}$/.test(b.dueDate || ""))
+        .map((b) => ({
           company_id: companyId,
           position_date: sheet_date,
-          opening_balance: opening_balance_pkr ?? 0,
-          total_receipts: total_receipts ?? 0,
-          total_payments: total_payments ?? 0,
-          closing_balance: closing_balance_pkr ?? 0,
-          post_dated_total: post_dated_total ?? 0,
-          closing_after_post_dated: closing_after_post_dated ?? closing_balance_pkr ?? 0,
-          source: "manual",
-          uploaded_by: auth.email,
-          cash_sheet_id: sheet.id,
-        },
-        { onConflict: "company_id,position_date" }
-      );
-
-    if (dcpErr) {
-      console.error("daily_cash_position upsert failed:", dcpErr.message);
-      // 17/10/2026: a trigger rejection (migration 273 — figures don't add up
-      // or the chain breaks) must reach the user, not just the log. The sheet
-      // header + lines are kept so the PDF can be checked; the day's position
-      // is not written until a corrected sheet is uploaded.
-      if (isCashSheetRejection(dcpErr.message)) {
-        return Response.json({ error: dcpErr.message, sheet_saved: true, data: sheet }, { status: 422 });
-      }
-      // Other failures stay non-blocking — sheet is saved, just log the error
-    }
-
-    // Replace the day's PDC maturity buckets (feeds the Finance pages' PDC
-    // outlook) — same replace-not-append rule as the finance ingestion path.
-    if (pdc_buckets.length > 0) {
-      await supabase.from("pdc_maturity_buckets")
-        .delete().eq("company_id", companyId).eq("position_date", sheet_date);
-      const { error: pdcErr } = await supabase.from("pdc_maturity_buckets").insert(
-        pdc_buckets
-          .filter((b) => b && typeof b.amount === "number" && /^\d{4}-\d{2}-\d{2}$/.test(b.dueDate || ""))
-          .map((b) => ({
-            company_id: companyId,
-            position_date: sheet_date,
-            due_date: b.dueDate,
-            amount: b.amount,
-            label: b.label ?? null,
-          }))
-      );
-      if (pdcErr) console.error("pdc_maturity_buckets insert failed:", pdcErr.message);
-    }
+          due_date: b.dueDate,
+          amount: b.amount,
+          label: b.label ?? null,
+        }))
+    );
+    if (pdcErr) console.error("pdc_maturity_buckets insert failed:", pdcErr.message);
   }
 
   return Response.json({ ok: true, data: sheet });

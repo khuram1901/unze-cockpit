@@ -4,6 +4,19 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.7 — 2026-10-18 (minor bump)
+
+**Banking page audit + fix — cash sheets have one source of truth; PDF problems are named, not silent**
+
+- Cash-sheet save order is now fail-safe: the daily position is written first (validated by the migration-273 guard); if it is rejected, nothing is saved. Previously the sheet header saved even when the position write failed.
+- The PDF parse step returns named checks (which figure couldn't be read, figures don't add up, opening ≠ previous day's closing, PDF looks like another company's sheet). The upload form shows them and stops; all four figures can be typed to override the PDF. "Parse failure never blocks the save" is gone.
+- Migration 276: `daily_cash_position` → `cash_sheet_uploads` mirror trigger; 11 drifted days + missing totals reconciled; Banking continuity now reads the same function as Finance; `admin_eobi_payments` direct reads restricted; `cash_sheet_uploads_with_totals` view (line sums/counts in DB).
+- `GET /api/admin/payments` now requires banking or Admin Operations access (was open to any signed-in user).
+- One role-aware `lib/banking-access.ts` replaces 7 copies of the access check (an Admin/CEO by role outside the hard-coded email lists was getting 403).
+- Banking tab uses `formatPKR`; no JS line summing.
+
+---
+
 ## v4.6 — 2026-10-17 (minor bump)
 
 **Imperial Footwear finance page audit + fix**
