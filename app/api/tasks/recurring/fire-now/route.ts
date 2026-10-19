@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../lib/supabase-server";
 import { createTaskCore } from "../../../../lib/task-creation";
+import { requireAuth } from "../../../../lib/api-auth";
 
 // POST /api/tasks/recurring/fire-now
 // Spawns the first task instance immediately when a recurring template is created.
@@ -8,6 +9,9 @@ import { createTaskCore } from "../../../../lib/task-creation";
 // Called client-side right after inserting into recurring_tasks so the assignee
 // sees a task straight away, rather than waiting for the next cron cycle.
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   try {
     const { templateId, firstDueDate } = await request.json();
     if (!templateId) return Response.json({ error: "templateId required" }, { status: 400 });
