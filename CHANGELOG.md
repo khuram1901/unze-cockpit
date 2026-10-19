@@ -4,6 +4,19 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.11 — 2026-10-19 (patch)
+
+**Audit page (/department/audit) audit + fix — Internal Audit team locked out since the department rename**
+
+- Root cause: department renamed "Audit" → "Internal Audit" on 18/10; every audit RLS policy, helper and RPC still checked `'Audit'`, so the whole team — Shahid included — saw an empty page, blank home Audit cards and an empty Tasks panel. No data was lost.
+- Migration 280 (applied 19/10 ahead of the code): `is_internal_audit_member()` / `is_pre_audit_member()` helpers; `is_audit_manager` and `is_assigned_audit_company` re-pointed; 10 policies ALTERed in place; 5 RPCs re-pointed.
+- Daily approvals check: any Pre-audit member can now save counts (assignment was mandatory but nothing was ever assigned — last entry 21/07). Assignment stays optional and narrows the list when set.
+- "Today" is the Pakistan date on page and database (DB runs in UTC); the log row is saved against the RPC's `as_of` date.
+- Page now shows load/access errors with a Try again button instead of silently showing nothing; in-page confirm bar replaces `window.confirm`; FY label computed from the date; off-palette colours replaced with SharedUI tokens.
+- Docs: `docs/audit/DECISIONS.md`.
+
+---
+
 ## v4.10 — 2026-10-18 (minor bump)
 
 **Unze P&L page audit + fix — named access, Smart Meters plant, Supabase computes everything, plant-level balance sheets**
