@@ -45,9 +45,9 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 };
 
 const FREQ_BADGE: Record<string, { bg: string; text: string }> = {
-  Monthly:         { bg: "#EEF1FC", text: COLOURS.BLUE },
+  Monthly:         { bg: COLOURS.INFO_SOFT, text: COLOURS.BLUE },
   Quarterly:       { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
-  "Semi-annually": { bg: "#F3EEF9", text: "#6E45B8" },
+  "Semi-annually": { bg: COLOURS.INFO_SOFT, text: COLOURS.PURPLE },
   Annually:        { bg: COLOURS.SUCCESS_SOFT, text: COLOURS.GREEN },
 };
 const FREQUENCIES = ["Monthly", "Quarterly", "Semi-annually", "Annually"];
@@ -97,7 +97,17 @@ type DailySummary = {
   yesterday_total: number | null; week: { date: string; total: number }[];
 };
 
-const today = new Date().toISOString().slice(0, 10);
+// Pakistan date (the team works in PKT; the server runs in UTC). Shaped
+// as YYYY-MM-DD via the en-CA locale, which is the ISO order.
+const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" });
+
+// Fiscal year runs 1 July → 30 June. Computed from the date, never hard-coded.
+function fiscalYearLabel(iso: string): string {
+  const y = parseInt(iso.slice(0, 4), 10);
+  const m = parseInt(iso.slice(5, 7), 10);
+  const start = m >= 7 ? y : y - 1;
+  return `FY ${start}-${String(start + 1).slice(2)} · year end 30/06/${start + 1}`;
+}
 
 function daysBetween(fromIso: string): number {
   return Math.max(1, Math.ceil((Date.now() - new Date(fromIso).getTime()) / 86400000));
@@ -140,7 +150,7 @@ function companyName(companyId: string): string {
 function StatusPill({ status, pct }: { status: string; pct: number }) {
   const map: Record<string, { bg: string; text: string; label: string }> = {
     "In Progress": { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER, label: `In progress · ${pct}%` },
-    Planned:       { bg: "#EEF1FC", text: COLOURS.BLUE, label: "Planned" },
+    Planned:       { bg: COLOURS.INFO_SOFT, text: COLOURS.BLUE, label: "Planned" },
     Completed:     { bg: COLOURS.SUCCESS_SOFT, text: COLOURS.GREEN, label: "✓ Done" },
     Cancelled:     { bg: COLOURS.HAIRLINE, text: COLOURS.SLATE, label: "Cancelled" },
   };
@@ -163,6 +173,9 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
   const [dailyDraft, setDailyDraft] = useState<Record<string, { pending: string; reason: string }>>({});
   const [dailySaving, setDailySaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [dailyError, setDailyError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ message: string; label: string; run: () => Promise<void> } | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [tasksByProcess, setTasksByProcess] = useState<Record<string, StageTask[]>>({});
@@ -182,7 +195,14 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
 
   const loadOverview = useCallback(async () => {
     const { data, error } = await supabase.rpc("audit_team_overview");
-    if (!error && data && !data.error) {
+    if (error) {
+      setLoadError("Could not load the audit plan: " + error.message);
+    } else if (!data || data.error) {
+      setLoadError(data?.error === "not_authorised"
+        ? "You don't have access to the Internal Audit plan. Your profile must be in the Internal Audit department — ask Shahid or the CEO to check your Members record."
+        : "Could not load the audit plan" + (data?.error ? `: ${data.error}` : "."));
+    } else {
+      setLoadError(null);
       setViewer(data.viewer as Viewer);
       setTeams((data.teams as Team[]) || []);
       setStuck((data.stuck as StuckItem[]) || []);
@@ -195,7 +215,10 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
 
   const loadDaily = useCallback(async () => {
     const { data, error } = await supabase.rpc("audit_daily_log_summary");
-    if (!error && data && !data.error) setDailySummary(data as DailySummary);
+    if (error) { setDailyError("Could not load today's approvals check: " + error.message); return; }
+    if (!data || data.error) { setDailyError(data?.error === "not_authorised" ? null : "Could not load today's approvals check."); return; }
+    setDailyError(null);
+    setDailySummary(data as DailySummary);
   }, []);
 
   useEffect(() => { loadOverview(); loadDaily(); }, [loadOverview, loadDaily]);
@@ -259,7 +282,11 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
   }
 
   async function deleteStep(task: StageTask) {
-    if (!window.confirm("Delete this step?")) return;
+    if (!confirmAction || confirmAction.label !== `step:${task.id}`) {
+      setConfirmAction({ message: `Delete the step "${task.sub_task || task.stage_label}"?`, label: `step:${task.id}`, run: () => deleteStep(task) });
+      return;
+    }
+    setConfirmAction(null);
     const { error } = await supabase.from("audit_stage_tasks").delete().eq("id", task.id);
     if (error) { showMsg("Error: " + error.message); return; }
     logAction("Deleted", "audit_stage_tasks", task.sub_task || task.stage_label, task.id);
@@ -300,7 +327,11 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
   }
 
   async function deleteProcess(id: string, name: string) {
-    if (!window.confirm(`Delete "${name}" permanently? This cannot be undone.`)) return;
+    if (!confirmAction || confirmAction.label !== `proc:${id}`) {
+      setConfirmAction({ message: `Delete "${name}" permanently? All its steps go with it. This cannot be undone.`, label: `proc:${id}`, run: () => deleteProcess(id, name) });
+      return;
+    }
+    setConfirmAction(null);
     const { error } = await supabase.from("audit_plan_processes").delete().eq("id", id);
     if (error) { showMsg("Error: " + error.message); return; }
     logAction("Deleted", "audit_plan_processes", name, id);
@@ -311,7 +342,11 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
   }
 
   async function startNewCycle(p: PlanProcess) {
-    if (!window.confirm(`Start a new ${p.frequency.toLowerCase()} cycle for "${p.process_name}"? All steps reset to not started.`)) return;
+    if (!confirmAction || confirmAction.label !== `cycle:${p.id}`) {
+      setConfirmAction({ message: `Start a new ${p.frequency.toLowerCase()} cycle for "${p.process_name}"? All steps reset to not started.`, label: `cycle:${p.id}`, run: () => startNewCycle(p) });
+      return;
+    }
+    setConfirmAction(null);
     const { error } = await supabase.rpc("audit_start_new_cycle", { p_process_id: p.id });
     if (error) { showMsg("Error: " + error.message); return; }
     logAction("Updated", "audit_plan_processes", `New cycle started — ${p.process_name}`, p.id);
@@ -343,7 +378,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
       .map(([key, v]) => {
         const [company_id, doc_type] = key.split("|");
         return {
-          company_id, doc_type, log_date: today,
+          company_id, doc_type, log_date: dailySummary.as_of || today,
           pending_count: Math.max(0, parseInt(v.pending, 10) || 0),
           reason: v.reason.trim() || null,
           recorded_by: userCtx?.email || null,
@@ -361,6 +396,16 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
   }
 
   if (loading) return <p style={{ color: COLOURS.SLATE }}>Loading audit plan…</p>;
+  if (loadError) {
+    return (
+      <div style={{ backgroundColor: COLOURS.DANGER_SOFT, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.CARD, padding: "14px 16px", fontSize: "13px", color: COLOURS.RED }}>
+        <strong>Audit plan unavailable.</strong> {loadError}
+        <div style={{ marginTop: "8px" }}>
+          <button onClick={() => { setLoading(true); loadOverview(); loadDaily(); }} style={{ ...btnGhost, borderColor: COLOURS.RED, color: COLOURS.RED }}>Try again</button>
+        </div>
+      </div>
+    );
+  }
 
   const selectedTeam = teams.find((t) => t.id === selectedTeamId) || teams[0] || null;
   const isPreauditView = selectedTeam?.code === "PREAUDIT";
@@ -448,8 +493,22 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
     <section style={{ marginBottom: "22px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
         <SectionTitle title="Annual Internal Audit Plan" />
-        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>FY 2025-26 · year end closed 30/06/2026</span>
+        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{fiscalYearLabel(today)}</span>
       </div>
+
+      {confirmAction && (
+        <div style={{ backgroundColor: COLOURS.WARNING_SOFT, border: `1px solid ${COLOURS.AMBER}`, borderRadius: RADII.CARD, padding: "12px 16px", marginBottom: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+          <span style={{ fontSize: "13px", color: COLOURS.NAVY }}>{confirmAction.message}</span>
+          <span style={{ display: "flex", gap: "8px" }}>
+            <button onClick={() => setConfirmAction(null)} style={btnGhost}>Cancel</button>
+            <button onClick={() => confirmAction.run()} style={{ ...btnNavy, backgroundColor: confirmAction.label.startsWith("cycle:") ? COLOURS.NAVY : COLOURS.RED }}>Yes, continue</button>
+          </span>
+        </div>
+      )}
+
+      {dailyError && (
+        <div style={{ backgroundColor: COLOURS.DANGER_SOFT, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px", fontSize: "13px", color: COLOURS.RED }}>{dailyError}</div>
+      )}
 
       {/* ═══ Stuck strip — managers only ═══ */}
       {isManager && wv("dept_audit.stuck_strip", true) && stuck.length > 0 && (
@@ -553,7 +612,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
 
       {/* ═══ Member banner ═══ */}
       {!isManager && selectedTeam && (
-        <div style={{ backgroundColor: "#EEF1FC", borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px", fontSize: "13px", color: COLOURS.BLUE }}>
+        <div style={{ backgroundColor: COLOURS.INFO_SOFT, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px", fontSize: "13px", color: COLOURS.BLUE }}>
           Your team: <strong>{selectedTeam.name}</strong>
           {(viewer?.member_company_ids?.length ?? 0) > 0 && (
             <> · {(viewer!.member_company_ids).map(shortCode).join(" + ")}</>
@@ -819,7 +878,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
               {dailySummary && (
                 <span style={{
                   fontSize: "11px", fontWeight: 700, padding: "2px 9px", borderRadius: RADII.PILL,
-                  backgroundColor: dailySummary.today_total > 0 ? "#FEE2E2" : COLOURS.SUCCESS_SOFT,
+                  backgroundColor: dailySummary.today_total > 0 ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT,
                   color: dailySummary.today_total > 0 ? COLOURS.RED : COLOURS.GREEN,
                 }}>
                   {dailySummary.today_total === 0 ? "✓ All clear" : `${dailySummary.today_total} pending`}
