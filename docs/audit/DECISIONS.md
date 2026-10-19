@@ -11,6 +11,7 @@ Source of truth for the Annual Internal Audit Plan page. Created 19/10/2026 from
 - **Manager rights** (`is_audit_manager()`): Admin/Exec, or role Manager in Internal Audit (Shahid). Managers see all teams, the stuck strip, the week sparkline, and can assign members to teams.
 - **Members** see only their own team's processes; the member banner names the team and companies.
 - **Daily approvals check:** any Pre-audit team member (`is_pre_audit_member()`), any manager, or a member explicitly assigned to an activity may save counts for that company. Assignment is optional — a member with no assignments sees all 14 activities; once assigned, their list narrows automatically.
+- **Second blocker found in live testing (19/10/2026):** every Internal Audit member except Shahid had an explicit Access Matrix override `can_view_dept_audit = false` (Members defaults), which beats the department rule in `canViewDepartment()`. With Khuram's approval the override was cleared (set to no-override) for Amina, Junaid, Fraz, Attia, Abdul Rehman, Khizar, Bilal and External Auditor; Shahid's explicit `true` untouched. Rule: an explicit `false` toggle always wins — check `member_permissions` first when a member is bounced to /welcome.
 - Test accounts are excluded from the manager's "assign member" list. test.member / test.manager (Executive Office) are refused by the database (`not_authorised`).
 
 ## Rules
