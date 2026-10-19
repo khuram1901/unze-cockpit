@@ -13,6 +13,7 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 - Daily approvals check: any Pre-audit member can now save counts (assignment was mandatory but nothing was ever assigned — last entry 21/07). Assignment stays optional and narrows the list when set.
 - "Today" is the Pakistan date on page and database (DB runs in UTC); the log row is saved against the RPC's `as_of` date.
 - Page now shows load/access errors with a Try again button instead of silently showing nothing; in-page confirm bar replaces `window.confirm`; FY label computed from the date; off-palette colours replaced with SharedUI tokens.
+- Live test found a second blocker: 8 of 9 Internal Audit members carried an explicit `can_view_dept_audit = false` override that beats the department rule; cleared with approval (Shahid unchanged).
 - Docs: `docs/audit/DECISIONS.md`.
 
 ---
