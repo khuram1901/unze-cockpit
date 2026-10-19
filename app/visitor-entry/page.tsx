@@ -175,6 +175,7 @@ export default function VisitorEntryPage() {
   // Auth guard — redirects to /login if not authenticated, /welcome if no admin_ops access
   const { checking } = useRequireCapability("visitor_entry");
 
+  const [tab, setTab] = useState<"checkin" | "checkout">("checkin");
   const [screen, setScreen] = useState<"form" | "confirm" | "success">("form");
   const [form, setForm] = useState<Form>(BLANK());
   const [departments, setDepartments] = useState<string[]>([]);
@@ -190,6 +191,7 @@ export default function VisitorEntryPage() {
   const [currentVisitors, setCurrentVisitors] = useState<CurrentVisitor[]>([]);
   const [checkingOut, setCheckingOut] = useState<Set<string>>(new Set());
   const [loadingCurrent, setLoadingCurrent] = useState(false);
+  const [checkoutSearch, setCheckoutSearch] = useState("");
   const [returningVisitor, setReturningVisitor] = useState<{
     name: string;
     host_name: string;
@@ -453,6 +455,15 @@ export default function VisitorEntryPage() {
 
   const fieldBox: React.CSSProperties = { marginBottom: isDesktop ? 0 : 14 };
 
+  // Filtered visitors for checkout search
+  const visibleVisitors = checkoutSearch.trim()
+    ? currentVisitors.filter((v) =>
+        v.visitor_name.toLowerCase().includes(checkoutSearch.toLowerCase()) ||
+        v.host_name.toLowerCase().includes(checkoutSearch.toLowerCase()) ||
+        v.department_name.toLowerCase().includes(checkoutSearch.toLowerCase())
+      )
+    : currentVisitors;
+
   // ── Loading ───────────────────────────────────────────────────────────────
   if (checking) return <CentredMsg>Checking access…</CentredMsg>;
 
@@ -469,10 +480,16 @@ export default function VisitorEntryPage() {
             {form.visitor_name} has been logged in to see {form.host_name}.
           </p>
           <button
-            onClick={() => { setForm(BLANK()); setScreen("form"); setError(""); loadCurrentVisitors(); }}
+            onClick={() => { setForm(BLANK()); setScreen("form"); setError(""); setTab("checkin"); loadCurrentVisitors(); }}
             style={{ background: C.NAVY, color: C.WHITE, border: "none", borderRadius: 10, padding: "13px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer", width: "100%" }}
           >
             Log Another Visitor
+          </button>
+          <button
+            onClick={() => { setForm(BLANK()); setScreen("form"); setError(""); setTab("checkout"); loadCurrentVisitors(); setCheckoutSearch(""); }}
+            style={{ background: C.WHITE, color: C.NAVY, border: `1.5px solid ${C.BORDER}`, borderRadius: 10, padding: "11px 28px", fontSize: 14, fontWeight: 600, cursor: "pointer", width: "100%", marginTop: 10 }}
+          >
+            View Who&apos;s In Office
           </button>
         </div>
       </div>
@@ -533,64 +550,178 @@ export default function VisitorEntryPage() {
       <div style={{ ...inner, paddingTop: isDesktop ? 24 : 20 }}>
         {/* Header */}
         <p style={{ fontSize: 11, fontWeight: 700, color: C.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Visitors Log</p>
-        <p style={{ fontSize: isDesktop ? 26 : 22, fontWeight: 700, color: C.NAVY, margin: "0 0 20px" }}>New Visitor Entry</p>
 
-        {/* Currently in Office panel */}
-        <div style={{ ...cardStyle, marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: currentVisitors.length > 0 ? 12 : 0 }}>
-            <p style={{ ...sectionTitle, marginBottom: 0 }}>Currently in Office</p>
-            <span style={{
-              background: currentVisitors.length > 0 ? "#E6F4F0" : C.BORDER,
-              color: currentVisitors.length > 0 ? C.GREEN : C.SLATE,
-              fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
-            }}>
-              {loadingCurrent ? "…" : `${currentVisitors.length} ${currentVisitors.length === 1 ? "person" : "people"}`}
-            </span>
-          </div>
-          {!loadingCurrent && currentVisitors.length === 0 && (
-            <p style={{ fontSize: 13, color: C.SLATE, margin: 0, paddingTop: 6 }}>No visitors currently in the office.</p>
-          )}
-          {currentVisitors.map((v, idx) => (
-            <div
-              key={v.id}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                gap: 10,
-                paddingTop: 10, paddingBottom: 10,
-                borderTop: idx === 0 ? `1px solid ${C.BORDER}` : "none",
-                borderBottom: `1px solid ${C.BORDER}`,
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {v.visitor_name}
+        {/* Tab switcher */}
+        <div style={{ display: "flex", gap: 0, marginBottom: 24, borderRadius: 12, overflow: "hidden", border: `1.5px solid ${C.BORDER}`, background: C.WHITE }}>
+          <button
+            onClick={() => setTab("checkin")}
+            style={{
+              flex: 1,
+              padding: isDesktop ? "13px 20px" : "12px 16px",
+              background: tab === "checkin" ? C.NAVY : C.WHITE,
+              color: tab === "checkin" ? C.WHITE : C.SLATE,
+              border: "none",
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "background 0.15s",
+              letterSpacing: "0.02em",
+            }}
+          >
+            ＋ Check In
+          </button>
+          <button
+            onClick={() => { setTab("checkout"); loadCurrentVisitors(); setCheckoutSearch(""); }}
+            style={{
+              flex: 1,
+              padding: isDesktop ? "13px 20px" : "12px 16px",
+              background: tab === "checkout" ? C.NAVY : C.WHITE,
+              color: tab === "checkout" ? C.WHITE : C.SLATE,
+              border: "none",
+              borderLeft: `1.5px solid ${C.BORDER}`,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "background 0.15s",
+              letterSpacing: "0.02em",
+              position: "relative",
+            }}
+          >
+            ✓ Check Out
+            {currentVisitors.length > 0 && (
+              <span style={{
+                marginLeft: 8,
+                background: tab === "checkout" ? "rgba(255,255,255,0.25)" : C.GREEN,
+                color: tab === "checkout" ? C.WHITE : C.WHITE,
+                fontSize: 11,
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: 20,
+              }}>
+                {currentVisitors.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* ── CHECK OUT TAB ─────────────────────────────────────────────── */}
+        {tab === "checkout" && (
+          <div>
+            <p style={{ fontSize: isDesktop ? 26 : 22, fontWeight: 700, color: C.NAVY, margin: "0 0 4px" }}>Check Out</p>
+            <p style={{ fontSize: 13, color: C.SLATE, margin: "0 0 20px" }}>
+              {loadingCurrent
+                ? "Loading…"
+                : currentVisitors.length === 0
+                  ? "No visitors are currently in the office."
+                  : `${currentVisitors.length} ${currentVisitors.length === 1 ? "visitor" : "visitors"} currently in the office.`}
+            </p>
+
+            {/* Search */}
+            {currentVisitors.length > 2 && (
+              <div style={{ marginBottom: 16 }}>
+                <input
+                  type="text"
+                  placeholder="Search by visitor or host name…"
+                  value={checkoutSearch}
+                  onChange={(e) => setCheckoutSearch(e.target.value)}
+                  style={{ ...inputStyle(isDesktop), background: C.WHITE }}
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {/* Visitor cards */}
+            {loadingCurrent ? (
+              <div style={{ ...cardStyle, textAlign: "center", padding: "32px 16px" }}>
+                <p style={{ color: C.SLATE, fontSize: 14, margin: 0 }}>Loading visitors…</p>
+              </div>
+            ) : visibleVisitors.length === 0 ? (
+              <div style={{ ...cardStyle, textAlign: "center", padding: "48px 16px" }}>
+                <p style={{ fontSize: 32, margin: "0 0 12px" }}>🏢</p>
+                <p style={{ fontSize: 16, fontWeight: 600, color: C.NAVY, margin: "0 0 6px" }}>
+                  {checkoutSearch ? "No matching visitors" : "No visitors inside"}
                 </p>
-                <p style={{ margin: "2px 0 0", fontSize: 12, color: C.SLATE }}>
-                  {[v.host_name, v.department_name].filter(Boolean).join(" · ")}
-                  {v.time_in ? ` · Arrived ${formatTimePkt(v.time_in)}` : ""}
+                <p style={{ fontSize: 13, color: C.SLATE, margin: 0 }}>
+                  {checkoutSearch
+                    ? "Try a different name or clear the search."
+                    : "Everyone has already checked out."}
                 </p>
               </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {visibleVisitors.map((v) => {
+                  const isOut = checkingOut.has(v.id);
+                  return (
+                    <div
+                      key={v.id}
+                      style={{
+                        background: C.WHITE,
+                        border: `1px solid ${C.BORDER}`,
+                        borderRadius: 12,
+                        padding: "16px",
+                        display: "flex",
+                        alignItems: isDesktop ? "center" : "flex-start",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        flexDirection: isDesktop ? "row" : "row",
+                      }}
+                    >
+                      {/* Visitor info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.NAVY }}>
+                          {v.visitor_name}
+                        </p>
+                        <p style={{ margin: "4px 0 0", fontSize: 13, color: C.SLATE }}>
+                          {v.host_name && <span>Visiting <strong style={{ color: C.NAVY }}>{v.host_name}</strong></span>}
+                          {v.department_name && <span style={{ color: C.SLATE }}> · {v.department_name}</span>}
+                        </p>
+                        {v.time_in && (
+                          <p style={{ margin: "3px 0 0", fontSize: 12, color: C.SLATE }}>
+                            Arrived at <strong>{formatTimePkt(v.time_in)}</strong>
+                          </p>
+                        )}
+                      </div>
+                      {/* Check Out button */}
+                      <button
+                        onClick={() => handleCheckOut(v.id)}
+                        disabled={isOut}
+                        style={{
+                          flexShrink: 0,
+                          padding: "11px 22px",
+                          borderRadius: 10,
+                          border: "none",
+                          background: isOut ? C.BORDER : C.GREEN,
+                          color: isOut ? C.SLATE : C.WHITE,
+                          fontSize: 14,
+                          fontWeight: 700,
+                          cursor: isOut ? "wait" : "pointer",
+                          whiteSpace: "nowrap",
+                          minWidth: 110,
+                        }}
+                      >
+                        {isOut ? "Saving…" : "Check Out"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Refresh */}
+            <div style={{ textAlign: "center", marginTop: 20 }}>
               <button
-                onClick={() => handleCheckOut(v.id)}
-                disabled={checkingOut.has(v.id)}
-                style={{
-                  flexShrink: 0,
-                  padding: "7px 14px",
-                  borderRadius: 8,
-                  border: `1.5px solid ${C.BORDER}`,
-                  background: checkingOut.has(v.id) ? C.BORDER : C.WHITE,
-                  color: checkingOut.has(v.id) ? C.SLATE : C.NAVY,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: checkingOut.has(v.id) ? "wait" : "pointer",
-                  whiteSpace: "nowrap",
-                }}
+                onClick={() => { loadCurrentVisitors(); setCheckoutSearch(""); }}
+                style={{ background: "none", border: "none", color: C.SLATE, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
               >
-                {checkingOut.has(v.id) ? "Saving…" : "Check Out"}
+                Refresh list
               </button>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {/* ── CHECK IN TAB ──────────────────────────────────────────────── */}
+        {tab === "checkin" && <>
+        <p style={{ fontSize: isDesktop ? 26 : 22, fontWeight: 700, color: C.NAVY, margin: "0 0 20px" }}>New Visitor Entry</p>
 
         {/* Returning visitor banner */}
         {returningVisitor && (
@@ -880,6 +1011,7 @@ export default function VisitorEntryPage() {
             Review &amp; Confirm →
           </button>
         </div>
+        </>}
       </div>
     </div>
   );
