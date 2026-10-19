@@ -41,20 +41,19 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
   }
 
-  // Today in PKT (UTC+5)
-  const nowUtc = new Date();
-  const pktOffset = 5 * 60 * 60 * 1000;
-  const pktNow   = new Date(nowUtc.getTime() + pktOffset);
-  const today    = pktNow.toISOString().slice(0, 10); // YYYY-MM-DD
-
+  // Pass p_caller_email so Postgres picks the migration-278 overload (8 params),
+  // not the older 7-param version. Without this the two overloads are ambiguous
+  // and Postgres throws "function is not unique", which silently empties the list.
+  // No date filter — show ALL inside visitors (anyone not yet checked out).
   const { data, error } = await supabase.rpc("visitor_list_paged", {
-    p_date_from:  today,
-    p_date_to:    today,
-    p_department: null,
-    p_search:     null,
-    p_status:     "inside",
-    p_limit:      100,
-    p_offset:     0,
+    p_date_from:    null,
+    p_date_to:      null,
+    p_department:   null,
+    p_search:       null,
+    p_status:       "inside",
+    p_limit:        200,
+    p_offset:       0,
+    p_caller_email: auth.email,  // migration 278 — also selects correct overload
   });
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

@@ -189,6 +189,7 @@ export default function VisitorEntryPage() {
   const [flagInfo, setFlagInfo] = useState<{ type: string; reason: string | null } | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
   const [currentVisitors, setCurrentVisitors] = useState<CurrentVisitor[]>([]);
+  const [currentError, setCurrentError] = useState("");
   const [checkingOut, setCheckingOut] = useState<Set<string>>(new Set());
   const [loadingCurrent, setLoadingCurrent] = useState(false);
   const [checkoutSearch, setCheckoutSearch] = useState("");
@@ -248,13 +249,19 @@ export default function VisitorEntryPage() {
 
   async function loadCurrentVisitors() {
     setLoadingCurrent(true);
+    setCurrentError("");
     try {
       const res = await apiFetch("/api/visitors/current");
       if (res.ok) {
         const d = await res.json();
         setCurrentVisitors(d.visitors ?? []);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setCurrentError(d.error ?? `Error ${res.status}`);
       }
-    } catch { /* non-blocking */ }
+    } catch (e) {
+      setCurrentError(e instanceof Error ? e.message : "Failed to load visitors");
+    }
     finally { setLoadingCurrent(false); }
   }
 
@@ -634,6 +641,15 @@ export default function VisitorEntryPage() {
             {loadingCurrent ? (
               <div style={{ ...cardStyle, textAlign: "center", padding: "32px 16px" }}>
                 <p style={{ color: C.SLATE, fontSize: 14, margin: 0 }}>Loading visitors…</p>
+              </div>
+            ) : currentError ? (
+              <div style={{ ...cardStyle, textAlign: "center", padding: "48px 16px", borderColor: C.RED }}>
+                <p style={{ fontSize: 32, margin: "0 0 12px" }}>⚠️</p>
+                <p style={{ fontSize: 16, fontWeight: 600, color: C.RED, margin: "0 0 6px" }}>Could not load visitors</p>
+                <p style={{ fontSize: 13, color: C.SLATE, margin: "0 0 16px" }}>{currentError}</p>
+                <button onClick={() => loadCurrentVisitors()} style={{ background: C.NAVY, color: C.WHITE, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, cursor: "pointer" }}>
+                  Try again
+                </button>
               </div>
             ) : visibleVisitors.length === 0 ? (
               <div style={{ ...cardStyle, textAlign: "center", padding: "48px 16px" }}>
