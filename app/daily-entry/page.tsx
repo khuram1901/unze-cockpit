@@ -88,7 +88,7 @@ export default function DailyEntryPage() {
   const [loadingGenMeta, setLoadingGenMeta] = useState(false);
   type LastRefuelFull = { previous_hours: number | null; present_hours: number | null; refuel_date: string | null; is_seed: boolean };
   const [genLastRefuel, setGenLastRefuel] = useState<LastRefuelFull | null>(null);
-  const [genFuelPrevEditable, setGenFuelPrevEditable] = useState(true);
+  // Previous Hours is always locked — auto-filled from last fuel log entry
   const [lastRefuelData, setLastRefuelData] = useState<LastRefuelFull | null>(null);
   const [genFuel, setGenFuel] = useState({
     generator_id: "", refuel_date: today,
@@ -326,18 +326,12 @@ export default function DailyEntryPage() {
       .then((json) => {
         const d = json.data as LastRefuelFull | null;
         if (d) {
-          // pre-fill next entry's "Opening Hours" from the last entry's CLOSING meter reading (present_hours)
+          // pre-fill Previous Hours (locked) from the last entry's present_hours
           setGenFuel((g) => ({ ...g, previous_hours: d.present_hours != null ? String(d.present_hours) : "" }));
-          setGenFuelPrevEditable(!!d.is_seed);
-          if (!d.is_seed) {
-            setLastRefuelData({ previous_hours: d.previous_hours ?? null, present_hours: d.present_hours ?? null, refuel_date: d.refuel_date ?? null, is_seed: d.is_seed });
-          } else {
-            setLastRefuelData(null);
-          }
+          setLastRefuelData({ previous_hours: d.previous_hours ?? null, present_hours: d.present_hours ?? null, refuel_date: d.refuel_date ?? null, is_seed: d.is_seed });
           setGenLastRefuel(d);
         } else {
           setGenFuel((g) => ({ ...g, previous_hours: "" }));
-          setGenFuelPrevEditable(true);
           setLastRefuelData(null);
           setGenLastRefuel(null);
         }
@@ -434,9 +428,8 @@ export default function DailyEntryPage() {
       .then((j) => {
         const d = j.data as LastRefuelFull | null;
         if (d) {
-          // after save: pre-fill next entry's opening from just-saved present_hours
+          // after save: pre-fill Previous Hours (locked) for next entry
           setGenFuel((g) => ({ ...g, previous_hours: d.present_hours != null ? String(d.present_hours) : "" }));
-          setGenFuelPrevEditable(!!d.is_seed);
           setLastRefuelData({ previous_hours: d.previous_hours ?? null, present_hours: d.present_hours ?? null, refuel_date: d.refuel_date ?? null, is_seed: d.is_seed });
           setGenLastRefuel(d);
         }
@@ -1569,12 +1562,11 @@ export default function DailyEntryPage() {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginTop: "12px" }}>
-                <Field label={genFuelPrevEditable ? "Opening Hours (set once)" : "Opening Hours"}>
-                  <input type="number" step="0.1" min="0" placeholder="e.g. 1240.5"
+                <Field label="Previous Hours">
+                  <input type="number" step="0.1" min="0" placeholder="Auto-filled from last entry"
                     value={genFuel.previous_hours}
-                    readOnly={!genFuelPrevEditable}
-                    onChange={(e) => { if (genFuelPrevEditable) setGenFuel({ ...genFuel, previous_hours: e.target.value }); }}
-                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, backgroundColor: genFuelPrevEditable ? undefined : "#F1F5F9", color: genFuelPrevEditable ? undefined : COLOURS.SLATE, cursor: genFuelPrevEditable ? undefined : "not-allowed" }} />
+                    readOnly
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, backgroundColor: "#F1F5F9", color: COLOURS.SLATE, cursor: "not-allowed" }} />
                 </Field>
                 <Field label="Present Hours *">
                   <input type="number" step="0.1" min="0" placeholder="e.g. 1268.0"
