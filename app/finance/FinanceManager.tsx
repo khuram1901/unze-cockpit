@@ -621,7 +621,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
         return (
           <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: CARD, marginBottom: "14px" }}>
-            <SectionTitle title="PDC Outlook — Next 8 Weeks" style={{ margin: "0 0 4px" }} />
+            <SectionTitle title={`PDC Outlook — Next ${pdcOutlook.length} Week${pdcOutlook.length === 1 ? "" : "s"}`} style={{ margin: "0 0 4px" }} />
             <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "6px" }}>
               Starting from today&apos;s cash in hand ({latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}), assuming every scheduled PDC clears on time and nothing else changes.
             </div>
