@@ -379,6 +379,9 @@ END;
 $$;
 
 -- ── 8. visitor_departments_hosts — for form dropdowns ───────────────────────
+-- NOTE: superseded by migration 285 which sources departments from the
+-- master `departments` table (same source as Tasks and Members pages).
+-- This block is kept for history only; 285 is the live version.
 CREATE OR REPLACE FUNCTION public.visitor_departments_hosts()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -389,22 +392,24 @@ DECLARE
   v_depts jsonb;
   v_hosts jsonb;
 BEGIN
-  -- Distinct departments from visitor_log + members (active only)
-  SELECT jsonb_agg(DISTINCT d ORDER BY d)
+  -- All active departments from the master departments table
+  SELECT jsonb_agg(d ORDER BY d)
   INTO v_depts
   FROM (
-    SELECT DISTINCT department_name AS d FROM visitor_log WHERE NOT is_deleted AND department_name <> ''
-    UNION
-    SELECT DISTINCT department AS d FROM members WHERE active = true AND department IS NOT NULL AND department <> ''
+    SELECT department_name AS d
+    FROM departments
+    WHERE active = true
+      AND department_name IS NOT NULL
+      AND department_name <> ''
   ) q;
 
   -- Active members as hosts
   SELECT jsonb_agg(r ORDER BY r.full_name)
   INTO v_hosts
   FROM (
-    SELECT id::text, full_name, department
+    SELECT id::text, name AS full_name, department
     FROM members
-    WHERE active = true AND full_name IS NOT NULL
+    WHERE is_active = true AND name IS NOT NULL
   ) r;
 
   RETURN jsonb_build_object(
