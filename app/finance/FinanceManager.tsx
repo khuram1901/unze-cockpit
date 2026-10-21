@@ -294,7 +294,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         // wants the window to always be "the last 30 days," full stop.
         .gte("position_date", daysAgoISO(30))
         .order("position_date", { ascending: false }),
-      supabase.rpc("get_pdc_weekly_outlook", { p_company_id: companyId, p_today: todayISO(), p_planned_monthly_receivables: 240000000 }),
+      supabase.rpc("get_pdc_weekly_outlook", { p_company_id: companyId, p_today: todayISO() }),
       supabase.rpc("daily_cash_continuity", { p_company_id: companyId }),
     ]);
     if (obRes.error) console.error("Opening balance error:", obRes.error);
@@ -586,7 +586,22 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       {pdcOutlook.length > 0 && (() => {
         const nearTerm = pdcOutlook.filter((w) => w.near_term);
         const future   = pdcOutlook.filter((w) => !w.near_term && w.pdc_due > 0);
-        const weeklyReceipts = pdcOutlook[0]?.avg_weekly_receipts ?? 0;
+
+        // Compute weekly receipts from Planned Receivables PKR 240M for October 2026
+        // (avoid passing the 3rd param to the RPC while two overloads coexist in Postgres)
+        const PLANNED_MONTHLY = 240_000_000;
+        const todayDate = new Date();
+        const daysInMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate();
+        const weeklyReceipts = PLANNED_MONTHLY / (daysInMonth / 7.0);
+
+        // Recompute running_balance from cash in hand + cumulative (receipts − pdc_due)
+        const cashInHand = latestPosition?.closing_balance ?? 0;
+        let runningBal = cashInHand;
+        const weeklyBalance: Record<number, number> = {};
+        [...nearTerm, ...pdcOutlook.filter((w) => !w.near_term)].forEach((w) => {
+          runningBal = runningBal + weeklyReceipts - w.pdc_due;
+          weeklyBalance[w.week_number] = runningBal;
+        });
 
         const totalPdcNext6 = nearTerm.reduce((s, w) => s + w.pdc_due, 0);
         const totalPdcAll   = pdcOutlook.reduce((s, w) => s + w.pdc_due, 0);
@@ -721,7 +736,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                             ? <div style={{ fontFamily: MONO, fontSize: "10.5px", fontWeight: 700, color: RED }}>{formatPKR(w.pdc_due)}</div>
                             : <div style={{ fontFamily: MONO, fontSize: "10px", color: SLATE }}>—</div>}
                           <div style={{ fontSize: "8.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Net Bal</div>
-                          <div style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: NAVY }}>{formatPKR(w.running_balance)}</div>
+                          <div style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: (weeklyBalance[w.week_number] ?? 0) < 0 ? RED : NAVY }}>{formatPKR(weeklyBalance[w.week_number] ?? 0)}</div>
                         </div>
                       </div>
 
