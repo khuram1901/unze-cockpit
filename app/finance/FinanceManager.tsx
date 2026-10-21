@@ -294,7 +294,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         // wants the window to always be "the last 30 days," full stop.
         .gte("position_date", daysAgoISO(30))
         .order("position_date", { ascending: false }),
-      supabase.rpc("get_pdc_weekly_outlook", { p_company_id: companyId, p_today: todayISO() }),
+      supabase.rpc("get_pdc_weekly_outlook", { p_company_id: companyId, p_today: todayISO(), p_planned_monthly_receivables: 0 }),
       supabase.rpc("daily_cash_continuity", { p_company_id: companyId }),
     ]);
     if (obRes.error) console.error("Opening balance error:", obRes.error);
