@@ -21,7 +21,6 @@ import { useMobile } from "../../lib/useMobile";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TxnSummary = { id: string; txn_type: "payment" | "receipt"; amount_pkr: number };
 
 // Continuity break: previous day's closing doesn't match the next day's opening
 type ChainBreak = { prev_date: string; prev_closing: number; next_date: string; next_opening: number; difference: number };
@@ -38,8 +37,20 @@ type CashSheet = {
   uploaded_by: string;
   created_at: string;
   pdf_storage_path: string | null;
-  cash_sheet_transactions: TxnSummary[];
+  // 21/10/2026: the list API now reads cash_sheet_uploads_with_totals, which
+  // sums the transaction lines in the database. The transactions array is no
+  // longer sent — reaching for it crashed the tab on any zero-payments day.
+  line_receipts_pkr: number | null;
+  line_payments_pkr: number | null;
 };
+
+// Sheet-level total from the PDF when present, otherwise the DB-summed lines.
+function sheetReceipts(s: CashSheet): number {
+  return s.receipts_pkr != null ? Number(s.receipts_pkr) : Number(s.line_receipts_pkr ?? 0);
+}
+function sheetPayments(s: CashSheet): number {
+  return s.payments_pkr != null ? Number(s.payments_pkr) : Number(s.line_payments_pkr ?? 0);
+}
 
 type Transaction = {
   id: string;
@@ -66,6 +77,8 @@ type SheetDetail = {
   pdf_signed_url: string | null;
   receipts: Transaction[];
   payments: Transaction[];
+  line_receipts_pkr: number;
+  line_payments_pkr: number;
 };
 
 type CompanyTab = { id: "BRNH" | "HD" | "KKJ"; label: string; color: string; lightColor: string };
@@ -201,17 +214,8 @@ export default function RestaurantsFinancePage() {
     : null;
 
   // Period receipts/payments — prefer sheet-level totals (from PDF parse), fall back to transactions
-  const periodReceipts = sheets.reduce((sum, s) => {
-    const fromSheet = s.receipts_pkr;
-    if (fromSheet != null && fromSheet > 0) return sum + fromSheet;
-    return sum + s.cash_sheet_transactions.filter((t) => t.txn_type === "receipt").reduce((s2, t) => s2 + Number(t.amount_pkr), 0);
-  }, 0);
-
-  const periodPayments = sheets.reduce((sum, s) => {
-    const fromSheet = s.payments_pkr;
-    if (fromSheet != null && fromSheet > 0) return sum + fromSheet;
-    return sum + s.cash_sheet_transactions.filter((t) => t.txn_type === "payment").reduce((s2, t) => s2 + Number(t.amount_pkr), 0);
-  }, 0);
+  const periodReceipts = sheets.reduce((sum, s) => sum + sheetReceipts(s), 0);
+  const periodPayments = sheets.reduce((sum, s) => sum + sheetPayments(s), 0);
 
   // Chart data
   const chartData = sorted
@@ -496,13 +500,8 @@ export default function RestaurantsFinancePage() {
                   {[...sheets]
                     .sort((a, b) => b.sheet_date.localeCompare(a.sheet_date))
                     .map((s) => {
-                      // Prefer sheet-level totals (from PDF parse); fall back to summing transactions
-                      const receipts = (s.receipts_pkr != null && s.receipts_pkr > 0) ? s.receipts_pkr : s.cash_sheet_transactions
-                        .filter((t) => t.txn_type === "receipt")
-                        .reduce((sum, t) => sum + Number(t.amount_pkr), 0);
-                      const payments = (s.payments_pkr != null && s.payments_pkr > 0) ? s.payments_pkr : s.cash_sheet_transactions
-                        .filter((t) => t.txn_type === "payment")
-                        .reduce((sum, t) => sum + Number(t.amount_pkr), 0);
+                      const receipts = sheetReceipts(s);
+                      const payments = sheetPayments(s);
                       const net = (s.closing_balance_pkr ?? 0) - (s.opening_balance_pkr ?? 0);
 
                       return (
@@ -632,9 +631,9 @@ export default function RestaurantsFinancePage() {
                 const activeTabColor = COMPANY_TABS.find((t) => t.id === d.company)?.color ?? tab.color;
                 const activeTabLight = COMPANY_TABS.find((t) => t.id === d.company)?.lightColor ?? tab.lightColor;
 
-                // Effective receipts/payments: prefer sheet-level totals
-                const effectiveReceipts = (d.receipts_pkr != null && d.receipts_pkr > 0) ? d.receipts_pkr : d.receipts.reduce((s, t) => s + Number(t.amount_pkr), 0);
-                const effectivePayments = (d.payments_pkr != null && d.payments_pkr > 0) ? d.payments_pkr : d.payments.reduce((s, t) => s + Number(t.amount_pkr), 0);
+                // Sheet-level totals from the PDF, otherwise the DB-summed lines (never summed here)
+                const effectiveReceipts = d.receipts_pkr != null ? Number(d.receipts_pkr) : Number(d.line_receipts_pkr ?? 0);
+                const effectivePayments = d.payments_pkr != null ? Number(d.payments_pkr) : Number(d.line_payments_pkr ?? 0);
 
                 return (
                   <>
