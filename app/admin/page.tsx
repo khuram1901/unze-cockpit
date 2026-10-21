@@ -812,6 +812,7 @@ export default function AdminDataPage() {
   const [visitorSearch, setVisitorSearch]     = useState("");
   const [visitorStatus, setVisitorStatus]     = useState<"" | "inside" | "checked_out">("");
   const [visitorDeptFilter, setVisitorDeptFilter] = useState("");
+  const [allVisitorDepts, setAllVisitorDepts]  = useState<string[]>([]);
   const [visitorPage, setVisitorPage]         = useState(0);
   const [editingVisitor, setEditingVisitor]   = useState<VisitorRow | null>(null);
   const [editCnic, setEditCnic]               = useState("");   // raw 13-digit CNIC to overwrite (blank = no change)
@@ -1962,6 +1963,17 @@ export default function AdminDataPage() {
     } finally { setSavingVisitor(false); }
   }
 
+  // F9b — load the master department list (all depts that have ever had a visitor, plus members)
+  async function loadVisitorDepts() {
+    try {
+      const res  = await authFetch("/api/visitors/departments");
+      if (!res.ok) return;
+      const data = await res.json();
+      const depts = (data.departments ?? []) as string[];
+      setAllVisitorDepts([...depts].sort());
+    } catch { /* non-blocking */ }
+  }
+
   // F10 — load visitor settings (admin only)
   async function loadVisitorSettings() {
     const res  = await authFetch("/api/visitors/settings");
@@ -2055,6 +2067,14 @@ export default function AdminDataPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, checking, visitorDateFrom, visitorDateTo, visitorPage]);
+
+  // Load master department list once when visitors tab first opens
+  useEffect(() => {
+    if (activeTab === "visitors" && !checking && allVisitorDepts.length === 0) {
+      loadVisitorDepts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, checking]);
 
   // ── Render guard ───────────────────────────────────────────────────
   if (checking) return (
@@ -2420,7 +2440,11 @@ export default function AdminDataPage() {
   }
 
   function renderVisitorsTab() {
-    const distinctDepts = [...new Set(visitorRows.map((r) => r.department_name))].sort();
+    // Use master dept list (from visitor_departments_hosts RPC — includes all depts ever
+    // recorded + active member depts). Falls back to depts in the current page if still loading.
+    const distinctDepts = allVisitorDepts.length > 0
+      ? allVisitorDepts
+      : [...new Set(visitorRows.map((r) => r.department_name))].sort();
 
     // Determine which preset tab is active (if any)
     const today = new Date();
