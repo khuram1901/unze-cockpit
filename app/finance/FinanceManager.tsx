@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO, daysAgoISO } from "../lib/dateUtils";
 import { formatPKR } from "../lib/pkrFormatter";
@@ -42,7 +42,7 @@ type DailyPosition = {
   cash_sheet_id?: string | null;
 };
 
-type PdcWeek = { week_number: number; week_start: string; week_end: string; pdc_due: number; effective_balance: number };
+type PdcWeek = { week_number: number; week_start: string; week_end: string; pdc_due: number; avg_weekly_receipts: number; running_balance: number; near_term: boolean };
 
 // A continuity break: previous day's closing doesn't match the next day's opening
 type ChainBreak = { prev_date: string; prev_closing: number; next_date: string; next_opening: number; difference: number };
@@ -294,7 +294,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         // wants the window to always be "the last 30 days," full stop.
         .gte("position_date", daysAgoISO(30))
         .order("position_date", { ascending: false }),
-      supabase.rpc("get_pdc_outlook", { p_company_id: companyId, p_today: todayISO() }),
+      supabase.rpc("get_pdc_weekly_outlook", { p_company_id: companyId, p_today: todayISO() }),
       supabase.rpc("daily_cash_continuity", { p_company_id: companyId }),
     ]);
     if (obRes.error) console.error("Opening balance error:", obRes.error);
@@ -578,80 +578,195 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         )}
       </div>
 
-      {/* ── PDC OUTLOOK — next 8 weeks ──
-          Khuram: "treat it as a cash flow statement rather than a net
-          balance statement... show me, for the next 8 weeks, what my
-          balance may look like considering the PDC commitment." Built from
-          get_pdc_outlook() (migration 132) — reads the latest report's
-          cash-in-hand plus that report's dated PDC buckets, and walks the
-          balance down week by week as each bucket comes due. Was a plain
-          table (per his first ask for exact per-week numbers); switched to
-          a bar+line combo chart on 15 Jul per his follow-up — same numbers,
-          less space, easier to read at a glance. Exact PKR figures are
-          still one hover away via the tooltip, and the effective-balance
-          line is labelled directly on the chart. ── */}
+      {/* ── PDC OUTLOOK — week-by-week card list (migration 287) ──
+          Shows each of the next 6 weeks as a card row: date range, estimated
+          weekly receipts (trailing 4-week avg from daily_cash_position),
+          PDC cheques due, and running net balance. Weeks with PDC are
+          highlighted red; clear weeks have a green left border.
+          Beyond the 6-week window, any future PDC commitments appear as
+          separate "future commitments" cards below the main list. ── */}
       {pdcOutlook.length > 0 && (() => {
-        // Build chart data — X-axis label is a compressed date range e.g. "15–21 Jul"
-        // or "29 Jul–4 Aug" when the week crosses a month boundary.
-        const pdcChartData = pdcOutlook.map((w) => ({
-          xLabel: (() => {
-            const [, sm, sd] = w.week_start.split("-");
-            const [, em, ed] = w.week_end.split("-");
-            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-            const startDay = parseInt(sd, 10);
-            const endDay   = parseInt(ed, 10);
-            const startMon = months[parseInt(sm, 10) - 1];
-            const endMon   = months[parseInt(em, 10) - 1];
-            return sm === em
-              ? `${startDay}–${endDay} ${endMon}`
-              : `${startDay} ${startMon}–${endDay} ${endMon}`;
-          })(),
-          period: `${formatDateUK(w.week_start)} – ${formatDateUK(w.week_end)}`,
-          pdc_due: w.pdc_due,
-          effective_balance: w.effective_balance,
-        }));
+        const nearTerm = pdcOutlook.filter((w) => w.near_term);
+        const future   = pdcOutlook.filter((w) => !w.near_term && w.pdc_due > 0);
+        const avgReceipts = pdcOutlook[0]?.avg_weekly_receipts ?? 0;
 
-        const PdcXTick = ({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) => (
-          <g transform={`translate(${x},${y})`}>
-            <text x={0} y={0} dy={12} textAnchor="middle" fill={SLATE} fontSize={10.5} fontFamily="Inter, sans-serif">
-              {payload?.value}
-            </text>
-          </g>
+        const totalPdcNext6  = nearTerm.reduce((s, w) => s + w.pdc_due, 0);
+        const totalPdcAll    = pdcOutlook.reduce((s, w) => s + w.pdc_due, 0);
+
+        // Helper: "19–25 Oct 2026" or "26 Oct–1 Nov 2026" (DD Mon YYYY)
+        const fmtRange = (ws: string, we: string) => {
+          const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          const [sy, sm, sd] = ws.split("-");
+          const [ey, em, ed] = we.split("-");
+          const startDay = parseInt(sd, 10);
+          const endDay   = parseInt(ed, 10);
+          const startMon = months[parseInt(sm, 10) - 1];
+          const endMon   = months[parseInt(em, 10) - 1];
+          if (sm === em && sy === ey) return `${startDay}–${endDay} ${endMon} ${sy}`;
+          return `${startDay} ${startMon}–${endDay} ${endMon} ${ey}`;
+        };
+
+        const weekLabel = (n: number) => {
+          if (n === 1) return "Week 1 · This week";
+          if (n === 2) return "Week 2 · Next week";
+          return `Week ${n}`;
+        };
+
+        // Tile style
+        const tile = (accent: string): React.CSSProperties => ({
+          flex: 1, minWidth: 0,
+          border: `1px solid ${HAIRLINE}`, borderRadius: "10px",
+          padding: "14px 16px", backgroundColor: CARD,
+        });
+        const tileLabel: React.CSSProperties = {
+          fontSize: "11px", fontWeight: 500, color: SLATE,
+          textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px",
+        };
+        const tileValue = (color?: string): React.CSSProperties => ({
+          fontFamily: MONO, fontSize: "18px", fontWeight: 500,
+          color: color || NAVY, whiteSpace: "nowrap" as const,
+        });
+        const tileTag = (bg: string, fg: string): React.CSSProperties => ({
+          display: "inline-block", fontSize: "10px", fontWeight: 600,
+          padding: "2px 7px", borderRadius: "20px", marginTop: "6px",
+          backgroundColor: bg, color: fg,
+        });
+
+        // Amount column style
+        const amtCol: React.CSSProperties = { textAlign: "right", minWidth: "90px" };
+        const amtLabel: React.CSSProperties = {
+          fontSize: "10px", fontWeight: 500, color: SLATE,
+          textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "3px",
+        };
+        const amtVal = (color?: string, bold?: boolean): React.CSSProperties => ({
+          fontFamily: MONO, fontSize: bold ? "14px" : "13px",
+          fontWeight: bold ? 600 : 400, color: color || NAVY,
+        });
+
+        // Divider
+        const divider = (label: string) => (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "20px 0 10px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: SLATE }}>
+              {label}
+            </span>
+            <div style={{ flex: 1, height: "1px", backgroundColor: HAIRLINE }} />
+          </div>
         );
 
         return (
           <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: CARD, marginBottom: "14px" }}>
-            <SectionTitle title={`PDC Outlook — Next ${pdcOutlook.length} Week${pdcOutlook.length === 1 ? "" : "s"}`} style={{ margin: "0 0 4px" }} />
-            <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "6px" }}>
-              Starting from today&apos;s cash in hand ({latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}), assuming every scheduled PDC clears on time and nothing else changes.
+            <SectionTitle title="PDC Outlook — Week by Week" style={{ margin: "0 0 4px" }} />
+            <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "16px" }}>
+              Trailing 4-week avg receipts ~{formatPKR(avgReceipts)}/week · Starting from cash in hand {latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={pdcChartData} margin={{ top: 24, right: 16, left: 0, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
-                <XAxis dataKey="xLabel" tick={<PdcXTick />} interval={0} height={36} />
-                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} width={52} />
-                <Tooltip
-                  formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]}
-                  labelFormatter={(_, payload) => payload?.[0]?.payload?.period || ""}
-                  contentStyle={{ fontSize: "12px", borderRadius: "8px", border: `1px solid ${HAIRLINE}` }}
-                />
-                <Legend wrapperStyle={{ fontSize: "12px" }} />
-                <ReferenceLine y={0} stroke={RED} strokeDasharray="4 4" />
-                <Bar dataKey="pdc_due" fill={AMBER} name="PDC Due" radius={[3, 3, 0, 0]} />
-                <Line type="monotone" dataKey="effective_balance" stroke={NAVY} strokeWidth={2} dot={{ r: 3, fill: NAVY }} name="Effective Balance">
-                  <LabelList
-                    dataKey="effective_balance"
-                    position="top"
-                    formatter={(v: unknown) => {
-                      const n = Number(v);
-                      if (isNaN(n)) return "";
-                      return Math.abs(n) >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${(n / 1000).toFixed(0)}K`;
-                    }}
-                    style={{ fontSize: 11, fontWeight: 600, fill: NAVY }}
-                  />
-                </Line>
-              </ComposedChart>
-            </ResponsiveContainer>
+
+            {/* KPI tiles */}
+            <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
+              <div style={tile(GREEN)}>
+                <div style={tileLabel}>Cash in Hand</div>
+                <div style={tileValue(GREEN)}>{latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}</div>
+                {latestPosition && <span style={tileTag("#E6F4F1", GREEN)}>As at {formatDateUK(latestPosition.position_date)}</span>}
+              </div>
+              <div style={tile(RED)}>
+                <div style={tileLabel}>PDC Due — Next 6 Wks</div>
+                <div style={tileValue(totalPdcNext6 > 0 ? RED : NAVY)}>{formatPKR(totalPdcNext6)}</div>
+                {totalPdcNext6 > 0 && <span style={tileTag("#FDECEA", RED)}>Committed</span>}
+                {totalPdcNext6 === 0 && <span style={tileTag("#E6F4F1", GREEN)}>All clear</span>}
+              </div>
+              <div style={tile(AMBER)}>
+                <div style={tileLabel}>Total PDC Committed</div>
+                <div style={tileValue(totalPdcAll > 0 ? RED : NAVY)}>{formatPKR(totalPdcAll)}</div>
+                {totalPdcAll > 0 && <span style={tileTag("#FDECEA", RED)}>All ahead</span>}
+              </div>
+            </div>
+
+            {divider("Next 6 weeks")}
+
+            {/* Week rows */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "4px" }}>
+              {nearTerm.map((w) => {
+                const hasPdc = w.pdc_due > 0;
+                return (
+                  <div key={w.week_number} style={{
+                    backgroundColor: hasPdc ? "#FDECEA" : CARD,
+                    border: `1px solid ${hasPdc ? RED : HAIRLINE}`,
+                    borderLeft: `3px solid ${hasPdc ? RED : GREEN}`,
+                    borderRadius: "10px",
+                    padding: "14px 16px",
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: "8px 16px",
+                    alignItems: "center",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{fmtRange(w.week_start, w.week_end)}</div>
+                      <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px" }}>{weekLabel(w.week_number)}</div>
+                      {hasPdc && (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "4px",
+                          backgroundColor: RED, color: "#fff",
+                          fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", marginTop: "6px" }}>
+                          ● PDC due this week
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <div style={amtCol}>
+                        <div style={amtLabel}>Est. Receipts</div>
+                        <div style={amtVal(GREEN)}>{formatPKR(w.avg_weekly_receipts)}</div>
+                      </div>
+                      <div style={amtCol}>
+                        <div style={amtLabel}>PDC Due</div>
+                        {hasPdc
+                          ? <div style={amtVal(RED, true)}>{formatPKR(w.pdc_due)}</div>
+                          : <div style={amtVal(SLATE)}>—</div>}
+                      </div>
+                      <div style={amtCol}>
+                        <div style={amtLabel}>Net Balance</div>
+                        <div style={amtVal(NAVY)}>{formatPKR(w.running_balance)}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Future commitments */}
+            {future.length > 0 && (
+              <>
+                {divider("Future commitments")}
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {future.map((w) => {
+                    const weeksAway = w.week_number - 6;
+                    return (
+                      <div key={w.week_number} style={{
+                        backgroundColor: CARD,
+                        border: `1px solid ${HAIRLINE}`,
+                        borderLeft: `3px solid ${AMBER}`,
+                        borderRadius: "10px",
+                        padding: "14px 16px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        flexWrap: "wrap",
+                      }}>
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{fmtRange(w.week_start, w.week_end)}</div>
+                          <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>
+                            Week {w.week_number} · {weeksAway} week{weeksAway === 1 ? "" : "s"} from now
+                          </div>
+                          <div style={{ fontSize: "11px", color: AMBER, marginTop: "6px" }}>⚠ Plan for this — large outflow ahead</div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={amtLabel}>PDC Due</div>
+                          <div style={{ fontFamily: MONO, fontSize: "20px", fontWeight: 600, color: RED }}>{formatPKR(w.pdc_due)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         );
       })()}
