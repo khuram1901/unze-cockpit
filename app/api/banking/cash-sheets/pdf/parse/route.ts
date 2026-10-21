@@ -63,6 +63,9 @@ export async function POST(request: NextRequest) {
     opening: null, closing: null, receipts: null, payments: null,
     pdc_total: null, closing_after_pdc: null, transactions: [], pdc_buckets: [],
   };
+  // 21/10/2026: a day with no payments or no receipts is normal (the sheet
+  // prints "Total  -"). Only a MISSING Total line counts as unreadable.
+  let totalsFound = { payments: false, receipts: false };
   let parseWarning: string | null = null;
   let detectedCompany: string | null = null;
 
@@ -71,6 +74,7 @@ export async function POST(request: NextRequest) {
     if (results.length > 0) {
       const r = results[0];
       detectedCompany = r.company;
+      totalsFound = r.totalsFound;
       parsed = {
         opening: r.openingBalanceTotal,
         closing: r.closingBalanceUnzeTrading,
@@ -97,8 +101,8 @@ export async function POST(request: NextRequest) {
   const unread: string[] = [];
   if (parsed.opening == null || (parsed.opening === 0 && parsed.payments === 0)) unread.push("opening balance");
   if (parsed.closing == null) unread.push("closing balance");
-  if (parsed.receipts == null || parsed.receipts === 0) unread.push("total receipts");
-  if (parsed.payments == null || parsed.payments === 0) unread.push("total payments");
+  if (parsed.receipts == null || !totalsFound.receipts) unread.push("total receipts");
+  if (parsed.payments == null || !totalsFound.payments) unread.push("total payments");
   if (unread.length > 0) {
     checks.push({ level: "error", message: `Could not read the ${unread.join(", ")} from the PDF. Enter the figure${unread.length > 1 ? "s" : ""} manually.` });
   } else {

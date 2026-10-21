@@ -20,6 +20,10 @@ export type CashFlowParsed = {
   date: string | null;
   company: "unze" | "imperial" | "baranh" | "dolci" | "kkj" | "unknown";
   rawText: string;
+  // 21/10/2026: whether the section's own "Total" line was found. A sheet with
+  // no payments (or no receipts) prints "Total  -", which is a real zero, not
+  // an unreadable figure — the pre-save check must not confuse the two.
+  totalsFound: { payments: boolean; receipts: boolean };
 };
 
 function parseAmount(text: string): number {
@@ -241,13 +245,26 @@ function extractAllTransactions(text: string): CashFlowTransaction[] {
   return out;
 }
 
-function findTotalInSection(text: string, startLabel: string, endLabel: string): number {
-  const startIdx = text.indexOf(startLabel);
-  const endIdx = text.indexOf(endLabel);
-  if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) return 0;
-  const block = text.slice(startIdx, endIdx);
-  const totalMatch = block.match(/Total\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
-  return totalMatch ? parseAmount(totalMatch[1]) : 0;
+// Reads the first "Total" line of a section block. Returns the amount, 0 when
+// the sheet prints "-" (no rows that day), or null when no Total line exists.
+// "#####" is Excel's column-overflow marker and may precede the word Total.
+function readSectionTotal(block: string): number | null {
+  const m = block.match(/(?:^|\n)[#\s]*Total\s*(-|\(?[\d,]+(?:\.\d+)?\)?)\s*(?:\n|$)/i);
+  if (!m) return null;
+  return m[1] === "-" ? 0 : parseAmount(m[1].replace(/[()]/g, ""));
+}
+
+// Slice of text between a section header and the next section header, so a
+// section with no rows never borrows the NEXT section's Total line.
+function sectionBlock(text: string, startRe: RegExp, endRes: RegExp[]): string | null {
+  const start = text.search(startRe);
+  if (start < 0) return null;
+  let end = text.length;
+  for (const re of endRes) {
+    const i = text.slice(start + 1).search(re);
+    if (i >= 0 && start + 1 + i < end) end = start + 1 + i;
+  }
+  return text.slice(start, end);
 }
 
 // ── Company detection ─────────────────────────────────────────────────────────
@@ -282,17 +299,12 @@ function detectCompany(text: string): CashFlowParsed["company"] {
 // ── Parsers ───────────────────────────────────────────────────────────────────
 
 function parseUnzeTrading(text: string, date: string | null): CashFlowParsed {
-  const paymentsTotal = findTotalInSection(text, "Payments", "Receipts");
-
-  const closingLabel = "Closing Balance Unze Trading";
-  const closingIdx = text.indexOf(closingLabel);
-  let receiptsTotal = 0;
-  const receiptsIdx = text.indexOf("Receipts");
-  if (receiptsIdx >= 0 && closingIdx >= 0) {
-    const recBlock = text.slice(receiptsIdx, closingIdx);
-    const m = recBlock.match(/Total\s*([\d,]+(?:\.\d+)?)/i);
-    if (m) receiptsTotal = parseAmount(m[1]);
-  }
+  const payBlock = sectionBlock(text, /Date\s*Payments/i, [/Date\s*Receipts/i, /Closing Balance/i]);
+  const recBlock = sectionBlock(text, /Date\s*Receipts/i, [/Closing Balance/i, /Date\s*Loan/i]);
+  const payRead = payBlock ? readSectionTotal(payBlock) : null;
+  const recRead = recBlock ? readSectionTotal(recBlock) : null;
+  const paymentsTotal = payRead ?? 0;
+  const receiptsTotal = recRead ?? 0;
 
   const loanSection = text.indexOf("Loan & Post Dated");
   const closingAfterIdx = text.indexOf("Closing Balance After");
@@ -315,6 +327,7 @@ function parseUnzeTrading(text: string, date: string | null): CashFlowParsed {
     company: "unze",
     rawText: text,
     transactions: extractAllTransactions(text),
+    totalsFound: { payments: payRead !== null, receipts: recRead !== null },
   };
 }
 
@@ -442,6 +455,7 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     company: "imperial",
     rawText: text,
     transactions: extractAllTransactions(text),
+    totalsFound: { payments: paymentsIdx >= 0, receipts: receiptsIdx >= 0 },
   };
 }
 
@@ -467,20 +481,16 @@ function parseBaranhStyle(
 ): CashFlowParsed {
   const openingBalance = findAmount(text, "Opening Balance Total");
 
-  // Payments section ends at "Closing Balance Total" (NOT "Receipts" — in BRNH PDFs
-  // the Receipts section appears before Payments in extracted text, so using "Receipts"
-  // as end boundary makes findTotalInSection always return 0).
-  const paymentsTotal = findTotalInSection(text, "Payments", "Closing Balance Total");
-
-  // Receipts section ends where Closing Balance Total appears
-  let receiptsTotal = 0;
-  const receiptsIdx = text.indexOf("Receipts");
-  const closingTotalIdx = text.indexOf("Closing Balance Total");
-  if (receiptsIdx >= 0 && closingTotalIdx >= 0) {
-    const block = text.slice(receiptsIdx, closingTotalIdx);
-    const m = block.match(/Total\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
-    if (m) receiptsTotal = parseAmount(m[1]);
-  }
+  // Each section is cut at whichever other header comes next (Receipts may
+  // appear before OR after Payments in extracted text). 21/10/2026: a section
+  // with no rows prints "Total  -"; previously the digits-only regex skipped it
+  // and took the NEXT section's total, so HD showed payments = receipts.
+  const payBlock = sectionBlock(text, /Date\s*Payments/i, [/Date\s*Receipts/i, /Closing Balance Total/i]);
+  const recBlock = sectionBlock(text, /Date\s*Receipts/i, [/Date\s*Payments/i, /Closing Balance Total/i]);
+  const payRead = payBlock ? readSectionTotal(payBlock) : null;
+  const recRead = recBlock ? readSectionTotal(recBlock) : null;
+  const paymentsTotal = payRead ?? 0;
+  const receiptsTotal = recRead ?? 0;
 
   // Main closing balance (before PDC)
   const closingBalance = findAmount(text, "Closing Balance Total");
@@ -513,6 +523,7 @@ function parseBaranhStyle(
     company,
     rawText: text,
     transactions: extractAllTransactions(text),
+    totalsFound: { payments: payRead !== null, receipts: recRead !== null },
   };
 }
 
@@ -534,25 +545,12 @@ function parseKKJ(text: string, date: string | null): CashFlowParsed {
 
   // Payments total: extract the "Total" line in the Payments section.
   // "-" means zero.
-  let paymentsTotal = 0;
-  const paymentsIdx = text.search(/Payments/i);
-  const receiptsIdx = text.search(/Receipts/i);
-  if (paymentsIdx >= 0 && receiptsIdx > paymentsIdx) {
-    const block = text.slice(paymentsIdx, receiptsIdx);
-    const m = block.match(/Total\s*([\d,]+(?:\.\d+)?)/i);
-    if (m) paymentsTotal = parseAmount(m[1]);
-    // "-" means zero — paymentsTotal stays 0
-  }
-
-  // Receipts total: extract "Total" in the Receipts section (before Closing Balance)
-  let receiptsTotal = 0;
-  const closingIdx = text.search(/Closing Balance/i);
-  if (receiptsIdx >= 0) {
-    const end = closingIdx > receiptsIdx ? closingIdx : text.length;
-    const block = text.slice(receiptsIdx, end);
-    const m = block.match(/Total\s*([\d,]+(?:\.\d+)?)/i);
-    if (m) receiptsTotal = parseAmount(m[1]);
-  }
+  const payBlock = sectionBlock(text, /Date\s*Payments/i, [/Date\s*Receipts/i, /Closing Balance/i]);
+  const recBlock = sectionBlock(text, /Date\s*Receipts/i, [/Date\s*Payments/i, /Closing Balance/i]);
+  const payRead = payBlock ? readSectionTotal(payBlock) : null;
+  const recRead = recBlock ? readSectionTotal(recBlock) : null;
+  const paymentsTotal = payRead ?? 0;
+  const receiptsTotal = recRead ?? 0;
 
   // Closing balance: number after "Closing Balance" label
   const closingBalance = (() => {
@@ -572,6 +570,7 @@ function parseKKJ(text: string, date: string | null): CashFlowParsed {
     company: "kkj",
     rawText: text,
     transactions: extractAllTransactions(text),
+    totalsFound: { payments: payRead !== null, receipts: recRead !== null },
   };
 }
 
