@@ -294,7 +294,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         // wants the window to always be "the last 30 days," full stop.
         .gte("position_date", daysAgoISO(30))
         .order("position_date", { ascending: false }),
-      supabase.rpc("get_pdc_weekly_outlook", { p_company_id: companyId, p_today: todayISO() }),
+      supabase.rpc("get_pdc_weekly_outlook", { p_company_id: companyId, p_today: todayISO(), p_planned_monthly_receivables: 240000000 }),
       supabase.rpc("daily_cash_continuity", { p_company_id: companyId }),
     ]);
     if (obRes.error) console.error("Opening balance error:", obRes.error);
@@ -578,23 +578,21 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         )}
       </div>
 
-      {/* ── PDC OUTLOOK — week-by-week card list (migration 287) ──
-          Shows each of the next 6 weeks as a card row: date range, estimated
-          weekly receipts (trailing 4-week avg from daily_cash_position),
-          PDC cheques due, and running net balance. Weeks with PDC are
-          highlighted red; clear weeks have a green left border.
-          Beyond the 6-week window, any future PDC commitments appear as
-          separate "future commitments" cards below the main list. ── */}
+      {/* ── PDC OUTLOOK — horizontal week timeline (migration 288) ──
+          6 near-term weeks shown as columns on a horizontal baseline.
+          Each column: data box on top → vertical stem → dot on the line.
+          Weeks with PDC due are red. Future commitments below as amber rows.
+          Weekly receipts = Planned Receivables PKR 240M Oct ÷ (days/7). ── */}
       {pdcOutlook.length > 0 && (() => {
         const nearTerm = pdcOutlook.filter((w) => w.near_term);
         const future   = pdcOutlook.filter((w) => !w.near_term && w.pdc_due > 0);
-        const avgReceipts = pdcOutlook[0]?.avg_weekly_receipts ?? 0;
+        const weeklyReceipts = pdcOutlook[0]?.avg_weekly_receipts ?? 0;
 
-        const totalPdcNext6  = nearTerm.reduce((s, w) => s + w.pdc_due, 0);
-        const totalPdcAll    = pdcOutlook.reduce((s, w) => s + w.pdc_due, 0);
+        const totalPdcNext6 = nearTerm.reduce((s, w) => s + w.pdc_due, 0);
+        const totalPdcAll   = pdcOutlook.reduce((s, w) => s + w.pdc_due, 0);
 
-        // Helper: "19–25 Oct 2026" or "26 Oct–1 Nov 2026" (DD Mon YYYY)
-        const fmtRange = (ws: string, we: string) => {
+        // Returns [line1, line2] e.g. ["19–25", "Oct 2026"] or ["26 Oct–1 Nov", "2026"]
+        const fmtRange = (ws: string, we: string): [string, string] => {
           const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
           const [sy, sm, sd] = ws.split("-");
           const [ey, em, ed] = we.split("-");
@@ -602,51 +600,33 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           const endDay   = parseInt(ed, 10);
           const startMon = months[parseInt(sm, 10) - 1];
           const endMon   = months[parseInt(em, 10) - 1];
-          if (sm === em && sy === ey) return `${startDay}–${endDay} ${endMon} ${sy}`;
-          return `${startDay} ${startMon}–${endDay} ${endMon} ${ey}`;
+          if (sm === em && sy === ey) return [`${startDay}–${endDay}`, `${endMon} ${sy}`];
+          return [`${startDay} ${startMon}–${endDay} ${endMon}`, ey];
         };
 
-        const weekLabel = (n: number) => {
-          if (n === 1) return "Week 1 · This week";
-          if (n === 2) return "Week 2 · Next week";
-          return `Week ${n}`;
+        const weekShortLabel = (n: number) => {
+          if (n === 1) return "WK 1 · THIS WEEK";
+          if (n === 2) return "WK 2 · NEXT WEEK";
+          return `WK ${n}`;
         };
 
-        // Tile style
-        const tile = (accent: string): React.CSSProperties => ({
-          flex: 1, minWidth: 0,
-          border: `1px solid ${HAIRLINE}`, borderRadius: "10px",
-          padding: "14px 16px", backgroundColor: CARD,
-        });
         const tileLabel: React.CSSProperties = {
-          fontSize: "11px", fontWeight: 500, color: SLATE,
-          textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px",
+          fontSize: "10px", fontWeight: 600, color: SLATE,
+          textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "5px",
         };
         const tileValue = (color?: string): React.CSSProperties => ({
-          fontFamily: MONO, fontSize: "18px", fontWeight: 500,
+          fontFamily: MONO, fontSize: "17px", fontWeight: 500,
           color: color || NAVY, whiteSpace: "nowrap" as const,
         });
         const tileTag = (bg: string, fg: string): React.CSSProperties => ({
           display: "inline-block", fontSize: "10px", fontWeight: 600,
-          padding: "2px 7px", borderRadius: "20px", marginTop: "6px",
+          padding: "2px 7px", borderRadius: "20px", marginTop: "5px",
           backgroundColor: bg, color: fg,
         });
 
-        // Amount column style
-        const amtCol: React.CSSProperties = { textAlign: "right", minWidth: "90px" };
-        const amtLabel: React.CSSProperties = {
-          fontSize: "10px", fontWeight: 500, color: SLATE,
-          textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "3px",
-        };
-        const amtVal = (color?: string, bold?: boolean): React.CSSProperties => ({
-          fontFamily: MONO, fontSize: bold ? "14px" : "13px",
-          fontWeight: bold ? 600 : 400, color: color || NAVY,
-        });
-
-        // Divider
-        const divider = (label: string) => (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "20px 0 10px" }}>
-            <span style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: SLATE }}>
+        const secDiv = (label: string, mt = 20) => (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: `${mt}px 0 14px` }}>
+            <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: SLATE, whiteSpace: "nowrap" }}>
               {label}
             </span>
             <div style={{ flex: 1, height: "1px", backgroundColor: HAIRLINE }} />
@@ -654,112 +634,152 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         );
 
         return (
-          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: CARD, marginBottom: "14px" }}>
-            <SectionTitle title="PDC Outlook — Week by Week" style={{ margin: "0 0 4px" }} />
-            <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "16px" }}>
-              Trailing 4-week avg receipts ~{formatPKR(avgReceipts)}/week · Starting from cash in hand {latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}
+          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 22px", backgroundColor: CARD, marginBottom: "14px" }}>
+            <SectionTitle title="PDC Outlook — Week by Week" style={{ margin: "0 0 2px" }} />
+            <div style={{ fontSize: "11.5px", color: SLATE, marginBottom: "18px" }}>
+              As at {latestPosition ? formatDateUK(latestPosition.position_date) : "—"} · Est. receipts from Planned Receivables {formatPKR(weeklyReceipts)}/week
             </div>
 
             {/* KPI tiles */}
-            <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
-              <div style={tile(GREEN)}>
+            <div style={{ display: "flex", gap: "10px", marginBottom: "22px", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 0, border: `1px solid ${HAIRLINE}`, borderRadius: "10px", padding: "12px 14px", backgroundColor: CARD }}>
                 <div style={tileLabel}>Cash in Hand</div>
                 <div style={tileValue(GREEN)}>{latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}</div>
                 {latestPosition && <span style={tileTag("#E6F4F1", GREEN)}>As at {formatDateUK(latestPosition.position_date)}</span>}
               </div>
-              <div style={tile(RED)}>
+              <div style={{ flex: 1, minWidth: 0, border: `1px solid ${HAIRLINE}`, borderRadius: "10px", padding: "12px 14px", backgroundColor: CARD }}>
                 <div style={tileLabel}>PDC Due — Next 6 Wks</div>
                 <div style={tileValue(totalPdcNext6 > 0 ? RED : NAVY)}>{formatPKR(totalPdcNext6)}</div>
-                {totalPdcNext6 > 0 && <span style={tileTag("#FDECEA", RED)}>Committed</span>}
-                {totalPdcNext6 === 0 && <span style={tileTag("#E6F4F1", GREEN)}>All clear</span>}
+                {totalPdcNext6 > 0
+                  ? <span style={tileTag("#FDECEA", RED)}>Committed</span>
+                  : <span style={tileTag("#E6F4F1", GREEN)}>All clear</span>}
               </div>
-              <div style={tile(AMBER)}>
+              <div style={{ flex: 1, minWidth: 0, border: `1px solid ${HAIRLINE}`, borderRadius: "10px", padding: "12px 14px", backgroundColor: CARD }}>
                 <div style={tileLabel}>Total PDC Committed</div>
                 <div style={tileValue(totalPdcAll > 0 ? RED : NAVY)}>{formatPKR(totalPdcAll)}</div>
                 {totalPdcAll > 0 && <span style={tileTag("#FDECEA", RED)}>All ahead</span>}
               </div>
             </div>
 
-            {divider("Next 6 weeks")}
+            {secDiv("Next 6 weeks", 0)}
 
-            {/* Week rows */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "4px" }}>
-              {nearTerm.map((w) => {
-                const hasPdc = w.pdc_due > 0;
-                return (
-                  <div key={w.week_number} style={{
-                    backgroundColor: hasPdc ? "#FDECEA" : CARD,
-                    border: `1px solid ${hasPdc ? RED : HAIRLINE}`,
-                    borderLeft: `3px solid ${hasPdc ? RED : GREEN}`,
-                    borderRadius: "10px",
-                    padding: "14px 16px",
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    gap: "8px 16px",
-                    alignItems: "center",
-                  }}>
-                    <div>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{fmtRange(w.week_start, w.week_end)}</div>
-                      <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px" }}>{weekLabel(w.week_number)}</div>
-                      {hasPdc && (
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "4px",
-                          backgroundColor: RED, color: "#fff",
-                          fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", marginTop: "6px" }}>
-                          ● PDC due this week
+            {/* ── Horizontal timeline ── */}
+            <div style={{ position: "relative", paddingBottom: "28px" }}>
+              {/* Horizontal baseline */}
+              <div style={{
+                position: "absolute", bottom: "20px", left: 0, right: 0,
+                height: "2px",
+                background: `linear-gradient(to right, ${GREEN} 85%, ${HAIRLINE} 100%)`,
+                borderRadius: "2px",
+                zIndex: 0,
+              }} />
+
+              {/* Week columns */}
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
+                {nearTerm.map((w) => {
+                  const hasPdc = w.pdc_due > 0;
+                  const [dateTop, dateBot] = fmtRange(w.week_start, w.week_end);
+                  return (
+                    <div key={w.week_number} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
+                      {/* Vertical stem */}
+                      <div style={{
+                        position: "absolute", bottom: 0, left: "50%",
+                        transform: "translateX(-50%)",
+                        width: "1.5px",
+                        height: "calc(100% - 10px)",
+                        backgroundColor: hasPdc ? `rgba(179,38,30,0.35)` : HAIRLINE,
+                        zIndex: 0,
+                      }} />
+
+                      {/* Data box */}
+                      <div style={{
+                        backgroundColor: hasPdc ? "#FDECEA" : CARD,
+                        border: `1px solid ${hasPdc ? RED : HAIRLINE}`,
+                        borderRadius: "8px",
+                        padding: "8px 5px",
+                        width: "calc(100% - 6px)",
+                        textAlign: "center",
+                        position: "relative", zIndex: 1,
+                        marginBottom: "8px",
+                        minHeight: "88px",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                      }}>
+                        <div>
+                          <div style={{ fontSize: "9px", fontWeight: 700, color: hasPdc ? RED : SLATE, letterSpacing: "0.03em", marginBottom: "2px" }}>
+                            {weekShortLabel(w.week_number)}
+                          </div>
+                          <div style={{ fontSize: "9.5px", fontWeight: 600, color: NAVY, lineHeight: 1.3 }}>
+                            {dateTop}<br />{dateBot}
+                          </div>
                         </div>
-                      )}
+                        <div>
+                          <div style={{ height: "1px", backgroundColor: hasPdc ? "rgba(179,38,30,.2)" : HAIRLINE, margin: "5px 0" }} />
+                          <div style={{ fontSize: "8.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginBottom: "1px" }}>PDC Due</div>
+                          {hasPdc
+                            ? <div style={{ fontFamily: MONO, fontSize: "10.5px", fontWeight: 700, color: RED }}>{formatPKR(w.pdc_due)}</div>
+                            : <div style={{ fontFamily: MONO, fontSize: "10px", color: SLATE }}>—</div>}
+                          <div style={{ fontSize: "8.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Net Bal</div>
+                          <div style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: NAVY }}>{formatPKR(w.running_balance)}</div>
+                        </div>
+                      </div>
+
+                      {/* Dot on baseline */}
+                      <div style={{
+                        width: hasPdc ? "12px" : "10px",
+                        height: hasPdc ? "12px" : "10px",
+                        borderRadius: "50%",
+                        backgroundColor: hasPdc ? RED : CARD,
+                        border: `2px solid ${hasPdc ? RED : GREEN}`,
+                        position: "relative", zIndex: 2,
+                        marginBottom: hasPdc ? "-6px" : "-5px",
+                        flexShrink: 0,
+                      }} />
+
+                      {/* Week label below line */}
+                      <div style={{
+                        position: "absolute", bottom: "-20px",
+                        left: "50%", transform: "translateX(-50%)",
+                        fontSize: "9px", fontWeight: 600,
+                        color: hasPdc ? RED : SLATE,
+                        whiteSpace: "nowrap", zIndex: 2,
+                      }}>
+                        {hasPdc ? `Wk ${w.week_number} ⚠` : `Wk ${w.week_number}`}
+                      </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                      <div style={amtCol}>
-                        <div style={amtLabel}>Est. Receipts</div>
-                        <div style={amtVal(GREEN)}>{formatPKR(w.avg_weekly_receipts)}</div>
-                      </div>
-                      <div style={amtCol}>
-                        <div style={amtLabel}>PDC Due</div>
-                        {hasPdc
-                          ? <div style={amtVal(RED, true)}>{formatPKR(w.pdc_due)}</div>
-                          : <div style={amtVal(SLATE)}>—</div>}
-                      </div>
-                      <div style={amtCol}>
-                        <div style={amtLabel}>Net Balance</div>
-                        <div style={amtVal(NAVY)}>{formatPKR(w.running_balance)}</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Future commitments */}
             {future.length > 0 && (
               <>
-                {divider("Future commitments")}
+                {secDiv("Future commitments", 10)}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {future.map((w) => {
                     const weeksAway = w.week_number - 6;
+                    const [dateTop, dateBot] = fmtRange(w.week_start, w.week_end);
                     return (
                       <div key={w.week_number} style={{
-                        backgroundColor: CARD,
-                        border: `1px solid ${HAIRLINE}`,
-                        borderLeft: `3px solid ${AMBER}`,
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        gap: "12px", flexWrap: "wrap",
+                        border: `1px solid ${AMBER}`,
                         borderRadius: "10px",
-                        padding: "14px 16px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        flexWrap: "wrap",
+                        padding: "12px 16px",
+                        backgroundColor: "#FEF3E2",
                       }}>
                         <div>
-                          <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{fmtRange(w.week_start, w.week_end)}</div>
-                          <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>
-                            Week {w.week_number} · {weeksAway} week{weeksAway === 1 ? "" : "s"} from now
+                          <div style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: AMBER, marginBottom: "3px" }}>
+                            Week {w.week_number} · {weeksAway} week{weeksAway === 1 ? "" : "s"} away
                           </div>
-                          <div style={{ fontSize: "11px", color: AMBER, marginTop: "6px" }}>⚠ Plan for this — large outflow ahead</div>
+                          <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{dateTop} {dateBot}</div>
+                          <div style={{ fontSize: "11px", color: AMBER, marginTop: "5px", fontWeight: 600 }}>⚠ Plan for this — large outflow ahead</div>
                         </div>
                         <div style={{ textAlign: "right" }}>
-                          <div style={amtLabel}>PDC Due</div>
-                          <div style={{ fontFamily: MONO, fontSize: "20px", fontWeight: 600, color: RED }}>{formatPKR(w.pdc_due)}</div>
+                          <div style={{ fontSize: "9px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: SLATE, marginBottom: "3px" }}>PDC Due</div>
+                          <div style={{ fontFamily: MONO, fontSize: "20px", fontWeight: 600, color: AMBER }}>{formatPKR(w.pdc_due)}</div>
                         </div>
                       </div>
                     );
