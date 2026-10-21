@@ -619,10 +619,24 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           return [`${startDay} ${startMon}–${endDay} ${endMon}`, ey];
         };
 
-        const weekShortLabel = (n: number) => {
-          if (n === 1) return "WK 1 · THIS WEEK";
-          if (n === 2) return "WK 2 · NEXT WEEK";
-          return `WK ${n}`;
+        // Badge shown under the date for weeks 1 and 2 only
+        const weekBadge = (n: number): string | null => {
+          if (n === 1) return "THIS WEEK";
+          if (n === 2) return "NEXT WEEK";
+          return null;
+        };
+
+        // Short label for the dot below the baseline: "19–25 Oct" or "26 Oct–1 Nov"
+        const dotLabel = (ws: string, we: string, hasPdc: boolean): string => {
+          const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          const [sy, sm, sd] = ws.split("-");
+          const [, em, ed] = we.split("-");
+          const d1 = parseInt(sd, 10);
+          const d2 = parseInt(ed, 10);
+          const m1 = months[parseInt(sm, 10) - 1];
+          const m2 = months[parseInt(em, 10) - 1];
+          const range = sm === em ? `${d1}–${d2} ${m2}` : `${d1} ${m1}–${d2} ${m2}`;
+          return hasPdc ? `${range} ⚠` : range;
         };
 
         const tileLabel: React.CSSProperties = {
@@ -722,12 +736,17 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                         justifyContent: "space-between",
                       }}>
                         <div>
-                          <div style={{ fontSize: "9px", fontWeight: 700, color: hasPdc ? RED : SLATE, letterSpacing: "0.03em", marginBottom: "2px" }}>
-                            {weekShortLabel(w.week_number)}
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>
+                            {dateTop}
                           </div>
-                          <div style={{ fontSize: "9.5px", fontWeight: 600, color: NAVY, lineHeight: 1.3 }}>
-                            {dateTop}<br />{dateBot}
+                          <div style={{ fontSize: "9.5px", fontWeight: 500, color: SLATE, marginBottom: "2px" }}>
+                            {dateBot}
                           </div>
+                          {weekBadge(w.week_number) && (
+                            <div style={{ fontSize: "8px", fontWeight: 700, color: hasPdc ? RED : GREEN, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                              {weekBadge(w.week_number)}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <div style={{ height: "1px", backgroundColor: hasPdc ? "rgba(179,38,30,.2)" : HAIRLINE, margin: "5px 0" }} />
@@ -760,7 +779,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                         color: hasPdc ? RED : SLATE,
                         whiteSpace: "nowrap", zIndex: 2,
                       }}>
-                        {hasPdc ? `Wk ${w.week_number} ⚠` : `Wk ${w.week_number}`}
+                        {dotLabel(w.week_start, w.week_end, hasPdc)}
                       </div>
                     </div>
                   );
