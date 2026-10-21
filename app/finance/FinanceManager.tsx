@@ -707,7 +707,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               <div style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
                 {nearTerm.map((w) => {
                   const hasPdc = w.pdc_due > 0;
-                  const [dateTop, dateBot] = fmtRange(w.week_start, w.week_end);
                   return (
                     <div key={w.week_number} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
                       {/* Vertical stem */}
@@ -725,31 +724,19 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                         backgroundColor: hasPdc ? "#FDECEA" : CARD,
                         border: `1px solid ${hasPdc ? RED : HAIRLINE}`,
                         borderRadius: "8px",
-                        padding: "8px 5px",
+                        padding: "10px 5px",
                         width: "calc(100% - 6px)",
                         textAlign: "center",
                         position: "relative", zIndex: 1,
                         marginBottom: "8px",
-                        minHeight: "88px",
+                        minHeight: "72px",
                         display: "flex",
                         flexDirection: "column",
-                        justifyContent: "space-between",
+                        justifyContent: "center",
+                        gap: "4px",
                       }}>
                         <div>
-                          <div style={{ fontSize: "11px", fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>
-                            {dateTop}
-                          </div>
-                          <div style={{ fontSize: "9.5px", fontWeight: 500, color: SLATE, marginBottom: "2px" }}>
-                            {dateBot}
-                          </div>
-                          {weekBadge(w.week_number) && (
-                            <div style={{ fontSize: "8px", fontWeight: 700, color: hasPdc ? RED : GREEN, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                              {weekBadge(w.week_number)}
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div style={{ height: "1px", backgroundColor: hasPdc ? "rgba(179,38,30,.2)" : HAIRLINE, margin: "5px 0" }} />
+                          <div style={{ height: "1px", backgroundColor: hasPdc ? "rgba(179,38,30,.2)" : HAIRLINE, margin: "0 0 6px" }} />
                           <div style={{ fontSize: "8.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginBottom: "1px" }}>PDC Due</div>
                           {hasPdc
                             ? <div style={{ fontFamily: MONO, fontSize: "10.5px", fontWeight: 700, color: RED }}>{formatPKR(w.pdc_due)}</div>
@@ -793,10 +780,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 {secDiv("Future commitments", 10)}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {future.map((w) => {
-                    const weeksAway = w.week_number - 6;
                     const [dateTop, dateBot] = fmtRange(w.week_start, w.week_end);
                     return (
-                      <div key={w.week_number} style={{
+                      <div key={w.week_start} style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         gap: "12px", flexWrap: "wrap",
                         border: `1px solid ${AMBER}`,
@@ -805,10 +791,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                         backgroundColor: "#FEF3E2",
                       }}>
                         <div>
-                          <div style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: AMBER, marginBottom: "3px" }}>
-                            Week {w.week_number} · {weeksAway} week{weeksAway === 1 ? "" : "s"} away
-                          </div>
-                          <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{dateTop} {dateBot}</div>
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{dateTop} {dateBot}</div>
                           <div style={{ fontSize: "11px", color: AMBER, marginTop: "5px", fontWeight: 600 }}>⚠ Plan for this — large outflow ahead</div>
                         </div>
                         <div style={{ textAlign: "right" }}>
