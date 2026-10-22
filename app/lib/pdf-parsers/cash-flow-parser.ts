@@ -6,6 +6,7 @@ export type CashFlowTransaction = {
   txn_type: string;
   description: string;
   amount: number;
+  rawStr?: string; // internal: the amount as printed (used to repair glued digits)
 };
 
 export type CashFlowParsed = {
@@ -181,9 +182,12 @@ function extractSectionTransactions(
   sectionText: string,
   txnType: "payment" | "receipt",
 ): { rows: CashFlowTransaction[]; sumMatchesTotal: boolean; sectionTotal: number } {
-  // Cut the section at its Total line so the total is never read as a row amount.
-  const totalMatch = sectionText.match(/(?:^|\n)[#\s]*Total\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
-  const sectionTotal = totalMatch ? parseAmount(totalMatch[1]) : 0;
+  // Cut the section at its Total line so the total is never read as a row
+  // amount. 22/10/2026: "Total  -" (no rows that day) must cut too — before,
+  // the digits-only pattern missed it and the next heading ("Closing Balance
+  // Unze Trading 111,827,701") was swallowed as a fake receipt row.
+  const totalMatch = sectionText.match(/(?:^|\n)[#\s]*Total\s*(-|\(?[\d,]+(?:\.\d+)?\)?)\s*(?:\n|$)/i);
+  const sectionTotal = totalMatch && totalMatch[1] !== "-" ? parseAmount(totalMatch[1].replace(/[()]/g, "")) : 0;
   const rowsBlock = totalMatch ? sectionText.slice(0, totalMatch.index!) : sectionText;
 
   const dateMatches = [...rowsBlock.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
@@ -211,10 +215,30 @@ function extractSectionTransactions(
       .trim();
     if (!description) continue;
 
-    rows.push({ txn_type: txnType, description, amount });
+    rows.push({ txn_type: txnType, description, amount, rawStr: last[1] });
   }
 
-  const sum = rows.reduce((a, r) => a + r.amount, 0);
+  let sum = rows.reduce((a, r) => a + r.amount, 0);
+
+  // 22/10/2026: pdf-parse sometimes glues digits from the description onto the
+  // amount ("…HT 31260702000001" + "12" → 3126070200000112; "Oct-26" + "2,961"
+  // → 262,961). When the rows don't tie to the section total, find the ONE row
+  // whose corrected amount (a) makes the section tie exactly and (b) is the
+  // tail of the printed digits. Both must hold, so nothing is ever invented.
+  if (sectionTotal > 0 && Math.abs(sum - sectionTotal) >= 1) {
+    const candidates = rows.filter((r) => {
+      const fixed = sectionTotal - (sum - r.amount);
+      if (fixed < 0 || fixed >= r.amount) return false;
+      const printed = (r.rawStr ?? "").replace(/,/g, "");
+      return printed.endsWith(String(Math.round(fixed)));
+    });
+    if (candidates.length === 1) {
+      candidates[0].amount = sectionTotal - (sum - candidates[0].amount);
+      sum = sectionTotal;
+    }
+  }
+  for (const r of rows) delete r.rawStr;
+
   const sumMatchesTotal = sectionTotal > 0 && Math.abs(sum - sectionTotal) < 1;
   return { rows, sumMatchesTotal, sectionTotal };
 }
@@ -224,6 +248,25 @@ function extractSectionTransactions(
 // "DateReceiptsAmount" (pdf-parse glues the column headers together), and each
 // section ends at its own "Total" line. Works for Unze, Imperial, Baranh/Dolci
 // and KKJ layouts, which all share this table shape.
+export function extractTransactionsWithTieOut(text: string): { rows: CashFlowTransaction[]; paymentsTie: boolean; receiptsTie: boolean } {
+  const out: CashFlowTransaction[] = [];
+  let paymentsTie = false, receiptsTie = false;
+  const payIdx = text.search(/Date\s*Payments/i);
+  const recIdx = text.search(/Date\s*Receipts/i);
+  const loanIdx = text.search(/Date\s*Loan\s*&\s*Post\s*Dated/i);
+  if (payIdx >= 0) {
+    const end = recIdx > payIdx ? recIdx : text.length;
+    const r = extractSectionTransactions(text.slice(payIdx, end), "payment");
+    out.push(...r.rows); paymentsTie = r.sumMatchesTotal || (r.sectionTotal === 0 && r.rows.length === 0);
+  }
+  if (recIdx >= 0) {
+    const end = loanIdx > recIdx ? loanIdx : text.length;
+    const r = extractSectionTransactions(text.slice(recIdx, end), "receipt");
+    out.push(...r.rows); receiptsTie = r.sumMatchesTotal || (r.sectionTotal === 0 && r.rows.length === 0);
+  }
+  return { rows: out, paymentsTie, receiptsTie };
+}
+
 function extractAllTransactions(text: string): CashFlowTransaction[] {
   const out: CashFlowTransaction[] = [];
 
@@ -592,6 +635,10 @@ const IMPERIAL_BLOCK_SPLIT = /(?=\d{2}\/\d{2}\/\d{4}\s*\nToday Opening Balance)/
 
 export async function parseCashFlowPDF(buffer: Buffer): Promise<CashFlowParsed[]> {
   const text = await extractTextFromPDF(buffer);
+  return parseCashFlowText(text);
+}
+
+export function parseCashFlowText(text: string): CashFlowParsed[] {
   const company = detectCompany(text);
 
   if (company === "unknown") {

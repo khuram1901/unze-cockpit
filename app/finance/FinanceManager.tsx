@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO, daysAgoISO } from "../lib/dateUtils";
-import { formatPKR } from "../lib/pkrFormatter";
+import { formatPKR, formatPKRWhole } from "../lib/pkrFormatter";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, SectionTitle, useToast, useConfirm, cardGrid, kpiGrid, fixedCols } from "../lib/SharedUI";
@@ -144,7 +144,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
   // Cash sheet drilldown detail modal
   const [csDetailId, setCsDetailId] = useState<string | null>(null);
-  const [csDetail, setCsDetail] = useState<{ date: string; opening: number; closing: number; totalReceipts?: number; totalPayments?: number; receipts: {description: string; amount_pkr: number}[]; payments: {description: string; amount_pkr: number}[] } | null>(null);
+  const [csDetail, setCsDetail] = useState<{ date: string; opening: number; closing: number; totalReceipts?: number; totalPayments?: number; linesTie?: boolean; receipts: {description: string; amount_pkr: number}[]; payments: {description: string; amount_pkr: number}[] } | null>(null);
   const [csDetailLoading, setCsDetailLoading] = useState(false);
 
   // Opening balance form
@@ -536,20 +536,20 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       >
         <SummaryCard
           label="Opening Balance"
-          value={opening ? formatPKR(opening.opening_amount) : "Not set"}
+          value={opening ? formatPKRWhole(opening.opening_amount) : "Not set"}
           sub={opening ? `as of ${formatDateUK(opening.as_of_date)}` : "Click edit to set"}
           onEdit={canEditAll ? openOpeningModal : undefined}
         />
         <SummaryCard
           label="Planned Receivables"
-          value={plan ? formatPKR(plan.tentative_receivables) : "Not set"}
+          value={plan ? formatPKRWhole(plan.tentative_receivables) : "Not set"}
           sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
           valueColor={GREEN}
           onEdit={canEditAll ? openPlanModal : undefined}
         />
         <SummaryCard
           label="Planned Payouts"
-          value={plan ? formatPKR(plan.tentative_payouts) : "Not set"}
+          value={plan ? formatPKRWhole(plan.tentative_payouts) : "Not set"}
           sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
           valueColor={RED}
           onEdit={canEditAll ? openPlanModal : undefined}
@@ -563,7 +563,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         {wv("finance.cash_in_hand", true) && (
           <SummaryCard
             label="Cash in Hand"
-            value={latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}
+            value={latestPosition ? formatPKRWhole(latestPosition.closing_balance) : "—"}
             sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
             isHero
           />
@@ -571,7 +571,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         {wv("finance.pdc_outstanding", true) && (
           <SummaryCard
             label="PDC Outstanding"
-            value={latestPosition ? formatPKR(latestPosition.post_dated_total) : "—"}
+            value={latestPosition ? formatPKRWhole(latestPosition.post_dated_total) : "—"}
             sub="Issued, not yet cleared — see outlook below"
             valueColor={AMBER}
           />
@@ -663,29 +663,29 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         );
 
         return (
-          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 22px", backgroundColor: CARD, marginBottom: "14px" }}>
-            <SectionTitle title="PDC Outlook — Week by Week" style={{ margin: "0 0 2px" }} />
-            <div style={{ fontSize: "11.5px", color: SLATE, marginBottom: "18px" }}>
-              As at {latestPosition ? formatDateUK(latestPosition.position_date) : "—"} · Est. receipts from Planned Receivables {formatPKR(weeklyReceipts)}/week
+          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: CARD, marginBottom: "14px" }}>
+            <SectionTitle title={`PDC Outlook — Next ${pdcOutlook.length} Week${pdcOutlook.length === 1 ? "" : "s"}`} style={{ margin: "0 0 4px" }} />
+            <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "6px" }}>
+              Starting from today&apos;s cash in hand ({latestPosition ? formatPKRWhole(latestPosition.closing_balance) : "—"}), assuming every scheduled PDC clears on time and nothing else changes.
             </div>
 
             {/* KPI tiles */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "22px", flexWrap: "wrap" }}>
               <div style={{ flex: 1, minWidth: 0, border: `1px solid ${HAIRLINE}`, borderRadius: "10px", padding: "12px 14px", backgroundColor: CARD }}>
                 <div style={tileLabel}>Cash in Hand</div>
-                <div style={tileValue(GREEN)}>{latestPosition ? formatPKR(latestPosition.closing_balance) : "—"}</div>
+                <div style={tileValue(GREEN)}>{latestPosition ? formatPKRWhole(latestPosition.closing_balance) : "—"}</div>
                 {latestPosition && <span style={tileTag("#E6F4F1", GREEN)}>As at {formatDateUK(latestPosition.position_date)}</span>}
               </div>
               <div style={{ flex: 1, minWidth: 0, border: `1px solid ${HAIRLINE}`, borderRadius: "10px", padding: "12px 14px", backgroundColor: CARD }}>
                 <div style={tileLabel}>PDC Due — Next 6 Wks</div>
-                <div style={tileValue(totalPdcNext6 > 0 ? RED : NAVY)}>{formatPKR(totalPdcNext6)}</div>
+                <div style={tileValue(totalPdcNext6 > 0 ? RED : NAVY)}>{formatPKRWhole(totalPdcNext6)}</div>
                 {totalPdcNext6 > 0
                   ? <span style={tileTag("#FDECEA", RED)}>Committed</span>
                   : <span style={tileTag("#E6F4F1", GREEN)}>All clear</span>}
               </div>
               <div style={{ flex: 1, minWidth: 0, border: `1px solid ${HAIRLINE}`, borderRadius: "10px", padding: "12px 14px", backgroundColor: CARD }}>
                 <div style={tileLabel}>Total PDC Committed</div>
-                <div style={tileValue(totalPdcAll > 0 ? RED : NAVY)}>{formatPKR(totalPdcAll)}</div>
+                <div style={tileValue(totalPdcAll > 0 ? RED : NAVY)}>{formatPKRWhole(totalPdcAll)}</div>
                 {totalPdcAll > 0 && <span style={tileTag("#FDECEA", RED)}>All ahead</span>}
               </div>
             </div>
@@ -739,10 +739,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                           <div style={{ height: "1px", backgroundColor: hasPdc ? "rgba(179,38,30,.2)" : HAIRLINE, margin: "0 0 6px" }} />
                           <div style={{ fontSize: "8.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginBottom: "1px" }}>PDC Due</div>
                           {hasPdc
-                            ? <div style={{ fontFamily: MONO, fontSize: "10.5px", fontWeight: 700, color: RED }}>{formatPKR(w.pdc_due)}</div>
+                            ? <div style={{ fontFamily: MONO, fontSize: "10.5px", fontWeight: 700, color: RED }}>{formatPKRWhole(w.pdc_due)}</div>
                             : <div style={{ fontFamily: MONO, fontSize: "10px", color: SLATE }}>—</div>}
                           <div style={{ fontSize: "8.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Net Bal</div>
-                          <div style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: (weeklyBalance[w.week_number] ?? 0) < 0 ? RED : NAVY }}>{formatPKR(weeklyBalance[w.week_number] ?? 0)}</div>
+                          <div style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: (weeklyBalance[w.week_number] ?? 0) < 0 ? RED : NAVY }}>{formatPKRWhole(weeklyBalance[w.week_number] ?? 0)}</div>
                         </div>
                       </div>
 
@@ -796,7 +796,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                         </div>
                         <div style={{ textAlign: "right" }}>
                           <div style={{ fontSize: "9px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: SLATE, marginBottom: "3px" }}>PDC Due</div>
-                          <div style={{ fontFamily: MONO, fontSize: "20px", fontWeight: 600, color: AMBER }}>{formatPKR(w.pdc_due)}</div>
+                          <div style={{ fontFamily: MONO, fontSize: "20px", fontWeight: 600, color: AMBER }}>{formatPKRWhole(w.pdc_due)}</div>
                         </div>
                       </div>
                     );
@@ -1134,12 +1134,20 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                       .then((r) => r.json())
                       .then((json) => {
                         if (json.data) {
+                          // 22/10/2026: totals are the PDF's own figures (or the DB line
+                          // sums when a sheet has none) — never summed in the browser.
+                          const d = json.data;
+                          const totalReceipts = d.receipts_pkr != null ? Number(d.receipts_pkr) : Number(d.line_receipts_pkr ?? 0);
+                          const totalPayments = d.payments_pkr != null ? Number(d.payments_pkr) : Number(d.line_payments_pkr ?? 0);
                           setCsDetail({
-                            date: json.data.sheet_date,
-                            opening: json.data.opening_balance_pkr ?? 0,
-                            closing: json.data.closing_balance_pkr ?? 0,
-                            receipts: json.data.receipts || [],
-                            payments: json.data.payments || [],
+                            date: d.sheet_date,
+                            opening: d.opening_balance_pkr ?? 0,
+                            closing: d.closing_balance_pkr ?? 0,
+                            totalReceipts,
+                            totalPayments,
+                            linesTie: Math.abs(Number(d.line_receipts_pkr ?? 0) - totalReceipts) < 1 && Math.abs(Number(d.line_payments_pkr ?? 0) - totalPayments) < 1,
+                            receipts: d.receipts || [],
+                            payments: d.payments || [],
                           });
                         }
                       })
@@ -1163,22 +1171,22 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                         )}
                       </td>
                       <td style={{ ...td, color: mismatch ? RED : undefined, fontWeight: mismatch ? 600 : undefined }}>
-                        {formatPKR(p.opening_balance)}
+                        {formatPKRWhole(p.opening_balance)}
                       </td>
                       <td style={{ ...td, color: GREEN, fontWeight: 600 }}>
-                        {formatPKR(p.total_receipts)}
+                        {formatPKRWhole(p.total_receipts)}
                       </td>
                       <td style={{ ...td, color: RED, fontWeight: 600 }}>
-                        {formatPKR(p.total_payments)}
+                        {formatPKRWhole(p.total_payments)}
                       </td>
                       <td style={{ ...td, fontWeight: 600, color: NAVY }}>
-                        {formatPKR(p.closing_balance)}
+                        {formatPKRWhole(p.closing_balance)}
                       </td>
                       <td style={{ ...td, color: SLATE }}>
-                        {formatPKR(p.post_dated_total)}
+                        {formatPKRWhole(p.post_dated_total)}
                       </td>
                       <td style={{ ...td, fontWeight: 600, color: p.closing_after_post_dated < 0 ? RED : GREEN }}>
-                        {formatPKR(p.closing_after_post_dated)}
+                        {formatPKRWhole(p.closing_after_post_dated)}
                       </td>
                     </tr>
                   );
@@ -1224,13 +1232,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 <div style={{ display: "grid", gridTemplateColumns: kpiGrid(200), gap: "12px", marginBottom: "24px" }}>
                   {[
                     { label: "Opening", value: csDetail.opening, color: NAVY },
-                    { label: "Receipts", value: csDetail.totalReceipts ?? csDetail.receipts.reduce((s, r) => s + r.amount_pkr, 0), color: GREEN },
-                    { label: "Payments", value: csDetail.totalPayments ?? csDetail.payments.reduce((s, r) => s + r.amount_pkr, 0), color: RED },
+                    { label: "Receipts", value: csDetail.totalReceipts ?? 0, color: GREEN },
+                    { label: "Payments", value: csDetail.totalPayments ?? 0, color: RED },
                     { label: "Closing", value: csDetail.closing, color: NAVY },
                   ].map(({ label, value, color }) => (
                     <div key={label} style={{ border: "1px solid #EEF0F3", borderRadius: "10px", padding: "12px", textAlign: "center" }}>
                       <div style={{ fontSize: "11px", color: SLATE, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>{label}</div>
-                      <div style={{ fontSize: "15px", fontWeight: 700, color }}>{formatPKR(value)}</div>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color }}>{formatPKRWhole(value)}</div>
                     </div>
                   ))}
                 </div>
@@ -1249,7 +1257,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                           {csDetail.receipts.map((r, i) => (
                             <tr key={i} style={{ borderBottom: i < csDetail.receipts.length - 1 ? "1px solid #EEF0F3" : "none" }}>
                               <td style={{ padding: "8px 12px", color: NAVY }}>{r.description}</td>
-                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: GREEN, whiteSpace: "nowrap" }}>{formatPKR(r.amount_pkr)}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: GREEN, whiteSpace: "nowrap" }}>{formatPKRWhole(r.amount_pkr)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1272,7 +1280,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                           {csDetail.payments.map((p, i) => (
                             <tr key={i} style={{ borderBottom: i < csDetail.payments.length - 1 ? "1px solid #EEF0F3" : "none" }}>
                               <td style={{ padding: "8px 12px", color: NAVY }}>{p.description}</td>
-                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: RED, whiteSpace: "nowrap" }}>{formatPKR(p.amount_pkr)}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: RED, whiteSpace: "nowrap" }}>{formatPKRWhole(p.amount_pkr)}</td>
                             </tr>
                           ))}
                         </tbody>

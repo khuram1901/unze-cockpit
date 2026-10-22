@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
-import { formatPKR } from "../lib/pkrFormatter";
+import { formatPKR, formatPKRWhole } from "../lib/pkrFormatter";
 import DateInput from "../lib/DateInput";
 import {
   COLOURS, RADII, SkeletonRows,
@@ -21,6 +21,8 @@ type CashSheetSummary = {
   pdf_storage_path: string | null;
   opening_balance_pkr: number | null;
   closing_balance_pkr: number | null;
+  receipts_pkr: number | null;
+  payments_pkr: number | null;
   notes: string | null;
   uploaded_by: string;
   created_at: string;
@@ -87,7 +89,7 @@ const PAYMENT_CATEGORIES = [
 
 // Shared PKR formatter (PKR 1,234,567.00) — same as every other finance page
 function pkr(amount: number | null | undefined): string {
-  return formatPKR(amount);
+  return formatPKRWhole(amount);
 }
 
 function monthLabel(ym: string): string {
@@ -532,9 +534,10 @@ export default function CashSheetTab() {
   // ── Sheet list helpers ──────────────────────────────────────────────────────
 
   function getSheetTotals(sheet: CashSheetSummary) {
-    // All figures come from the DB view — nothing summed here (golden rule)
-    const totalReceipts = Number(sheet.line_receipts_pkr ?? 0);
-    const totalPayments = Number(sheet.line_payments_pkr ?? 0);
+    // All figures come from the DB view — nothing summed here (golden rule).
+    // 22/10/2026: the PDF's own totals win; line sums only when a sheet has none.
+    const totalReceipts = sheet.receipts_pkr != null ? Number(sheet.receipts_pkr) : Number(sheet.line_receipts_pkr ?? 0);
+    const totalPayments = sheet.payments_pkr != null ? Number(sheet.payments_pkr) : Number(sheet.line_payments_pkr ?? 0);
     const net = totalReceipts - totalPayments;
     return { totalReceipts, totalPayments, net, txnCount: Number(sheet.receipt_count ?? 0) + Number(sheet.payment_count ?? 0) };
   }
@@ -855,8 +858,8 @@ export default function CashSheetTab() {
 
                   {/* Balance summary */}
                   {(detail.opening_balance_pkr != null || detail.closing_balance_pkr != null || detail.receipts_pkr != null || detail.payments_pkr != null) && (() => {
-                    const effectiveReceipts = (detail.receipts_pkr != null && detail.receipts_pkr > 0) ? detail.receipts_pkr : detail.line_receipts_pkr;
-                    const effectivePayments = (detail.payments_pkr != null && detail.payments_pkr > 0) ? detail.payments_pkr : detail.line_payments_pkr;
+                    const effectiveReceipts = detail.receipts_pkr != null ? Number(detail.receipts_pkr) : detail.line_receipts_pkr;
+                    const effectivePayments = detail.payments_pkr != null ? Number(detail.payments_pkr) : detail.line_payments_pkr;
                     const hasParsed = effectiveReceipts > 0 || effectivePayments > 0;
                     const tiles = [
                       { label: "Opening Balance", value: detail.opening_balance_pkr, color: COLOURS.SLATE },
@@ -1220,7 +1223,7 @@ function SectionHeader({
         }}>{label}</span>
         {total > 0 && (
           <span style={{ fontSize: "12px", fontWeight: 700, color }}>
-            {formatPKR(total)}
+            {formatPKRWhole(total)}
           </span>
         )}
       </div>

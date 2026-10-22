@@ -12,7 +12,7 @@
 import { useCallback, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
-import { formatPKR } from "../lib/pkrFormatter";
+import { formatPKR, formatPKRWhole } from "../lib/pkrFormatter";
 
 interface Store {
   id: string;
@@ -74,7 +74,7 @@ async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> 
 }
 
 function pkr(n: number | null | undefined): string {
-  return formatPKR(n);
+  return formatPKRWhole(n);
 }
 
 // ── Column normalisation ──────────────────────────────────────────────────────
