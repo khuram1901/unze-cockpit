@@ -139,6 +139,35 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [pdcOutlook, setPdcOutlook] = useState<PdcWeek[]>([]);
   const [chainBreaks, setChainBreaks] = useState<ChainBreak[]>([]);
 
+  // ── Month filter for Daily Position table ─────────────────────────────────
+  // Default to the current month in PKT (Asia/Karachi) so directors browsing
+  // from the UK/US don't get the previous month near PKT month-end boundaries.
+  function pktCurrentMonth(): string {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Karachi",
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(new Date());
+    const year = parts.find((p) => p.type === "year")?.value ?? "";
+    const month = parts.find((p) => p.type === "month")?.value ?? "";
+    return `${year}-${month}`;
+  }
+
+  function getPositionMonthOptions(): { value: string; label: string }[] {
+    const opts: { value: string; label: string }[] = [];
+    const [year, month] = pktCurrentMonth().split("-").map(Number);
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(Date.UTC(year, month - 1 - i, 1));
+      const value = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+      opts.push({ value, label });
+    }
+    return opts;
+  }
+
+  const [positionsMonth, setPositionsMonth] = useState<string>(pktCurrentMonth);
+  const positionMonthOptions = getPositionMonthOptions();
+
   // Which edit modal is open: null, 'opening', or 'plan'
   const [openModal, setOpenModal] = useState<null | "opening" | "plan">(null);
 
@@ -256,8 +285,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   }
 
 
-  async function loadData() {
+  async function loadData(month?: string) {
     setLoading(true);
+    const selectedMonth = month ?? positionsMonth;
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user?.email) {
       const { data: memberData } = await supabase.from("members").select("id, role, department, company").eq("email", userData.user.email).maybeSingle();
@@ -271,6 +301,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         setUserIsAdmin(isAdminTier(ctx));
       }
     }
+    // Month bounds for the position filter: first and last day of selectedMonth
+    const [posYear, posMonthNum] = selectedMonth.split("-").map(Number);
+    const monthStart = `${selectedMonth}-01`;
+    const lastDay = new Date(Date.UTC(posYear, posMonthNum, 0)).getUTCDate();
+    const monthEnd = `${selectedMonth}-${String(lastDay).padStart(2, "0")}`;
+
     const [obRes, planRes, posRes, pdcRes, chainRes] = await Promise.all([
       supabase
         .from("cash_opening_balance")
@@ -288,11 +324,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         .from("daily_cash_position")
         .select("id, position_date, opening_balance, total_receipts, total_payments, closing_balance, post_dated_total, closing_after_post_dated, cash_sheet_id")
         .eq("company_id", companyId)
-        // Rolling last 30 calendar days (today minus 30 through today), not a
-        // row-count limit — a row-count limit drifts further back than 30
-        // days whenever there are gaps (weekends, missed reports), and Khuram
-        // wants the window to always be "the last 30 days," full stop.
-        .gte("position_date", daysAgoISO(30))
+        // Filter by selected month — shows all entries for the chosen month.
+        // Previously this was a rolling 30-day window (.gte("position_date", daysAgoISO(30)))
+        // but a month filter is more useful and was missing (added 22/10/2026).
+        .gte("position_date", monthStart)
+        .lte("position_date", monthEnd)
         .order("position_date", { ascending: false }),
       supabase.rpc("get_pdc_outlook_v2", { p_company_id: companyId, p_today: todayISO() }),
       supabase.rpc("daily_cash_continuity", { p_company_id: companyId }),
@@ -366,9 +402,24 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     loadBudgets();
   }
 
+  // Reload just the positions table when the month changes (auth/budgets don't need re-fetching)
+  async function reloadPositions(month: string) {
+    const [posYear, posMonthNum] = month.split("-").map(Number);
+    const monthStart = `${month}-01`;
+    const lastDay = new Date(Date.UTC(posYear, posMonthNum, 0)).getUTCDate();
+    const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+    const { data } = await supabase
+      .from("daily_cash_position")
+      .select("id, position_date, opening_balance, total_receipts, total_payments, closing_balance, post_dated_total, closing_after_post_dated, cash_sheet_id")
+      .eq("company_id", companyId)
+      .gte("position_date", monthStart)
+      .lte("position_date", monthEnd)
+      .order("position_date", { ascending: false });
+    setPositions(data || []);
+  }
+
   useEffect(() => {
     loadData();
-
   }, []);
 
   function showMsg(text: string) {
@@ -1062,16 +1113,46 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       {/* ── DAILY POSITION HISTORY (full width) ── */}
       <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <SectionTitle title="Daily Position — Last 30 Days" />
+        <SectionTitle title={`Daily Position — ${positionMonthOptions.find((o) => o.value === positionsMonth)?.label ?? positionsMonth}`} />
         {positions.length > 0 && (
           <button onClick={() => {
             const headers = ["Date", "Opening", "Receipts", "Payments", "Closing", "Post-dated", "Net"];
             const rows = positions.map((p) => [formatDateUK(p.position_date), String(p.opening_balance), String(p.total_receipts), String(p.total_payments), String(p.closing_balance), String(p.post_dated_total), String(p.closing_after_post_dated)]);
-            downloadCSV(`cash-positions-${companyName.replace(/ /g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+            downloadCSV(`cash-positions-${companyName.replace(/ /g, "-")}-${positionsMonth}.csv`, headers, rows);
           }} style={{ backgroundColor: CARD, color: NAVY, border: `1px solid ${HAIRLINE}`, borderRadius: "999px", padding: "6px 16px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
             Export CSV
           </button>
         )}
+      </div>
+
+      {/* Month filter */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Month</label>
+        <select
+          value={positionsMonth}
+          onChange={(e) => {
+            const m = e.target.value;
+            setPositionsMonth(m);
+            reloadPositions(m);
+          }}
+          style={{
+            padding: "6px 10px",
+            borderRadius: "8px",
+            border: `1px solid ${HAIRLINE}`,
+            background: CARD,
+            color: NAVY,
+            fontSize: "13px",
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          {positionMonthOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <span style={{ fontSize: "12px", color: SLATE }}>
+          {positions.length} {positions.length === 1 ? "entry" : "entries"}
+        </span>
       </div>
       <div
         style={{
