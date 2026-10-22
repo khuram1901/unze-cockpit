@@ -112,6 +112,62 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // ── Line-item sanity checks (22/10/2026) ─────────────────────────────────────
+  // Two-layer guard against PDF parsing corruptions (e.g. a decimal point lost
+  // during text extraction turning PKR 12 into PKR 3,126,070,200,000,112):
+  //
+  // Layer 1 — per-line cap: any single transaction above PKR 500,000,000 (50 crore)
+  //   is almost certainly a parse error. The largest legitimate transaction on record
+  //   is ~PKR 264M (a LESCO bill). Cap is set at ~2× that with headroom.
+  //
+  // Layer 2 — line-sum vs section-total cross-check: sum all receipt lines and
+  //   compare to the PDF's parsed receipts total; same for payments. A mismatch
+  //   means one or more lines were parsed incorrectly.
+  //
+  // Both checks produce ERRORS (blocking save), not warnings, because corrupt line
+  // items directly corrupt the Daily Position totals shown to the CEO.
+
+  const MAX_SINGLE_TXN = 500_000_000; // PKR 50 crore — well above any real transaction
+
+  // Layer 1: per-line cap
+  const suspiciousLines = parsed.transactions.filter(t => t.amount > MAX_SINGLE_TXN);
+  if (suspiciousLines.length > 0) {
+    for (const t of suspiciousLines) {
+      checks.push({
+        level: "error",
+        message: `Suspicious line item: "${t.description}" shows ${f(t.amount)} — this is likely a PDF parsing error (decimal point lost). The largest real transaction on record is ~PKR 264M. Please check the PDF and enter the correct amount manually.`,
+      });
+    }
+  }
+
+  // Layer 2: line-sum vs section-total cross-check
+  if (parsed.transactions.length > 0 && parsed.receipts != null && parsed.payments != null) {
+    const lineReceiptsSum = parsed.transactions
+      .filter(t => t.txn_type === "receipt")
+      .reduce((s, t) => s + t.amount, 0);
+    const linePaymentsSum = parsed.transactions
+      .filter(t => t.txn_type === "payment")
+      .reduce((s, t) => s + t.amount, 0);
+
+    const receiptGap = Math.abs(lineReceiptsSum - parsed.receipts);
+    const paymentGap = Math.abs(linePaymentsSum - parsed.payments);
+    // Allow PKR 1 per line for rounding, plus a fixed PKR 100 floor
+    const tolerance = Math.max(100, parsed.transactions.length * 1);
+
+    if (receiptGap > tolerance) {
+      checks.push({
+        level: "error",
+        message: `Receipt lines add up to ${f(lineReceiptsSum)} but the PDF total is ${f(parsed.receipts)} (gap: ${f(receiptGap)}). One or more receipt lines may have been parsed incorrectly.`,
+      });
+    }
+    if (paymentGap > tolerance) {
+      checks.push({
+        level: "error",
+        message: `Payment lines add up to ${f(linePaymentsSum)} but the PDF total is ${f(parsed.payments)} (gap: ${f(paymentGap)}). One or more payment lines may have been parsed incorrectly.`,
+      });
+    }
+  }
+
   // Chain check against the previous available day (weekends/holidays are
   // simply the previous row — no calendar assumptions).
   const COMPANY_ID_MAP: Record<string, string> = { UTPL: UTPL_COMPANY_ID, IFPL: IFPL_COMPANY_ID, BRNH: BRNH_COMPANY_ID, HD: HD_COMPANY_ID, KKJ: KKJ_COMPANY_ID };
