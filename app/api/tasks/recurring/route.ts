@@ -43,6 +43,22 @@ export async function GET(request: NextRequest) {
         shouldCreate = true;
       } else if (tmpl.frequency === "monthly" && tmpl.day_of_month === dayOfMonth) {
         shouldCreate = true;
+      } else if (tmpl.frequency === "bimonthly" && tmpl.day_of_month === dayOfMonth) {
+        // Fire every ~2 months: skip if last fired within 45 days
+        if (!tmpl.last_created_at) {
+          shouldCreate = true;
+        } else {
+          const daysSinceLast = Math.floor((now.getTime() - new Date(tmpl.last_created_at).getTime()) / 86400000);
+          if (daysSinceLast >= 45) shouldCreate = true;
+        }
+      } else if (tmpl.frequency === "quarterly" && tmpl.day_of_month === dayOfMonth) {
+        // Fire every ~3 months: skip if last fired within 80 days
+        if (!tmpl.last_created_at) {
+          shouldCreate = true;
+        } else {
+          const daysSinceLast = Math.floor((now.getTime() - new Date(tmpl.last_created_at).getTime()) / 86400000);
+          if (daysSinceLast >= 80) shouldCreate = true;
+        }
       }
 
       // Don't create if already created today

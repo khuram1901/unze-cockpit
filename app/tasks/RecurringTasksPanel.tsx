@@ -144,7 +144,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       assigned_by: "Recurring Template", priority, project: project || null,
       company_id: companyId || null,
       frequency, day_of_week: frequency === "weekly" ? dayOfWeek : null,
-      day_of_month: frequency === "monthly" ? dayOfMonth : null,
+      day_of_month: ["monthly", "bimonthly", "quarterly"].includes(frequency) ? dayOfMonth : null,
       due_days_after: Number(dueDays) || 3, active: true,
       created_by_email: userData.user?.email || null,
     }).select("id");
@@ -211,7 +211,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       company_id: editCompanyId || null,
       frequency: editFrequency,
       day_of_week: editFrequency === "weekly" ? editDayOfWeek : null,
-      day_of_month: editFrequency === "monthly" ? editDayOfMonth : null,
+      day_of_month: ["monthly", "bimonthly", "quarterly"].includes(editFrequency) ? editDayOfMonth : null,
       due_days_after: Number(editDueDays) || 3,
     }).eq("id", id);
     setSavingEdit(false);
@@ -248,9 +248,9 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
               <label style={lbl}>Assign To <select style={inp} value={assignTo} onChange={(e) => setAssignTo(e.target.value)} required><option value="">Select</option>{members.map((m) => <option key={memberName(m)} value={memberName(m)}>{memberName(m)}</option>)}</select></label>
               <label style={lbl}>Company <select style={inp} value={companyId} onChange={(e) => setCompanyId(e.target.value)}><option value="">Group / none</option>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
               <label style={lbl}>Priority <select style={inp} value={priority} onChange={(e) => setPriority(e.target.value)}><option>Low</option><option>Normal</option><option>Urgent</option><option>Critical</option></select></label>
-              <label style={lbl}>Frequency <select style={inp} value={frequency} onChange={(e) => setFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+              <label style={lbl}>Frequency <select style={inp} value={frequency} onChange={(e) => setFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="bimonthly">Bi-Monthly (every 2 months)</option><option value="quarterly">Quarterly (every 3 months)</option></select></label>
               {frequency === "weekly" && <label style={lbl}>Day <select style={inp} value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>}
-              {frequency === "monthly" && <label style={lbl}>Day of Month <input type="number" min="1" max="28" style={inp} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} /></label>}
+              {(frequency === "monthly" || frequency === "bimonthly" || frequency === "quarterly") && <label style={lbl}>Day of Month <input type="number" min="1" max="28" style={inp} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} /></label>}
               <label style={lbl}>First task due date <input type="date" style={inp} value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} required /></label>
               <label style={lbl}>Due after (days) <input type="number" min="1" style={inp} value={dueDays} onChange={(e) => setDueDays(e.target.value)} /></label>
               <label style={lbl}>Department / Project <input style={inp} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Optional" /></label>
@@ -302,9 +302,9 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                     <label style={lbl}>Assign To <select style={inp} value={editAssignTo} onChange={(e) => setEditAssignTo(e.target.value)}><option value="">Select</option>{members.map((m) => <option key={memberName(m)} value={memberName(m)}>{memberName(m)}</option>)}</select></label>
                     <label style={lbl}>Company <select style={inp} value={editCompanyId} onChange={(e) => setEditCompanyId(e.target.value)}><option value="">Group / none</option>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
                     <label style={lbl}>Priority <select style={inp} value={editPriority} onChange={(e) => setEditPriority(e.target.value)}><option>Low</option><option>Normal</option><option>Urgent</option><option>Critical</option></select></label>
-                    <label style={lbl}>Frequency <select style={inp} value={editFrequency} onChange={(e) => setEditFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+                    <label style={lbl}>Frequency <select style={inp} value={editFrequency} onChange={(e) => setEditFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="bimonthly">Bi-Monthly (every 2 months)</option><option value="quarterly">Quarterly (every 3 months)</option></select></label>
                     {editFrequency === "weekly" && <label style={lbl}>Day <select style={inp} value={editDayOfWeek} onChange={(e) => setEditDayOfWeek(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>}
-                    {editFrequency === "monthly" && <label style={lbl}>Day of Month <input type="number" min="1" max="28" style={inp} value={editDayOfMonth} onChange={(e) => setEditDayOfMonth(Number(e.target.value))} /></label>}
+                    {(editFrequency === "monthly" || editFrequency === "bimonthly" || editFrequency === "quarterly") && <label style={lbl}>Day of Month <input type="number" min="1" max="28" style={inp} value={editDayOfMonth} onChange={(e) => setEditDayOfMonth(Number(e.target.value))} /></label>}
                     <label style={lbl}>Due after (days) <input type="number" min="1" style={inp} value={editDueDays} onChange={(e) => setEditDueDays(e.target.value)} /></label>
                     <label style={lbl}>Department / Project <input style={inp} value={editProject} onChange={(e) => setEditProject(e.target.value)} placeholder="Optional" /></label>
                   </div>
@@ -324,7 +324,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
                     <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                      {t.assigned_to || "Unassigned"} · {t.frequency}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : t.frequency === "monthly" ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
+                      {t.assigned_to || "Unassigned"} · {t.frequency === "bimonthly" ? "Bi-Monthly" : t.frequency === "quarterly" ? "Quarterly" : t.frequency.charAt(0).toUpperCase() + t.frequency.slice(1)}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : ["monthly", "bimonthly", "quarterly"].includes(t.frequency) ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
                       {t.last_created_at && ` · Last: ${t.last_created_at.slice(0, 10)}`}
                     </div>
                     <div style={{ marginTop: "4px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
