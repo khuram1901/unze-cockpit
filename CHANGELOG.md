@@ -4,6 +4,26 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.12 — 2026-10-26 (patch)
+
+**Cash-flow PDF parser fix — two bugs causing accounting-equation failures on IFPL and UTPL uploads**
+
+Two separate root causes both produced the same symptom: the upload page rejected the parsed figures (accounting equation check failed), forcing Waleed to type the numbers manually.
+
+Bug 1 — Imperial (IFPL): wrong section Total captured (commit `6abde62`)
+- `parseImperial()` used a simple `/Total\s+([\d,]+)/i` regex to read the Payments section total.
+- When pdf-parse emits a payment amount adjacent to "Total" due to column ordering (e.g. raw text `"Total  307,020  5,424,821"`), the old regex matched `307,020` instead of `5,424,821` — causing a PKR 307,020 gap in the equation.
+- Fix: replaced both Payments and Receipts total reads with `readSectionTotal(block)`, the anchored line-boundary regex already used by UTPL, Baranh, and KKJ parsers.
+
+Bug 2 — Both companies: payment rows dropped when amount precedes the date in pdf-parse output
+- `extractSectionTransactions()` searched for comma-grouped numbers in the text AFTER the date. On some PDFs (confirmed: UTPL 19/10/2026 Rent line PKR 264,594), pdf-parse emits the right-column amount BEFORE the date+description. The post-date chunk had no comma-grouped number → row silently dropped.
+- Fix: three-tier amount extraction: (a) last comma-grouped number after date (existing); (b) if none, look up to 60 chars before the date for a pre-date comma-grouped amount; (c) final fallback: plain integer ≥ 3 digits after date.
+- Also added description cleanup for trailing `= PKR` / `= Rs` currency markers.
+
+Result: both `Cash_Flow_21-10-2026.pdf` (IFPL) and `Unze_Cash_Flow_19-10-2026.pdf` (UTPL) should now parse and pass the accounting equation check without any manual entry.
+
+---
+
 ## v4.11 — 2026-10-19 (patch)
 
 **Audit page (/department/audit) audit + fix — Internal Audit team locked out since the department rename**
