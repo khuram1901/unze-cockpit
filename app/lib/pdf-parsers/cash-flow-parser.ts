@@ -178,6 +178,13 @@ function extractRestaurantPdcBuckets(text: string): PdcBucket[] {
 // chunk; everything before it is the description. Rows are validated against
 // the section's own "Total" line — a mismatch is reported via the returned
 // `sumMatchesTotal` flag rather than dropping data (best-effort principle).
+//
+// 26/10/2026: pdf-parse column-ordering quirk — on some PDFs the right-column
+// amount for a row is emitted BEFORE the date+description text, e.g.:
+//   "264,594\n21/10/2026\nNASIR IQBAL/FARHEEN NASIR Rent - Oct-26 = PKR\n"
+// In this layout the chunk-after-date has no comma-grouped number. We handle
+// it by also looking at the text that precedes the date (the "pre-date tail")
+// for a valid comma-grouped amount when the post-date chunk has none.
 function extractSectionTransactions(
   sectionText: string,
   txnType: "payment" | "receipt",
@@ -199,23 +206,69 @@ function extractSectionTransactions(
     const chunkEnd = i + 1 < dateMatches.length ? dateMatches[i + 1].index! : rowsBlock.length;
     const chunk = rowsBlock.slice(chunkStart, chunkEnd);
 
-    // Amount = last number in the chunk (comma-grouped preferred, plain fallback).
-    const numMatches = [...chunk.matchAll(/(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)/g)];
-    if (numMatches.length === 0) continue;
-    const last = numMatches[numMatches.length - 1];
-    const amount = parseAmount(last[1]);
+    // Amount = last comma-grouped number in the chunk-after-date.
+    // We prefer comma-grouped numbers over bare integers to avoid treating
+    // year-digits like "26" (in "Sep - 26") as an amount.
+    const commaNumRe = /(\d{1,3}(?:,\d{3})+(?:\.\d+)?)/g;
+    const commaMatches = [...chunk.matchAll(commaNumRe)];
+
+    let last: RegExpMatchArray | null = commaMatches.length > 0
+      ? commaMatches[commaMatches.length - 1]
+      : null;
+    let preDateAmount: number | null = null;
+
+    // 26/10/2026: pdf-parse column-ordering quirk. On some PDFs the right-column
+    // amount is emitted BEFORE the date+description, e.g.:
+    //   "264,594\n21/10/2026\nNASIR IQBAL/FARHEEN NASIR Rent - Oct-26 = PKR\n"
+    // When no comma-grouped number is in the post-date chunk, look at the text
+    // immediately before the current date for a valid comma-grouped amount.
+    if (!last) {
+      const lookback = Math.max(0, m.index! - 60);
+      const preTail = rowsBlock.slice(lookback, m.index!);
+      const preMatches = [...preTail.matchAll(commaNumRe)];
+      if (preMatches.length > 0) {
+        const preLast = preMatches[preMatches.length - 1];
+        const preAmt = parseAmount(preLast[1]);
+        if (preAmt > 0) {
+          preDateAmount = preAmt;
+          // Treat the entire post-date chunk as description when amount was pre-date.
+          last = { index: chunk.length, 0: "", 1: preLast[1] } as unknown as RegExpMatchArray;
+        }
+      }
+    }
+
+    // Final fallback: if still no amount found, look for any plain integer
+    // ≥ 100 in the post-date chunk (avoids picking up year fragments like "26").
+    if (!last) {
+      const plainMatches = [...chunk.matchAll(/\b(\d{3,}(?:\.\d+)?)\b/g)];
+      if (plainMatches.length > 0) {
+        last = plainMatches[plainMatches.length - 1];
+      }
+    }
+
+    if (!last) continue;
+    const amount = preDateAmount ?? parseAmount(last[1]);
     if (amount <= 0) continue;
 
-    const description = chunk
-      .slice(0, last.index)
+    const description = (preDateAmount !== null
+      ? chunk  // entire post-date chunk is the description
+      : chunk.slice(0, last.index)
+    )
       .replace(/\s+/g, " ")
       .trim()
+      // Trim trailing "= PKR" or "= Rs" currency markers (present in some PDF variants)
+      .replace(/\s*=\s*(?:PKR|Rs\.?)\s*$/i, "")
       // Trim a dangling "(" or "-" left behind when the amount was glued to the description
       .replace(/[-(\s]+$/, "")
       .trim();
     if (!description) continue;
 
-    rows.push({ txn_type: txnType, description, amount, rawStr: last[1] });
+    rows.push({
+      txn_type: txnType,
+      description,
+      amount,
+      rawStr: preDateAmount !== null ? String(preDateAmount) : last[1],
+    });
   }
 
   let sum = rows.reduce((a, r) => a + r.amount, 0);
@@ -390,23 +443,29 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
   const receiptsIdx = text.search(/Date\s*Receipts/i);
   const closingIdx = text.search(/Closing Balance\s*[\n\r(]/i);
 
-  // Extract payments total — in the payments block
-  let paymentsTotal = 0;
+  // Extract payments total using the anchored readSectionTotal helper, which
+  // requires the Total line to start at a newline and be followed by a newline
+  // or end-of-string. This prevents picking up an interleaved payment amount
+  // that pdf-parse may emit on the same "line" as the section Total.
+  // 26/10/2026: the simpler /Total\s+([\d,]+)/i regex was matching the wrong
+  // number when pdf-parse column-ordering emitted a payment amount adjacent to
+  // the Total keyword — e.g. "Total  307,020  5,424,821" read 307,020 instead
+  // of 5,424,821, causing a 307,020 gap in the accounting equation.
+  let payTotalRead: number | null = null;
   if (paymentsIdx >= 0) {
     const end = receiptsIdx > paymentsIdx ? receiptsIdx : (closingIdx > paymentsIdx ? closingIdx : text.length);
     const block = text.slice(paymentsIdx, end);
-    const m = block.match(/Total\s+([\d,]+(?:\.\d+)?)/i);
-    if (m) paymentsTotal = parseAmount(m[1]);
+    payTotalRead = readSectionTotal(block);
   }
+  let paymentsTotal = payTotalRead ?? 0;
 
-  // Extract receipts total — in the receipts block
-  let receiptsTotal = 0;
+  let recTotalRead: number | null = null;
   if (receiptsIdx >= 0) {
     const end = closingIdx > receiptsIdx ? closingIdx : text.length;
     const block = text.slice(receiptsIdx, end);
-    const m = block.match(/Total\s+([\d,]+(?:\.\d+)?)/i);
-    if (m) receiptsTotal = parseAmount(m[1]);
+    recTotalRead = readSectionTotal(block);
   }
+  let receiptsTotal = recTotalRead ?? 0;
 
   // ── Swap detection: some IFPL PDF dates have Payments/Receipts sections swapped ──
   // Guard: if equation fails by > 1000 but holds when swapped, swap them.
@@ -498,7 +557,7 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     company: "imperial",
     rawText: text,
     transactions: extractAllTransactions(text),
-    totalsFound: { payments: paymentsIdx >= 0, receipts: receiptsIdx >= 0 },
+    totalsFound: { payments: payTotalRead !== null, receipts: recTotalRead !== null },
   };
 }
 
