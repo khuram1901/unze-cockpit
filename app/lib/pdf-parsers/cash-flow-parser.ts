@@ -203,7 +203,10 @@ function extractSectionTransactions(
   // caused the parser to split one row into two: first half had no amount
   // (discarded), second half had no description (discarded) — dropping the row.
   const dateMatches = [...rowsBlock.matchAll(/(?:^|\n)\s*(\d{2})\/(\d{2})\/(\d{4})/gm)].map(m => {
-    // Re-anchor index to point at the date digits, not the preceding \n/spaces
+    // Re-anchor index to point at the date digits, not the preceding \n/spaces.
+    // Important: m[0] still holds the full original match string (including the
+    // leading \n + spaces), so we cannot use m[0].length for chunkStart — that
+    // overshoots past the date. Use the fixed length 10 (DD/MM/YYYY) instead.
     const dateStart = m.index! + m[0].indexOf(m[1] + "/" + m[2] + "/" + m[3]);
     return { ...m, index: dateStart } as RegExpMatchArray;
   });
@@ -211,7 +214,7 @@ function extractSectionTransactions(
 
   for (let i = 0; i < dateMatches.length; i++) {
     const m = dateMatches[i];
-    const chunkStart = m.index! + m[0].length;
+    const chunkStart = m.index! + 10; // DD/MM/YYYY is always exactly 10 chars
     const chunkEnd = i + 1 < dateMatches.length ? dateMatches[i + 1].index! : rowsBlock.length;
     const chunk = rowsBlock.slice(chunkStart, chunkEnd);
 
