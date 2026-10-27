@@ -369,7 +369,16 @@ function extractAllTransactions(text: string): CashFlowTransaction[] {
 //
 // Strategy: collect desc rows by ordinal position from each section's header→Total
 // slice, then find the post-Total amount block and zip by index.
-function extractImperialTransactions(text: string): CashFlowTransaction[] {
+// knownPayTotal and knownRecTotal are the section totals already extracted by
+// parseImperial — they come from the section Total lines in the amounts column
+// (right side), which the descriptions-only block (left side) does not contain.
+// Passing them in allows the amount-block walker to recognise where payment
+// amounts end and receipt amounts begin without re-deriving the totals.
+function extractImperialTransactions(
+  text: string,
+  knownPayTotal: number,
+  knownRecTotal: number,
+): CashFlowTransaction[] {
   const dateRe = /(\d{2})\/(\d{2})\/(\d{4})/g;
 
   // ── Step 1: collect payment descriptions ──
@@ -435,20 +444,14 @@ function extractImperialTransactions(text: string): CashFlowTransaction[] {
     .map(m => parseAmount(m[1]))
     .filter(n => n >= 100 && !isCalendarYear(n));
 
-  // ── Step 3: Read pay/rec section totals to slice out those totals from the amounts ──
-  // The amount block is: [pay amount 1..n] [pay Total] "Amount" [rec amount 1..m] [rec Total] [closing balance] ...
-  // Section totals from the already-parsed data are used to find the boundary.
-  const payTotalInBlock = (() => {
-    const payBlock = payHeaderIdx >= 0 && firstTotalIdx > payHeaderIdx
-      ? text.slice(payHeaderIdx, firstTotalIdx + 200)
-      : "";
-    return readSectionTotal(payBlock) ?? 0;
-  })();
-  const recTotalInBlock = (() => {
-    if (recHeaderIdx < 0) return 0;
-    const recEnd = secondTotalIdx > recHeaderIdx ? secondTotalIdx + 200 : text.length;
-    return readSectionTotal(text.slice(recHeaderIdx, recEnd)) ?? 0;
-  })();
+  // ── Step 3: Use the known section totals as phase markers ──
+  // In Imperial PDFs the "Total" lines in the left-column (descriptions block)
+  // carry no amount — amounts only appear in the right-column dump that starts
+  // after both Totals. readSectionTotal on the descriptions block returns null.
+  // Instead, use the totals already extracted by parseImperial (which correctly
+  // reads the right-column amounts via anchored regex on the full text).
+  const payTotalInBlock = knownPayTotal;
+  const recTotalInBlock = knownRecTotal;
 
   // Walk the amount list and assign: first payDescriptions.length amounts → payments,
   // skipping any amount that equals the payment Total (section separator),
@@ -727,7 +730,7 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     // in a separate column block after both "Total" lines. extractAllTransactions
     // (which calls extractSectionTransactions cutting at Total) sees no amounts
     // and produces wrong/empty rows. Use the Imperial-specific zip extractor instead.
-    transactions: extractImperialTransactions(text),
+    transactions: extractImperialTransactions(text, paymentsTotal, receiptsTotal),
     totalsFound: { payments: payTotalRead !== null, receipts: recTotalRead !== null },
   };
 }
