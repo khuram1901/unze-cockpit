@@ -229,22 +229,71 @@ function extractSectionTransactions(
       : null;
     let preDateAmount: number | null = null;
 
+    // 27/10/2026: pdf-parse glued-amount fix.
+    // When pdf-parse produces a row like "Jazz Bill payment fmo Oct-26824   "
+    // the amount (824) is a plain integer glued directly to description text with
+    // no whitespace separator.  The comma-grouped regex above misses it; the
+    // pre-date lookback below would wrongly steal the PREVIOUS row's amount.
+    // Fix: before the lookback, check whether the last non-whitespace content in
+    // the chunk ends in a run of digits preceded by a non-digit character — that
+    // trailing digit run is the glued amount.  We strip any leading 2-digit
+    // year-like prefix (e.g. "26" in "Oct-26") because those are part of the
+    // description date reference, not the amount.
+    if (!last) {
+      // Find a digit run at the very end of the chunk's content (before trailing
+      // whitespace/newlines), preceded by a non-digit (proving it's glued text).
+      const gluedMatch = chunk.match(/[^\d,\s](\d+)\s*(?:\n\s*)*$/);
+      if (gluedMatch) {
+        let digits = gluedMatch[1];
+        // Strip a leading 2-digit year reference if the digit run is long enough
+        // (e.g. "26824" → strip "26" → "824").  Only strip when the remaining
+        // portion is ≥ 2 digits so we don't accidentally discard a real amount.
+        if (digits.length > 2) {
+          // Check if it follows a month-YY pattern like "Oct-26824"
+          const yearGlueMatch = chunk.match(/[A-Za-z]+-(\d{2})(\d+)\s*(?:\n\s*)*$/);
+          if (yearGlueMatch) {
+            digits = yearGlueMatch[2]; // take only the post-year digits
+          }
+        }
+        const gluedAmt = parseAmount(digits);
+        if (gluedAmt > 0) {
+          // Mark position: the amount starts at (chunk.length - trailing_ws - digits.length)
+          const trailingWs = (chunk.match(/\s*$/) || [""])[0].length;
+          const amtIdx = chunk.length - trailingWs - digits.length;
+          last = { index: amtIdx, 0: digits, 1: digits } as unknown as RegExpMatchArray;
+        }
+      }
+    }
+
     // 26/10/2026: pdf-parse column-ordering quirk. On some PDFs the right-column
     // amount is emitted BEFORE the date+description, e.g.:
     //   "264,594\n21/10/2026\nNASIR IQBAL/FARHEEN NASIR Rent - Oct-26 = PKR\n"
     // When no comma-grouped number is in the post-date chunk, look at the text
     // immediately before the current date for a valid comma-grouped amount.
+    // Guard: only use this lookback when the pre-date text looks like a standalone
+    // amount on its own line (preceded by \n), not a trailing part of the previous
+    // row's description text (which would be a false positive like the 500,000
+    // tail that used to bleed into the Jazz Bill row).
     if (!last) {
       const lookback = Math.max(0, m.index! - 60);
       const preTail = rowsBlock.slice(lookback, m.index!);
       const preMatches = [...preTail.matchAll(commaNumRe)];
       if (preMatches.length > 0) {
         const preLast = preMatches[preMatches.length - 1];
-        const preAmt = parseAmount(preLast[1]);
-        if (preAmt > 0) {
-          preDateAmount = preAmt;
-          // Treat the entire post-date chunk as description when amount was pre-date.
-          last = { index: chunk.length, 0: "", 1: preLast[1] } as unknown as RegExpMatchArray;
+        // Only use the pre-date amount if it appears on its own line
+        // (i.e., preceded by \n or start-of-block and followed only by whitespace
+        // before the current date).  This prevents bleeding a previous row's
+        // description-embedded amount into the current row.
+        const preAmtStr = preLast[1];
+        const afterAmt = preTail.slice(preLast.index! + preAmtStr.length);
+        const isStandalone = /^\s*$/.test(afterAmt) && /(?:^|\n)\s*$/.test(preTail.slice(0, preLast.index!));
+        if (isStandalone) {
+          const preAmt = parseAmount(preAmtStr);
+          if (preAmt > 0) {
+            preDateAmount = preAmt;
+            // Treat the entire post-date chunk as description when amount was pre-date.
+            last = { index: chunk.length, 0: "", 1: preAmtStr } as unknown as RegExpMatchArray;
+          }
         }
       }
     }
