@@ -529,7 +529,7 @@ export default function RestaurantsFinancePage() {
                             {payments != null && payments > 0 ? pkr(payments) : "—"}
                           </td>
                           <td style={{ ...tdStyle, textAlign: "right", fontFamily: MONO, fontSize: "13px", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                            <span style={{ color: net >= 0 ? COLOURS.GREEN : COLOURS.RED }}>
+                            <span style={{ color: (s.closing_balance_pkr ?? 0) >= 0 ? COLOURS.GREEN : COLOURS.RED }}>
                               {pkr(s.closing_balance_pkr)}
                             </span>
                           </td>
@@ -648,7 +648,7 @@ export default function RestaurantsFinancePage() {
                         { label: "Opening Balance", value: d.opening_balance_pkr, color: COLOURS.NAVY },
                         { label: "Receipts", value: effectiveReceipts, color: COLOURS.GREEN },
                         { label: "Payments", value: effectivePayments, color: COLOURS.RED },
-                        { label: "Closing Balance", value: d.closing_balance_pkr, color: d.closing_balance_pkr != null && d.opening_balance_pkr != null && d.closing_balance_pkr >= d.opening_balance_pkr ? COLOURS.GREEN : COLOURS.RED },
+                        { label: "Closing Balance", value: d.closing_balance_pkr, color: (d.closing_balance_pkr ?? 0) >= 0 ? COLOURS.GREEN : COLOURS.RED },
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{
                           padding: "12px 14px",

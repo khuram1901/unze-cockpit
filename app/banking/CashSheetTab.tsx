@@ -770,7 +770,7 @@ export default function CashSheetTab() {
                       </>
                     )}
                     {!hasBalances && txnCount > 0 && (
-                      <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: net >= 0 ? COLOURS.GREEN : COLOURS.RED }}>
                         Net {net >= 0 ? "▲" : "▼"} {pkr(Math.abs(net))}
                       </div>
                     )}
