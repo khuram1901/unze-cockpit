@@ -240,7 +240,12 @@ export default function TaskDetailPanel({
       .then(({ data }) => setComments(data || []));
   }
 
-  useEffect(() => { loadComments(); }, [task.id]);
+  useEffect(() => {
+    loadComments();
+    // Mark comments on this task as read — clears the bell count for this task.
+    // Fire-and-forget; non-fatal if it fails.
+    authFetch(`/api/tasks/${task.id}/mark-comments-read`, { method: "POST" }).catch(() => {});
+  }, [task.id]);
 
   async function postComment() {
     const text = newComment.trim();
@@ -262,6 +267,8 @@ export default function TaskDetailPanel({
     if (!error) {
       setNewComment("");
       loadComments();
+      // Mark this task's comments as read for the commenter (they've just seen them).
+      authFetch(`/api/tasks/${task.id}/mark-comments-read`, { method: "POST" }).catch(() => {});
       // Fire-and-forget: notify task participants about the new comment.
       // Errors here are non-fatal — the comment has already been saved.
       authFetch(`/api/tasks/${task.id}/notify-comment`, {

@@ -318,6 +318,7 @@ export default function AuthWrapper({
     if (isAdmin && counts.machines_down_count > 0) items.push({ label: "Machines down", count: counts.machines_down_count, href: "/dashboard" });
     if (isAdmin && counts.pending_minutes_count > 0) items.push({ label: "Minutes pending", count: counts.pending_minutes_count, href: "/meetings" });
     if (counts.chat_unread_count > 0) items.push({ label: "Unread messages", count: counts.chat_unread_count, href: "#", action: () => setChatOpen(true) });
+    if (counts.unread_comments_count > 0) items.push({ label: "New task comments", count: counts.unread_comments_count, href: "/tasks" });
 
     setNotifItems(items);
     setNotifCount(items.reduce((s, i) => s + i.count, 0));
