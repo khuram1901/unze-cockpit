@@ -341,6 +341,173 @@ function extractAllTransactions(text: string): CashFlowTransaction[] {
   return out;
 }
 
+// ── Imperial-specific transaction extractor ────────────────────────────────────
+// Imperial PDFs have a two-column layout where pdf-parse emits ALL date+
+// description lines first (left column), followed by ALL amounts (right column)
+// after the "Total" keywords. This means extractSectionTransactions — which cuts
+// the rowsBlock at the Total line index — sees no amounts at all.
+//
+// Layout confirmed via pdfminer on Cash_Flow_21-10-2026.pdf (27/10/2026):
+//   Date  Payments  Amount
+//   Opening Balance  15,133,998
+//   21/10/2026 PACKAGES REAL ESTATE (PVT) LTD     ← 13 payment desc lines
+//   ...
+//   Total                                          ← no amount here in left col
+//   Receipts  Date
+//   21/10/2026 Cash Sale Rvd from Shop in Faysal Bank  ← 11 receipt desc lines
+//   ...
+//   Total
+//   Closing Balance  Date  Post Dated CHQs ...
+//   (ALL AMOUNTS in a separate block here):
+//   1,111,739                                      ← payment amounts (13)
+//   ...
+//   5,424,821                                      ← payment Total
+//   Amount
+//   1,525,214                                      ← receipt amounts (11)
+//   ...
+//   14,910,427                                     ← receipt Total
+//
+// Strategy: collect desc rows by ordinal position from each section's header→Total
+// slice, then find the post-Total amount block and zip by index.
+function extractImperialTransactions(text: string): CashFlowTransaction[] {
+  const dateRe = /(\d{2})\/(\d{2})\/(\d{4})/g;
+
+  // ── Step 1: collect payment descriptions ──
+  const payHeaderIdx = text.search(/Date\s*\n?\s*Payments/i);
+  const firstTotalIdx = text.search(/(?:^|\n)\s*Total\s*(?:\n|$)/i);
+  const recHeaderIdx = text.search(/Receipts\s*\n?\s*Date/i);
+  const secondTotalIdx = (() => {
+    if (firstTotalIdx < 0) return -1;
+    const afterFirst = text.slice(firstTotalIdx + 5);
+    const i = afterFirst.search(/(?:^|\n)\s*Total\s*(?:\n|$)/i);
+    return i >= 0 ? firstTotalIdx + 5 + i : -1;
+  })();
+
+  const payDescriptions: string[] = [];
+  const recDescriptions: string[] = [];
+
+  // Helper: extract date-keyed descriptions from a section block
+  function collectDescs(block: string): string[] {
+    const descs: string[] = [];
+    const dms = [...block.matchAll(dateRe)];
+    for (let i = 0; i < dms.length; i++) {
+      const chunkStart = dms[i].index! + dms[i][0].length;
+      const chunkEnd = i + 1 < dms.length ? dms[i + 1].index! : block.length;
+      const desc = block.slice(chunkStart, chunkEnd).replace(/\s+/g, " ").trim();
+      if (desc) descs.push(desc);
+    }
+    return descs;
+  }
+
+  // Payment descriptions: between "Date Payments" header and first "Total"
+  if (payHeaderIdx >= 0 && firstTotalIdx > payHeaderIdx) {
+    const payBlock = text.slice(payHeaderIdx, firstTotalIdx);
+    payDescriptions.push(...collectDescs(payBlock));
+  }
+
+  // Receipt descriptions: between "Receipts Date" header and second "Total"
+  if (recHeaderIdx >= 0) {
+    const recEnd = secondTotalIdx > recHeaderIdx ? secondTotalIdx : text.length;
+    const recBlock = text.slice(recHeaderIdx, recEnd);
+    recDescriptions.push(...collectDescs(recBlock));
+  }
+
+  if (payDescriptions.length === 0 && recDescriptions.length === 0) return [];
+
+  // ── Step 2: find the amount block — after the last "Total" keyword ──
+  // The amounts appear as a block of comma-grouped numbers after both section
+  // Totals. We identify the boundary as after the second Total line (or first
+  // if only one section). Amounts are one per line, interleaved with section
+  // totals (also comma-grouped) and "Amount" header labels.
+  const amountBlockStart = secondTotalIdx >= 0
+    ? secondTotalIdx
+    : (firstTotalIdx >= 0 ? firstTotalIdx : -1);
+
+  if (amountBlockStart < 0) return [];
+
+  const amountBlock = text.slice(amountBlockStart);
+  // Match comma-grouped numbers OR plain integers ≥ 3 digits (e.g. 450, 3,000).
+  // Exclude calendar-year-like values (2020–2035) which appear from PDC section
+  // date strings like "31/10/2026" that pdfminer/pdf-parse emit in the same block.
+  const anyNumRe = /(?<!\d)((?:\d{1,3}(?:,\d{3})+|\d{3,})(?:\.\d+)?)(?!\d)/g;
+  const isCalendarYear = (n: number) => n >= 2020 && n <= 2035;
+  const allCommaNums = [...amountBlock.matchAll(anyNumRe)]
+    .map(m => parseAmount(m[1]))
+    .filter(n => n >= 100 && !isCalendarYear(n));
+
+  // ── Step 3: Read pay/rec section totals to slice out those totals from the amounts ──
+  // The amount block is: [pay amount 1..n] [pay Total] "Amount" [rec amount 1..m] [rec Total] [closing balance] ...
+  // Section totals from the already-parsed data are used to find the boundary.
+  const payTotalInBlock = (() => {
+    const payBlock = payHeaderIdx >= 0 && firstTotalIdx > payHeaderIdx
+      ? text.slice(payHeaderIdx, firstTotalIdx + 200)
+      : "";
+    return readSectionTotal(payBlock) ?? 0;
+  })();
+  const recTotalInBlock = (() => {
+    if (recHeaderIdx < 0) return 0;
+    const recEnd = secondTotalIdx > recHeaderIdx ? secondTotalIdx + 200 : text.length;
+    return readSectionTotal(text.slice(recHeaderIdx, recEnd)) ?? 0;
+  })();
+
+  // Walk the amount list and assign: first payDescriptions.length amounts → payments,
+  // skipping any amount that equals the payment Total (section separator),
+  // then recDescriptions.length amounts → receipts (skipping receipt Total and
+  // anything after).
+  const payAmounts: number[] = [];
+  const recAmounts: number[] = [];
+  let phase = "payment"; // payment → receipt
+  let amtIdx = 0;
+
+  while (amtIdx < allCommaNums.length) {
+    const amt = allCommaNums[amtIdx];
+    amtIdx++;
+
+    if (phase === "payment") {
+      if (payTotalInBlock > 0 && Math.abs(amt - payTotalInBlock) < 1) {
+        // This is the payment Total line — switch to receipt phase
+        phase = "receipt";
+        continue;
+      }
+      if (payAmounts.length < payDescriptions.length) {
+        payAmounts.push(amt);
+      } else {
+        // More amounts than descriptions — switch to receipt phase
+        phase = "receipt";
+        if (recDescriptions.length > 0 && (recTotalInBlock === 0 || Math.abs(amt - recTotalInBlock) >= 1)) {
+          recAmounts.push(amt);
+        }
+      }
+    } else {
+      // receipt phase
+      if (recTotalInBlock > 0 && Math.abs(amt - recTotalInBlock) < 1) break; // receipt Total — done
+      if (recAmounts.length < recDescriptions.length) {
+        recAmounts.push(amt);
+      } else {
+        break; // closing balance and beyond
+      }
+    }
+  }
+
+  // ── Step 4: zip descriptions with amounts ──
+  const out: CashFlowTransaction[] = [];
+
+  for (let i = 0; i < payDescriptions.length; i++) {
+    const amount = payAmounts[i] ?? 0;
+    if (amount > 0) {
+      out.push({ txn_type: "payment", description: payDescriptions[i], amount });
+    }
+  }
+  for (let i = 0; i < recDescriptions.length; i++) {
+    const amount = recAmounts[i] ?? 0;
+    if (amount > 0) {
+      out.push({ txn_type: "receipt", description: recDescriptions[i], amount });
+    }
+  }
+
+  return out;
+}
+
 // Reads the first "Total" line of a section block. Returns the amount, 0 when
 // the sheet prints "-" (no rows that day), or null when no Total line exists.
 // "#####" is Excel's column-overflow marker and may precede the word Total.
@@ -556,7 +723,11 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     date,
     company: "imperial",
     rawText: text,
-    transactions: extractAllTransactions(text),
+    // 27/10/2026: Imperial PDFs emit all descriptions first, then all amounts
+    // in a separate column block after both "Total" lines. extractAllTransactions
+    // (which calls extractSectionTransactions cutting at Total) sees no amounts
+    // and produces wrong/empty rows. Use the Imperial-specific zip extractor instead.
+    transactions: extractImperialTransactions(text),
     totalsFound: { payments: payTotalRead !== null, receipts: recTotalRead !== null },
   };
 }
