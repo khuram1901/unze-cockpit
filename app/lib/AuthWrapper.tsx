@@ -5,6 +5,7 @@ import { supabase, loadMyPermissions, loadMyWidgetOverrides, ensureFreshSession,
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
 import ChatPanel from "./ChatPanel";
+import CommentsInboxPanel from "../tasks/CommentsInboxPanel";
 import FloatingTaskButton from "./FloatingTaskButton";
 import { canSeeAllTasks, canCreateAssignments, isSecondaryCEO, myIdentityEmails, type UserCtx, type PermOverrides, type WidgetOverrides } from "./permissions";
 import { COLOURS } from "./SharedUI";
@@ -58,6 +59,7 @@ export default function AuthWrapper({
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifItems, setNotifItems] = useState<{ label: string; count: number; href: string; action?: () => void }[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
+  const [commentsInboxOpen, setCommentsInboxOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const searchCacheRef = useRef<{
     tasks: { id: string; description: string; assigned_to: string | null; status: string }[];
@@ -318,7 +320,7 @@ export default function AuthWrapper({
     if (isAdmin && counts.machines_down_count > 0) items.push({ label: "Machines down", count: counts.machines_down_count, href: "/dashboard" });
     if (isAdmin && counts.pending_minutes_count > 0) items.push({ label: "Minutes pending", count: counts.pending_minutes_count, href: "/meetings" });
     if (counts.chat_unread_count > 0) items.push({ label: "Unread messages", count: counts.chat_unread_count, href: "#", action: () => setChatOpen(true) });
-    if (counts.unread_comments_count > 0) items.push({ label: "New task comments", count: counts.unread_comments_count, href: "/tasks" });
+    if (counts.unread_comments_count > 0) items.push({ label: "New task comments", count: counts.unread_comments_count, href: "#", action: () => setCommentsInboxOpen(true) });
 
     setNotifItems(items);
     setNotifCount(items.reduce((s, i) => s + i.count, 0));
@@ -487,6 +489,13 @@ export default function AuthWrapper({
         onClose={() => setChatOpen(false)}
         unreadCount={notifItems.find((i) => i.label === "Unread messages")?.count ?? 0}
         onMessagesRead={() => setTimeout(loadNotifications, 1500)}
+      />
+      <CommentsInboxPanel
+        open={commentsInboxOpen}
+        onClose={() => setCommentsInboxOpen(false)}
+        userEmail={email || ""}
+        userName={displayName(member, email)}
+        onCommentPosted={() => setTimeout(loadNotifications, 1500)}
       />
       {userCtx && canCreateAssignments(userCtx) && (
         <FloatingTaskButton />
