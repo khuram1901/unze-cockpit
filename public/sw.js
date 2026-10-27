@@ -1,4 +1,4 @@
-const CACHE_NAME = "pulse-mvj3nyy6";
+const CACHE_NAME = "pulse-mvqbgpl6";
 const OFFLINE_URLS = ["/my-dashboard", "/production", "/tasks"];
 
 self.addEventListener("install", (event) => {

@@ -197,7 +197,16 @@ function extractSectionTransactions(
   const sectionTotal = totalMatch && totalMatch[1] !== "-" ? parseAmount(totalMatch[1].replace(/[()]/g, "")) : 0;
   const rowsBlock = totalMatch ? sectionText.slice(0, totalMatch.index!) : sectionText;
 
-  const dateMatches = [...rowsBlock.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
+  // 27/10/2026: Only treat a date as a new-row marker when it appears at the
+  // START of a line (preceded by \n or the block start, plus optional spaces).
+  // Dates embedded mid-description (e.g. "CEO Petty Cash 21/10/2026  17,100")
+  // caused the parser to split one row into two: first half had no amount
+  // (discarded), second half had no description (discarded) — dropping the row.
+  const dateMatches = [...rowsBlock.matchAll(/(?:^|\n)\s*(\d{2})\/(\d{2})\/(\d{4})/gm)].map(m => {
+    // Re-anchor index to point at the date digits, not the preceding \n/spaces
+    const dateStart = m.index! + m[0].indexOf(m[1] + "/" + m[2] + "/" + m[3]);
+    return { ...m, index: dateStart } as RegExpMatchArray;
+  });
   const rows: CashFlowTransaction[] = [];
 
   for (let i = 0; i < dateMatches.length; i++) {
@@ -379,7 +388,8 @@ function extractImperialTransactions(
   knownPayTotal: number,
   knownRecTotal: number,
 ): CashFlowTransaction[] {
-  const dateRe = /(\d{2})\/(\d{2})\/(\d{4})/g;
+  // Only match dates at the start of a line — same fix as extractSectionTransactions.
+  const dateRe = /(?:^|\n)\s*(\d{2})\/(\d{2})\/(\d{4})/gm;
 
   // ── Step 1: collect payment descriptions ──
   const payHeaderIdx = text.search(/Date\s*\n?\s*Payments/i);
@@ -395,12 +405,14 @@ function extractImperialTransactions(
   const payDescriptions: string[] = [];
   const recDescriptions: string[] = [];
 
-  // Helper: extract date-keyed descriptions from a section block
+  // Helper: extract date-keyed descriptions from a section block.
+  // dateRe anchors to line-start so mid-description dates are ignored;
+  // chunkEnd points at the start of the NEXT date's leading \n/spaces.
   function collectDescs(block: string): string[] {
     const descs: string[] = [];
     const dms = [...block.matchAll(dateRe)];
     for (let i = 0; i < dms.length; i++) {
-      const chunkStart = dms[i].index! + dms[i][0].length;
+      const chunkStart = dms[i].index! + dms[i][0].length; // after the full match incl. \n+spaces
       const chunkEnd = i + 1 < dms.length ? dms[i + 1].index! : block.length;
       const desc = block.slice(chunkStart, chunkEnd).replace(/\s+/g, " ").trim();
       if (desc) descs.push(desc);
