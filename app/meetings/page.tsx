@@ -27,6 +27,24 @@ import {
   cardGrid,
 } from "../lib/SharedUI";
 
+// Canonical department list — kept in sync with MemberDrawer.tsx
+const MEETING_DEPARTMENTS = [
+  // Unze Group (shared)
+  "Accounts", "Admin", "CCTV and Surveillance", "Finance & Tax",
+  "Fit Out and Maintenance", "HR", "Internal Audit", "IT", "Management", "Marketing",
+  // IFPL
+  "Accounts IFPL", "LDS Store", "Online", "Retail Head Office", "Retail Store",
+  "Supply Chain", "Supply Chain Apparel", "Warehouse",
+  // Baranh
+  "Accounts Baranh", "Chocofay", "Restaurant", "Restaurant Head Office",
+  // UTPL
+  "Accounts Unze Trading", "Unze Meter Operations", "Unze Trading Operations",
+  // Unze London
+  "Accounts UK", "Retail Store UK",
+  // Cross-company
+  "Unze Group",
+];
+
 type ExtractedMinutes = {
   meeting_title: string;
   meeting_date: string;
@@ -315,7 +333,7 @@ function MeetingCard({
                 <div>
                   <label style={labelStyle}>Department</label>
                   <select value={draft.department} onChange={(e) => setDraft({ ...draft, department: e.target.value })} style={sf}>
-                    {["Unze Group", "Unze Trading Operations", "Finance & Tax", "HR", "Internal Audit", "Taxation", "Admin"].map((d) => (
+                    {MEETING_DEPARTMENTS.map((d) => (
                       <option key={d}>{d}</option>
                     ))}
                   </select>
@@ -1523,7 +1541,7 @@ export default function MeetingsPage() {
               <div>
                 <label style={labelStyle}>Department</label>
                 <select value={extracted.department} onChange={(e) => setExtracted({ ...extracted, department: e.target.value })} style={inputStyle}>
-                  {["Unze Group", "Unze Trading Operations", "Finance & Tax", "HR", "Internal Audit", "Taxation", "Admin"].map((d) => (
+                  {MEETING_DEPARTMENTS.map((d) => (
                     <option key={d}>{d}</option>
                   ))}
                 </select>
@@ -1658,7 +1676,7 @@ export default function MeetingsPage() {
                     <label style={{ ...labelStyle, fontSize: "12px" }}>Department</label>
                     <select value={item.department || ""} onChange={(e) => updateActionItem(i, { department: e.target.value })} style={smallField}>
                       <option value="">None</option>
-                      {["Unze Trading Operations", "Finance & Tax", "HR", "Internal Audit", "Taxation", "Admin"].map((d) => (
+                      {MEETING_DEPARTMENTS.map((d) => (
                         <option key={d}>{d}</option>
                       ))}
                     </select>
