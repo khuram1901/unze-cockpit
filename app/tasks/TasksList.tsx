@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
@@ -139,6 +139,8 @@ function getWeekStart(d: Date): string {
 export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport, department, scopedEmail }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean; department?: string | null; scopedEmail?: string | null }) {
   const isMobile = useMobile();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const taskIdFromUrl = searchParams.get("task");
   // Khuram (18/07/2026): the notification bell deep-links here with
   // ?filter=overdue|waiting|exception|submitted&scope=mine so clicking a
@@ -167,6 +169,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   );
   // Escalated task IDs — populated via RPC when the escalated filter is active.
   const [escalatedIds, setEscalatedIds] = useState<Set<string>>(new Set());
+  // Escalation count for the stat strip tile — fetched once on mount.
+  const [escalatedCount, setEscalatedCount] = useState<number>(0);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [companies, setCompanies] = useState<CompanyLite[]>([]);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
@@ -369,6 +373,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Must be a top-level useEffect — React's Rules of Hooks forbid calling hooks inside async functions.
   useEffect(() => {
     if (filter !== "escalated") return;
+    supabase.rpc("get_my_escalation_count").then(({ data, error }) => { if (!error && data != null) setEscalatedCount(data); });
     supabase.rpc("get_my_escalated_tasks").then(({ data }) => {
       if (data) setEscalatedIds(new Set((data as { task_id: string }[]).map((r) => r.task_id)));
     });
@@ -393,9 +398,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         setTimeout(() => {
           document.getElementById(`task-${taskIdFromUrl}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
         }, 100);
+        // Clear ?task= from URL so a page refresh doesn't re-open the
+        // same task modal. Keep other params (filter, scope, etc.) intact.
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("task");
+        const qs = params.toString();
+        router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
       }
     }
-  }, [taskIdFromUrl, tasks]);
+  }, [taskIdFromUrl, tasks, searchParams, pathname, router]);
 
   if (loading) return <SkeletonRows count={5} height="48px" />;
   if (errorMsg) return <ErrorBanner message={errorMsg} onRetry={loadTasks} />;
@@ -1296,12 +1307,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             { label: "Waiting Reply", value: kpi?.waiting_reply_count ?? waitingReply.length, accent: COLOURS.NAVY, soft: COLOURS.CARD, border: COLOURS.HAIRLINE },
             { label: "Stuck",         value: kpi?.stuck_count ?? 0,                        accent: COLOURS.NAVY, soft: COLOURS.CARD, border: COLOURS.HAIRLINE },
             { label: "Completed",     value: kpi?.completed_count ?? completedAll.length,  accent: COLOURS.GREEN, soft: COLOURS.CARD, border: COLOURS.HAIRLINE },
+            { label: "Escalated",     value: escalatedCount,                                accent: "#ea580c", soft: "#fff7ed", border: "#ea580c" },
           ].map(({ label, value, accent, soft, border, sub }) => (
             <div
               key={label}
-              onClick={() => setKpiDrawer(kpiDrawer === label ? null : label)}
+              onClick={() => { if (label === "Escalated") { setFilter(filter === "escalated" ? "all" : "escalated"); setKpiDrawer(null); } else { setKpiDrawer(kpiDrawer === label ? null : label); } }}
               style={{
-                backgroundColor: soft, border: `1px solid ${kpiDrawer === label ? border : COLOURS.HAIRLINE}`,
+                backgroundColor: soft, border: `1px solid ${(kpiDrawer === label || (label === "Escalated" && filter === "escalated")) ? border : COLOURS.HAIRLINE}`,
                 borderRadius: RADII.SM, padding: "8px 12px", cursor: "pointer",
               }}
             >
