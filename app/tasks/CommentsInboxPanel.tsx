@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { authedFetch } from "../lib/authedFetch";
+import { authFetch as authedFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 
 // ---------------------------------------------------------------------------
