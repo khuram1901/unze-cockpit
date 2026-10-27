@@ -1,5 +1,6 @@
 "use client";
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { authFetch as authedFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 
@@ -19,7 +20,7 @@ interface InboxTask {
   task_title: string;
   task_status: string;
   last_comment_at: string;
-  comments: InboxComment[];
+  comments: InboxComment[] | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,7 +61,6 @@ interface Props {
   onClose: () => void;
   userEmail: string;
   userName: string;
-  /** Called after a successful reply so the bell badge can refresh */
   onCommentPosted?: () => void;
 }
 
@@ -69,9 +69,11 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
   const [loading, setLoading] = useState(false);
   const [replies, setReplies] = useState<Record<string, string>>({});
   const [posting, setPosting] = useState<Record<string, boolean>>({});
-  const overlayRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
 
-  // Load inbox when panel opens
+  // Portal needs document to exist (client-side only)
+  useEffect(() => { setMounted(true); }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -104,7 +106,6 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
     setPosting(p => ({ ...p, [task.task_id]: true }));
 
     try {
-      // 1. Insert comment via Supabase directly (same pattern as TaskDetailPanel)
       const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -131,10 +132,8 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
         return;
       }
 
-      // 2. Mark this task's comments as read (clears it from inbox)
       await authedFetch(`/api/tasks/${task.task_id}/mark-comments-read`, { method: "POST" }).catch(() => {});
 
-      // 3. Fire email notification to other participants
       authedFetch(`/api/tasks/${task.task_id}/notify-comment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -145,7 +144,6 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
         }),
       }).catch(() => {});
 
-      // 4. Remove this task from the panel and clear reply draft
       setTasks(prev => prev.filter(t => t.task_id !== task.task_id));
       setReplies(r => { const n = { ...r }; delete n[task.task_id]; return n; });
       onCommentPosted?.();
@@ -160,22 +158,22 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
     onClose();
   }
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  const panelContent = (
     <>
       {/* Backdrop */}
       <div
-        ref={overlayRef}
         onClick={onClose}
         style={{
-          position: "fixed", inset: 0,
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
           background: "rgba(15,23,32,0.25)",
-          zIndex: 1201,
+          zIndex: 9998,
         }}
       />
 
-      {/* Panel */}
+      {/* Panel — rendered directly into document.body via Portal */}
       <div style={{
         position: "fixed",
         top: 0, right: 0, bottom: 0,
@@ -185,8 +183,10 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
         display: "flex",
         flexDirection: "column",
         boxShadow: "-8px 0 32px rgba(15,23,32,0.12)",
-        zIndex: 1202,
+        zIndex: 9999,
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        color: "#0F1720",
+        fontSize: 14,
       }}>
 
         {/* Header */}
@@ -197,6 +197,7 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
           alignItems: "center",
           justifyContent: "space-between",
           flexShrink: 0,
+          background: "#FFFFFF",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: "#0F1720" }}>Comments Inbox</span>
@@ -205,6 +206,7 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
                 background: "#B3261E", color: "#fff",
                 fontSize: 11, fontWeight: 700,
                 padding: "2px 8px", borderRadius: 10,
+                lineHeight: "18px",
               }}>
                 {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
               </span>
@@ -218,12 +220,21 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
               cursor: "pointer", color: "#64748B",
               fontSize: 18, borderRadius: 6,
               display: "flex", alignItems: "center", justifyContent: "center",
+              padding: 0, minHeight: 0,
             }}
           >✕</button>
         </div>
 
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Scrollable body */}
+        <div style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: 14,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          minHeight: 0,
+        }}>
 
           {loading && (
             <div style={{ textAlign: "center", padding: 40, color: "#64748B", fontSize: 13 }}>
@@ -239,146 +250,229 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
             </div>
           )}
 
-          {tasks.map(task => (
-            <div key={task.task_id} style={{
-              border: "1.5px solid #EEF0F3",
-              borderRadius: 10,
-              background: "#FFFFFF",
-              overflow: "hidden",
-            }}>
-              {/* Task header */}
-              <div style={{
-                padding: "11px 14px 9px",
-                background: "#F8F9FB",
-                borderBottom: "1.5px solid #EEF0F3",
-                display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8,
+          {tasks.map(task => {
+            const comments = Array.isArray(task.comments) ? task.comments : [];
+            return (
+              <div key={task.task_id} style={{
+                border: "1.5px solid #EEF0F3",
+                borderRadius: 10,
+                background: "#FFFFFF",
               }}>
-                <span style={{
-                  fontSize: 13, fontWeight: 700, color: "#0F1720",
-                  lineHeight: 1.35, flex: 1,
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}>
-                  {task.task_title}
-                </span>
-                <button
-                  onClick={() => handleOpenTask(task.task_id)}
-                  style={{
-                    fontSize: 11, color: "#64748B",
-                    background: "none", border: "1px solid #EEF0F3",
-                    borderRadius: 5, padding: "3px 8px",
-                    cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                  }}
-                >
-                  Open task ↗
-                </button>
-              </div>
 
-              {/* Comments */}
-              <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-                {task.comments.map((c, i) => (
-                  <div key={c.id} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
-                    {/* Unread indicator */}
-                    <div style={{
-                      width: 7, height: 7,
-                      background: "#B3261E", borderRadius: "50%",
-                      flexShrink: 0, marginTop: 8,
-                    }} />
-                    {/* Avatar */}
-                    <div style={{
-                      width: 28, height: 28, borderRadius: "50%",
-                      background: avatarColour(c.commented_by_email),
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 11, fontWeight: 700, color: "#fff",
-                      flexShrink: 0,
-                    }}>
-                      {initials(c.commented_by, c.commented_by_email)}
-                    </div>
-                    {/* Body */}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 3 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#0F1720" }}>
-                          {c.commented_by || c.commented_by_email || "Unknown"}
-                        </span>
-                        <span style={{ fontSize: 11, color: "#64748B" }}>{timeAgo(c.created_at)}</span>
-                      </div>
-                      <div style={{
-                        fontSize: 13, color: "#0F1720", lineHeight: 1.45,
-                        wordBreak: "break-word",
-                      }}>
-                        {c.comment_text}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Reply box */}
-              <div style={{
-                padding: "9px 14px 12px",
-                borderTop: "1.5px solid #EEF0F3",
-                display: "flex", gap: 8, alignItems: "flex-end",
-              }}>
+                {/* Task header */}
                 <div style={{
-                  flex: 1,
-                  border: `1.5px solid ${replies[task.task_id] ? "#0F7B5F" : "#EEF0F3"}`,
-                  borderRadius: 8,
-                  background: replies[task.task_id] ? "#fff" : "#F8F9FB",
-                  overflow: "hidden",
-                  transition: "border-color 0.15s",
+                  padding: "11px 14px 9px",
+                  background: "#F8F9FB",
+                  borderBottom: "1.5px solid #EEF0F3",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  borderRadius: "8px 8px 0 0",
                 }}>
-                  <textarea
-                    value={replies[task.task_id] ?? ""}
-                    onChange={e => setReplies(r => ({ ...r, [task.task_id]: e.target.value }))}
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                        e.preventDefault();
-                        handleReply(task);
-                      }
-                    }}
-                    placeholder="Reply… (⌘↵ to send)"
-                    rows={1}
+                  <span style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "#0F1720",
+                    lineHeight: "1.35",
+                    flex: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {task.task_title}
+                  </span>
+                  <button
+                    onClick={() => handleOpenTask(task.task_id)}
                     style={{
-                      width: "100%", border: "none", background: "transparent",
-                      padding: "8px 10px", fontSize: 13, color: "#0F1720",
-                      resize: "none", outline: "none",
-                      fontFamily: "inherit", minHeight: 36, maxHeight: 80,
+                      fontSize: 11,
+                      color: "#64748B",
+                      background: "none",
+                      border: "1px solid #EEF0F3",
+                      borderRadius: 5,
+                      padding: "3px 8px",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                      minHeight: 0,
+                      lineHeight: "16px",
+                      height: "auto",
                     }}
-                    onInput={e => {
-                      const el = e.currentTarget;
-                      el.style.height = "auto";
-                      el.style.height = Math.min(el.scrollHeight, 80) + "px";
-                    }}
-                  />
+                  >
+                    Open task ↗
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleReply(task)}
-                  disabled={!replies[task.task_id]?.trim() || posting[task.task_id]}
-                  style={{
-                    width: 34, height: 34,
-                    background: posting[task.task_id] ? "#64748B" : "#0F7B5F",
-                    border: "none", borderRadius: 8, cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0, opacity: !replies[task.task_id]?.trim() ? 0.4 : 1,
-                    transition: "background 0.15s, opacity 0.15s",
-                  }}
-                >
-                  {posting[task.task_id] ? (
-                    <span style={{ color: "#fff", fontSize: 11 }}>…</span>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="22" y1="2" x2="11" y2="13"/>
-                      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                    </svg>
-                  )}
-                </button>
+
+                {/* Comments list */}
+                {comments.length > 0 && (
+                  <div style={{
+                    padding: "10px 14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    background: "#FFFFFF",
+                  }}>
+                    {comments.map((c) => (
+                      <div key={c.id} style={{
+                        display: "flex",
+                        flexDirection: "row",
+                        gap: 9,
+                        alignItems: "flex-start",
+                        minHeight: 0,
+                      }}>
+                        {/* Unread dot */}
+                        <div style={{
+                          width: 7,
+                          height: 7,
+                          background: "#B3261E",
+                          borderRadius: "50%",
+                          flexShrink: 0,
+                          marginTop: 8,
+                        }} />
+                        {/* Avatar */}
+                        <div style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          background: avatarColour(c.commented_by_email),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#FFFFFF",
+                          flexShrink: 0,
+                          lineHeight: 1,
+                        }}>
+                          {initials(c.commented_by, c.commented_by_email)}
+                        </div>
+                        {/* Text body */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            display: "flex",
+                            flexDirection: "row",
+                            alignItems: "baseline",
+                            gap: 6,
+                            marginBottom: 3,
+                          }}>
+                            <span style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: "#0F1720",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}>
+                              {c.commented_by || c.commented_by_email || "Unknown"}
+                            </span>
+                            <span style={{ fontSize: 11, color: "#64748B", whiteSpace: "nowrap" }}>
+                              {timeAgo(c.created_at)}
+                            </span>
+                          </div>
+                          <div style={{
+                            fontSize: 13,
+                            color: "#0F1720",
+                            lineHeight: "1.45",
+                            wordBreak: "break-word",
+                            whiteSpace: "pre-wrap",
+                          }}>
+                            {c.comment_text}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Reply box */}
+                <div style={{
+                  padding: "9px 14px 12px",
+                  borderTop: "1.5px solid #EEF0F3",
+                  display: "flex",
+                  flexDirection: "row",
+                  gap: 8,
+                  alignItems: "flex-end",
+                  background: "#FFFFFF",
+                  borderRadius: "0 0 8px 8px",
+                }}>
+                  <div style={{
+                    flex: 1,
+                    border: `1.5px solid ${replies[task.task_id] ? "#0F7B5F" : "#EEF0F3"}`,
+                    borderRadius: 8,
+                    background: replies[task.task_id] ? "#FFFFFF" : "#F8F9FB",
+                    overflow: "hidden",
+                  }}>
+                    <textarea
+                      value={replies[task.task_id] ?? ""}
+                      onChange={e => setReplies(r => ({ ...r, [task.task_id]: e.target.value }))}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault();
+                          handleReply(task);
+                        }
+                      }}
+                      placeholder="Reply… (⌘↵ to send)"
+                      rows={1}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        border: "none",
+                        background: "transparent",
+                        padding: "8px 10px",
+                        fontSize: 13,
+                        color: "#0F1720",
+                        resize: "none",
+                        outline: "none",
+                        fontFamily: "inherit",
+                        minHeight: 36,
+                        maxHeight: 80,
+                        lineHeight: "1.4",
+                        boxSizing: "border-box",
+                      }}
+                      onInput={e => {
+                        const el = e.currentTarget;
+                        el.style.height = "auto";
+                        el.style.height = Math.min(el.scrollHeight, 80) + "px";
+                      }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleReply(task)}
+                    disabled={!replies[task.task_id]?.trim() || posting[task.task_id]}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      background: posting[task.task_id] ? "#64748B" : "#0F7B5F",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      opacity: !replies[task.task_id]?.trim() ? 0.4 : 1,
+                      minHeight: 0,
+                      padding: 0,
+                    }}
+                  >
+                    {posting[task.task_id] ? (
+                      <span style={{ color: "#fff", fontSize: 11 }}>…</span>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </>
   );
+
+  return createPortal(panelContent, document.body);
 }
