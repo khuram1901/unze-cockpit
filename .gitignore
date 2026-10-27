@@ -63,3 +63,4 @@ package-lock.json
 # Test user secrets (local only, never commit)
 .test-user-pw
 supabase/.temp/
+public/sw.js
