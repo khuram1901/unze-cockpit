@@ -171,7 +171,7 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
         style={{
           position: "fixed", inset: 0,
           background: "rgba(15,23,32,0.25)",
-          zIndex: 1000,
+          zIndex: 1201,
         }}
       />
 
@@ -185,7 +185,7 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
         display: "flex",
         flexDirection: "column",
         boxShadow: "-8px 0 32px rgba(15,23,32,0.12)",
-        zIndex: 1001,
+        zIndex: 1202,
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       }}>
 
