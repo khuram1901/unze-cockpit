@@ -24,9 +24,20 @@ async function getPdfjs() {
   if (!pdfjsCached) {
     // Use the legacy build — avoids browser-only APIs in Vercel serverless.
     pdfjsCached = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    // Disable the worker thread — not available in serverless; all parsing
-    // runs synchronously in the main thread instead.
-    pdfjsCached.GlobalWorkerOptions.workerSrc = "";
+
+    // pdfjs-dist v4.x: setting workerSrc = "" (empty string) is falsy and
+    // fails the internal `if (GlobalWorkerOptions.workerSrc)` check, which
+    // throws "No 'GlobalWorkerOptions.workerSrc' specified."
+    //
+    // Fix: resolve the bundled worker file path at runtime using createRequire
+    // and pass it as a file:// URL.  pdfjs-dist is in serverExternalPackages
+    // (next.config.ts) so it stays in node_modules and is resolvable here.
+    //
+    // 02/11/2026: previously used workerSrc = "" — broke in Vercel serverless.
+    const { createRequire } = await import("module");
+    const req = createRequire(import.meta.url);
+    const workerPath = req.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    pdfjsCached.GlobalWorkerOptions.workerSrc = `file://${workerPath}`;
   }
   return pdfjsCached;
 }

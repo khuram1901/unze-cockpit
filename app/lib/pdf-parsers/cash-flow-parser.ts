@@ -63,8 +63,23 @@ function extractInlineAmount(text: string, label: string): number | null {
 // was already taken), so the real day vanished from the app entirely.
 // Going with whichever date appears most often is far more reliable than a
 // single header line, for both companies' report formats.
+//
+// 02/11/2026: Cut at the PDC / Loan section before counting. When a company
+// has several post-dated cheques all due on the same future date those PDC
+// due-dates can outnumber the actual cash-position transaction date (e.g.
+// BRNH 29/10/2026 had 3 transaction rows but 4 PDC cheques on 09/11/2026,
+// so the frequency-count picked 09/11/2026 and filed the sheet 11 days in
+// the future). Limiting the search to the payment/receipt section — before
+// "Date Post Dated CHQs" or "Date Loan & Post Dated" — avoids this entirely
+// while keeping the mislabelled-header protection: the Imperial layout with
+// ~30 transaction rows still has its correct date far outnumber any one
+// header line.
 function extractDate(text: string): string | null {
-  const matches = [...text.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
+  // Strip the PDC section so future due-dates don't swamp the transaction date.
+  const pdcIdx = text.search(/Date\s+(?:Post\s*Dated\s*CHQs?|Loan\s*&\s*Post\s*Dated)/i);
+  const searchText = pdcIdx > 0 ? text.slice(0, pdcIdx) : text;
+
+  const matches = [...searchText.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
   if (matches.length === 0) return null;
   const counts = new Map<string, number>();
   for (const m of matches) {

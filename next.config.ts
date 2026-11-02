@@ -70,7 +70,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pdf-parse"],
+  // pdfjs-dist must NOT be bundled by webpack — it needs to stay in
+  // node_modules so that createRequire().resolve("pdfjs-dist/...") returns
+  // the real file path at runtime, letting us set a file:// workerSrc.
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
 
   async headers() {
     return [
