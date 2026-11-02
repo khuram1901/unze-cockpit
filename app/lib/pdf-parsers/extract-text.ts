@@ -25,19 +25,34 @@ async function getPdfjs() {
     // Use the legacy build — avoids browser-only APIs in Vercel serverless.
     pdfjsCached = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
-    // pdfjs-dist v4.x: setting workerSrc = "" (empty string) is falsy and
-    // fails the internal `if (GlobalWorkerOptions.workerSrc)` check, which
-    // throws "No 'GlobalWorkerOptions.workerSrc' specified."
+    // pdfjs-dist v4.x worker setup in Vercel serverless — full history:
     //
-    // Fix: resolve the bundled worker file path at runtime using createRequire
-    // and pass it as a file:// URL.  pdfjs-dist is in serverExternalPackages
-    // (next.config.ts) so it stays in node_modules and is resolvable here.
+    // Attempt 1: workerSrc = "" (empty string)
+    //   Failed: empty string is falsy; pdfjs `if (workerSrc)` check throws
+    //   "No 'GlobalWorkerOptions.workerSrc' specified."
     //
-    // 02/11/2026: previously used workerSrc = "" — broke in Vercel serverless.
+    // Attempt 2: workerSrc = `file://${workerPath}` (file:// URL)
+    //   Failed: pdfjs internally calls fileURLToPath() on this URL; on Vercel
+    //   Linux the URL format produces "File URL host must be 'localhost' or
+    //   empty on linux."
+    //
+    // Attempt 3 (current): workerPort with a real worker_threads.Worker
+    //   Give pdfjs an already-running Node.js Worker directly via workerPort.
+    //   With workerPort set, pdfjs uses the port object immediately and NEVER
+    //   reads workerSrc or calls fileURLToPath() — the URL issue never arises.
+    //   new NodeWorker(absolutePath) accepts a plain path string with no URL
+    //   conversion needed; no file:// prefix required.
+    //
+    //   pdfjs-dist is in serverExternalPackages (next.config.ts) so it stays
+    //   in node_modules and createRequire().resolve() returns the real path.
     const { createRequire } = await import("module");
     const req = createRequire(import.meta.url);
     const workerPath = req.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
-    pdfjsCached.GlobalWorkerOptions.workerSrc = `file://${workerPath}`;
+    const { Worker: NodeWorker } = await import("worker_threads");
+    const worker = new NodeWorker(workerPath); // plain absolute path — no file:// prefix
+    pdfjsCached.GlobalWorkerOptions.workerPort = worker; // port, not src
+    // Do NOT set workerSrc — workerPort takes precedence and pdfjs skips
+    // all URL parsing when a port is provided.
   }
   return pdfjsCached;
 }
