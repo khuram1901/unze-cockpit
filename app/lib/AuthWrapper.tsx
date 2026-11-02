@@ -68,10 +68,16 @@ export default function AuthWrapper({
   } | null>(null);
 
   // ── Inactivity auto-logout (security) ──────────────────────────────
-  // 30 minutes without mouse/keyboard/touch activity signs the user out.
-  // At 29 minutes a "Still there?" countdown appears; any activity or the
-  // Stay-signed-in button resets the clock.
-  const IDLE_LIMIT_MS = 30 * 60_000;
+  // Timeout is user-configurable (30 min / 1 hr / 2 hr) stored in
+  // localStorage under "unze:session-timeout-ms". Defaults to 30 min.
+  // Warning modal appears in the final 60 seconds before logout.
+  const IDLE_LIMIT_MS = (() => {
+    try {
+      const v = Number(localStorage.getItem("unze:session-timeout-ms"));
+      if (v === 60 * 60_000 || v === 120 * 60_000) return v;
+    } catch { /* ignore */ }
+    return 30 * 60_000; // default: 30 minutes
+  })();
   const IDLE_WARN_MS = 60_000; // warning shown for the final 60 seconds
   // Activity is tracked ACROSS TABS via localStorage — otherwise a
   // forgotten background tab would sign out a user actively working in
@@ -445,17 +451,75 @@ export default function AuthWrapper({
     <UserCtxContext.Provider value={{ userCtx, userEmail: email, member }}>
     <>
       {idleCountdown !== null && (
-        <div style={{ position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 3000, background: "#fff", border: "1.5px solid #B4791F", borderRadius: 12, boxShadow: "0 8px 30px rgba(15,23,32,0.25)", padding: "12px 18px", display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ fontSize: 13, color: "#0F1720" }}>
-            <b>Still there?</b> You&apos;ll be signed out in <b>{idleCountdown}s</b> for security.
-          </span>
-          <button
-            onClick={() => { lastActivityRef.current = Date.now(); try { localStorage.setItem(ACTIVITY_KEY, String(Date.now())); } catch { /* ignore */ } setIdleCountdown(null); }}
-            style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: "#0F1720", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer" }}
-          >
-            Stay signed in
-          </button>
-        </div>
+        <>
+          {/* Backdrop */}
+          <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,32,0.45)", zIndex: 9990 }} />
+          {/* Modal */}
+          <div style={{
+            position: "fixed", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 9991,
+            background: "#fff",
+            borderRadius: 16,
+            boxShadow: "0 20px 60px rgba(15,23,32,0.30)",
+            padding: "32px 36px",
+            width: 360,
+            maxWidth: "calc(100vw - 32px)",
+            textAlign: "center",
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          }}>
+            {/* Icon */}
+            <div style={{ fontSize: 36, marginBottom: 14 }}>⏱️</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#0F1720", marginBottom: 8 }}>
+              Still there?
+            </div>
+            <div style={{ fontSize: 13, color: "#64748B", lineHeight: 1.5, marginBottom: 24 }}>
+              You&apos;ll be signed out automatically in{" "}
+              <span style={{ fontWeight: 700, color: "#B3261E", fontSize: 15 }}>{idleCountdown}s</span>
+              {" "}due to inactivity.
+            </div>
+            {/* Countdown ring — simple progress bar */}
+            <div style={{ height: 4, background: "#EEF0F3", borderRadius: 4, marginBottom: 24, overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                background: idleCountdown > 30 ? "#0F7B5F" : idleCountdown > 10 ? "#B4791F" : "#B3261E",
+                borderRadius: 4,
+                width: `${Math.min(100, (idleCountdown / 60) * 100)}%`,
+                transition: "width 1s linear, background 0.3s",
+              }} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={async () => {
+                  lastActivityRef.current = Date.now();
+                  try { localStorage.setItem(ACTIVITY_KEY, String(Date.now())); } catch { /* ignore */ }
+                  setIdleCountdown(null);
+                }}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 8,
+                  background: "#0F1720", color: "#fff",
+                  border: "none", cursor: "pointer",
+                  fontWeight: 700, fontSize: 13,
+                  minHeight: 0,
+                }}
+              >
+                Stay signed in
+              </button>
+              <button
+                onClick={handleSignOut}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 8,
+                  background: "transparent", color: "#64748B",
+                  border: "1.5px solid #EEF0F3", cursor: "pointer",
+                  fontWeight: 600, fontSize: 13,
+                  minHeight: 0,
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </>
       )}
       <SidebarLayout
         userCtx={userCtx}

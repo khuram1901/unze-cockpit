@@ -100,4 +100,5 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_audit_log", title: "Audit Log", subtitle: "System activity trail", href: "/audit-log", icon: "📋", group: "Settings" },
   { permKey: "_backups", title: "Data & Backups", subtitle: "Database snapshots and source document archive", href: "/backups", icon: "💾", group: "Settings" },
   { permKey: "_profile", title: "Profile", subtitle: "Your account and preferences", href: "/profile", icon: "👤", group: "Settings" },
+  { permKey: "_session", title: "Session Timeout", subtitle: "Auto sign-out duration", href: "/settings/session", icon: "⏱️", group: "Settings" },
 ];
