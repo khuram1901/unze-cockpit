@@ -51,14 +51,23 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
 
     // Each item has a str and a transform [sx, bx, by, sy, tx, ty].
     // tx = x position (from left), ty = y position (from bottom of page).
+    // Cast to any[] to avoid pdfjs-dist TextItem | TextMarkedContent union
+    // type mismatch — pdfjsCached is already `any` at runtime.
     type TextItem = { str: string; x: number; y: number };
-    const items: TextItem[] = content.items
-      .filter(
-        (it): it is { str: string; transform: number[] } =>
-          "str" in it && Array.isArray((it as { transform?: unknown }).transform),
-      )
-      .map(it => ({ str: it.str, x: it.transform[4], y: it.transform[5] }))
-      .filter(it => it.str.trim() !== "");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawItems = (content.items as any[]).filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (it: any) => typeof it.str === "string" && Array.isArray(it.transform),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items: TextItem[] = rawItems
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((it: any) => ({
+        str: it.str as string,
+        x: it.transform[4] as number,
+        y: it.transform[5] as number,
+      }))
+      .filter((it: TextItem) => it.str.trim() !== "");
 
     if (items.length === 0) {
       pageTexts.push("");
