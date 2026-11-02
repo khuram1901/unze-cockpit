@@ -794,7 +794,11 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     // in a separate column block after both "Total" lines. extractAllTransactions
     // (which calls extractSectionTransactions cutting at Total) sees no amounts
     // and produces wrong/empty rows. Use the Imperial-specific zip extractor instead.
-    transactions: extractImperialTransactions(text, paymentsTotal, receiptsTotal),
+    //
+    // 02/11/2026: With the new pdfjs-dist coordinate-based extraction, each row
+    // is assembled as "date description amount" (left-col + right-col on same Y),
+    // so extractSectionTransactions now works correctly for Imperial too.
+    transactions: extractAllTransactions(text),
     totalsFound: { payments: payTotalRead !== null, receipts: recTotalRead !== null },
   };
 }

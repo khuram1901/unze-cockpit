@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     payments: number | null;
     pdc_total: number | null;
     closing_after_pdc: number | null;
-    transactions: { txn_type: string; description: string; amount: number }[];
+    transactions: { txn_type: string; description: string; amount: number; needs_review?: boolean }[];
     pdc_buckets: { dueDate: string; amount: number; label: string | null }[];
   } = {
     opening: null, closing: null, receipts: null, payments: null,
@@ -122,14 +122,16 @@ export async function POST(request: NextRequest) {
   //
   // Layer 2 — line-sum vs section-total cross-check: sum all receipt lines and
   //   compare to the PDF's parsed receipts total; same for payments. A mismatch
-  //   means one or more lines were parsed incorrectly.
+  //   means one or more lines were parsed incorrectly. SAVE IS NOT BLOCKED — the
+  //   sheet is saved, affected lines are flagged needs_review = true, and the user
+  //   is shown the exact gap. (Changed from hard block to warning 02/11/2026.)
   //
-  // Both checks produce ERRORS (blocking save), not warnings, because corrupt line
-  // items directly corrupt the Daily Position totals shown to the CEO.
+  // Layer 1 still produces ERRORS (blocking save) because a per-line amount of
+  // >500 crore is always a parse error with no valid interpretation.
 
   const MAX_SINGLE_TXN = 500_000_000; // PKR 50 crore — well above any real transaction
 
-  // Layer 1: per-line cap
+  // Layer 1: per-line cap (HARD BLOCK — unchanged)
   const suspiciousLines = parsed.transactions.filter(t => t.amount > MAX_SINGLE_TXN);
   if (suspiciousLines.length > 0) {
     for (const t of suspiciousLines) {
@@ -140,7 +142,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Layer 2: line-sum vs section-total cross-check
+  // Layer 2: line-sum vs section-total cross-check (WARNING — save proceeds,
+  // affected lines marked needs_review = true)
   if (parsed.transactions.length > 0 && parsed.receipts != null && parsed.payments != null) {
     const lineReceiptsSum = parsed.transactions
       .filter(t => t.txn_type === "receipt")
@@ -151,20 +154,29 @@ export async function POST(request: NextRequest) {
 
     const receiptGap = Math.abs(lineReceiptsSum - parsed.receipts);
     const paymentGap = Math.abs(linePaymentsSum - parsed.payments);
-    // Allow PKR 1 per line for rounding, plus a fixed PKR 100 floor
-    const tolerance = Math.max(100, parsed.transactions.length * 1);
+    // PKR 1 floor for genuine per-line rounding
+    const tolerance = 1;
 
     if (receiptGap > tolerance) {
       checks.push({
-        level: "error",
-        message: `Receipt lines add up to ${f(lineReceiptsSum)} but the PDF total is ${f(parsed.receipts)} (gap: ${f(receiptGap)}). One or more receipt lines may have been parsed incorrectly.`,
+        level: "warning",
+        message: `Receipt lines add up to ${f(lineReceiptsSum)} but the PDF total is ${f(parsed.receipts)} (gap: ${f(receiptGap)}). The sheet has been saved; receipt lines are flagged for review.`,
       });
+      // Mark all receipt lines needs_review — we can't tell which specific line
+      // is wrong, so flag the whole section for the user to check.
+      for (const t of parsed.transactions) {
+        if (t.txn_type === "receipt") t.needs_review = true;
+      }
     }
     if (paymentGap > tolerance) {
       checks.push({
-        level: "error",
-        message: `Payment lines add up to ${f(linePaymentsSum)} but the PDF total is ${f(parsed.payments)} (gap: ${f(paymentGap)}). One or more payment lines may have been parsed incorrectly.`,
+        level: "warning",
+        message: `Payment lines add up to ${f(linePaymentsSum)} but the PDF total is ${f(parsed.payments)} (gap: ${f(paymentGap)}). The sheet has been saved; payment lines are flagged for review.`,
       });
+      // Mark all payment lines needs_review
+      for (const t of parsed.transactions) {
+        if (t.txn_type === "payment") t.needs_review = true;
+      }
     }
   }
 

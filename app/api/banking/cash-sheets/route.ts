@@ -77,6 +77,7 @@ type TxnInput = {
   reference?: string;
   category?: string;
   sort_order?: number;
+  needs_review?: boolean; // 02/11/2026: set true when line-sum ≠ section total
 };
 
 export async function POST(request: NextRequest) {
@@ -221,6 +222,7 @@ export async function POST(request: NextRequest) {
       reference: t.reference || null,
       category: t.category || null,
       sort_order: t.sort_order ?? i,
+      needs_review: t.needs_review ?? false, // 02/11/2026: flag lines where line-sum ≠ section total
     }));
     const { error: txnErr } = await supabase.from("cash_sheet_transactions").insert(rows);
     if (txnErr) {
