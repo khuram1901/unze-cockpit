@@ -45,6 +45,22 @@ export default function SessionSettingsPage() {
 
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "32px 20px" }}>
+      {/* Back link */}
+      <a
+        href="/home"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 13,
+          color: SLATE,
+          textDecoration: "none",
+          marginBottom: 24,
+        }}
+      >
+        ← Back to Home
+      </a>
+
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: NAVY, margin: 0, marginBottom: 6 }}>
