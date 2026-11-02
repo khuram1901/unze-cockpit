@@ -71,6 +71,11 @@ export default function AuthCallbackPage() {
         return;
       }
 
+      // Google sign-in has no "Keep me signed in" checkbox, so we set it
+      // automatically — Google sessions are already long-lived and users
+      // signing in via Google expect to stay logged in.
+      try { localStorage.setItem("unze:keep-signed-in", "true"); } catch { /* private mode */ }
+
       // Check if this is a daily-entry-only user (no broader app access)
       const permData = await loadMyPermissions();
       const overrides = (permData as PermOverrides | null);

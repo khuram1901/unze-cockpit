@@ -117,7 +117,8 @@ export default function AuthWrapper({
         await pendingSessionRefresh();
         clearPermissionCaches();
         await supabase.auth.signOut();
-        router.push("/login?error=You were signed out after 30 minutes of inactivity.");
+        const mins = Math.round(IDLE_LIMIT_MS / 60_000);
+        router.push(`/login?error=You were signed out after ${mins} minutes of inactivity.`);
       } else if (idleFor >= IDLE_LIMIT_MS - IDLE_WARN_MS) {
         setIdleCountdown(Math.max(1, Math.ceil((IDLE_LIMIT_MS - idleFor) / 1000)));
       } else {
