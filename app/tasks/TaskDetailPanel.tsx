@@ -82,6 +82,7 @@ export default function TaskDetailPanel({
   memberPhones,
   onChanged,
   onClose,
+  hasUnreadComments,
 }: {
   task: Task;
   currentRole: string;
@@ -92,6 +93,7 @@ export default function TaskDetailPanel({
   memberPhones: Record<string, string>;
   onChanged: () => void;
   onClose?: () => void;
+  hasUnreadComments?: boolean;
 }) {
   const dlg = useConfirm();
   const userCtx = { email: myEmail, role: currentRole };
@@ -242,9 +244,12 @@ export default function TaskDetailPanel({
 
   useEffect(() => {
     loadComments();
-    // Mark comments on this task as read — clears the bell count for this task.
-    // Fire-and-forget; non-fatal if it fails.
-    authFetch(`/api/tasks/${task.id}/mark-comments-read`, { method: "POST" }).catch(() => {});
+    // Only mark as read if the caller confirmed this task has unread comments.
+    // Firing blindly on every open was writing rows for tasks with no unread
+    // comments, which confused the badge counter for dual-identity users.
+    if (hasUnreadComments) {
+      authFetch(`/api/tasks/${task.id}/mark-comments-read`, { method: "POST" }).catch(() => {});
+    }
   }, [task.id]);
 
   async function postComment() {

@@ -65,6 +65,7 @@ export default function TaskDetailModal({
   myEmail,
   memberPhones,
   onChanged,
+  hasUnreadComments,
 }: {
   task: Task | null;
   open: boolean;
@@ -76,6 +77,7 @@ export default function TaskDetailModal({
   myEmail: string | null;
   memberPhones: Record<string, string>;
   onChanged: () => void;
+  hasUnreadComments?: boolean;
 }) {
   if (!task) return null;
 
@@ -130,6 +132,7 @@ export default function TaskDetailModal({
           memberPhones={memberPhones}
           onChanged={onChanged}
           onClose={onClose}
+          hasUnreadComments={hasUnreadComments}
         />
       </div>
     </Modal>

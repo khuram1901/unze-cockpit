@@ -1317,6 +1317,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         myEmail={myEmail}
         memberPhones={memberPhones}
         onChanged={refreshAll}
+        hasUnreadComments={expandedTaskId ? unreadCommentTaskIds.has(expandedTaskId) : false}
       />
 
       {/* ═══ STAT STRIP — one compact row, sourced from get_tasks_kpi_summary()
