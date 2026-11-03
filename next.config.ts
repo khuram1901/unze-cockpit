@@ -71,9 +71,19 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   // pdfjs-dist must NOT be bundled by webpack — it needs to stay in
-  // node_modules so that createRequire().resolve("pdfjs-dist/...") returns
-  // the real file path at runtime, letting us set a file:// workerSrc.
+  // node_modules so that import("pdfjs-dist/legacy/build/pdf.worker.mjs")
+  // resolves correctly at runtime as a bare module specifier.
   serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
+
+  // Vercel's static file tracer cannot follow the dynamic import inside
+  // pdfjs-dist (it's marked /*webpackIgnore: true*/), so pdf.worker.mjs
+  // is not automatically included in the serverless function deployment.
+  // This setting forces it to be included alongside the parse route.
+  outputFileTracingIncludes: {
+    "/api/banking/cash-sheets/pdf/parse": [
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+    ],
+  },
 
   async headers() {
     return [
