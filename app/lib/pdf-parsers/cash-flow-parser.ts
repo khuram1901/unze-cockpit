@@ -631,11 +631,24 @@ function detectCompany(text: string): CashFlowParsed["company"] {
   if (lower.includes("closing balance unze trading")) return "unze";
   if (lower.includes("unze trading pvt")) return "unze";
 
+  // ── Imperial Footwear — checked BEFORE K&K Jhang ──
+  // Imperial PDFs often contain a transaction from "K N K Baranh Jhang" (a
+  // related entity) which, depending on how pdfjs decodes the font, can come
+  // out as "K & K Baranh Jhang" in some environments — matching the KKJ
+  // pattern below. Checking the strong Imperial header identifiers first
+  // ("Today Opening Balance" + "Today Closing Balance" are the two label rows
+  // that appear only in the IFPL sheet structure, and "Imperial Footwear Pvt
+  // Ltd" is the company title) ensures the correct company wins regardless of
+  // what appears in the transaction body text.
+  if (lower.includes("today opening balance") && lower.includes("today closing balance")) return "imperial";
+  if (lower.includes("imperial footwear pvt ltd")) return "imperial";
+
   // ── K&K Jhang ──
   if (lower.includes("k & k baranh jhang") || lower.includes("k&k baranh jhang") || lower.includes("k & k jhang")) return "kkj";
 
-  // ── Imperial Footwear ──
-  if (lower.includes("today opening balance") && lower.includes("today closing balance")) return "imperial";
+  // "imperial footwear" alone (without "pvt ltd") — fallback after KKJ so a
+  // Unze sheet that mentions Imperial as a payee but was not caught by the
+  // "opening balance total" block above still has a chance to match KKJ first.
   if (lower.includes("imperial footwear")) return "imperial";
 
   return "unknown";
