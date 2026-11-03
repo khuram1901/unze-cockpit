@@ -27,32 +27,32 @@ async function getPdfjs() {
 
     // pdfjs-dist v4.x worker setup in Vercel serverless — full history:
     //
+    // In Node.js, pdfjs-dist ALWAYS sets #isWorkerDisabled = true in its
+    // static initialiser (PDFWorker class, pdf.mjs line ~17315). Real worker
+    // threads are never spawned. Instead it always calls _setupFakeWorkerGlobal
+    // which does: await import(GlobalWorkerOptions.workerSrc)
+    // The imported module must export WorkerMessageHandler.
+    //
     // Attempt 1: workerSrc = "" (empty string)
-    //   Failed: empty string is falsy; pdfjs `if (workerSrc)` check throws
-    //   "No 'GlobalWorkerOptions.workerSrc' specified."
+    //   Failed: falsy; pdfjs throws "No 'GlobalWorkerOptions.workerSrc' specified."
     //
-    // Attempt 2: workerSrc = `file://${workerPath}` (file:// URL)
-    //   Failed: pdfjs internally calls fileURLToPath() on this URL; on Vercel
-    //   Linux the URL format produces "File URL host must be 'localhost' or
-    //   empty on linux."
+    // Attempt 2: workerSrc = `file://${resolvedPath}` (file:// URL)
+    //   Failed: pdfjs's dynamic import of the file:// URL hit
+    //   "File URL host must be 'localhost' or empty on linux" — the file:// URL
+    //   format produced by string concatenation was not handled by Node.js.
     //
-    // Attempt 3 (current): workerPort with a real worker_threads.Worker
-    //   Give pdfjs an already-running Node.js Worker directly via workerPort.
-    //   With workerPort set, pdfjs uses the port object immediately and NEVER
-    //   reads workerSrc or calls fileURLToPath() — the URL issue never arises.
-    //   new NodeWorker(absolutePath) accepts a plain path string with no URL
-    //   conversion needed; no file:// prefix required.
+    // Attempt 3: workerPort = new NodeWorker(path)
+    //   Failed: GlobalWorkerOptions.workerPort setter checks
+    //   `typeof Worker !== "undefined" && val instanceof Worker` — Worker is NOT
+    //   a global in Node.js so any non-null value throws "Invalid workerPort type."
     //
-    //   pdfjs-dist is in serverExternalPackages (next.config.ts) so it stays
-    //   in node_modules and createRequire().resolve() returns the real path.
-    const { createRequire } = await import("module");
-    const req = createRequire(import.meta.url);
-    const workerPath = req.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
-    const { Worker: NodeWorker } = await import("worker_threads");
-    const worker = new NodeWorker(workerPath); // plain absolute path — no file:// prefix
-    pdfjsCached.GlobalWorkerOptions.workerPort = worker; // port, not src
-    // Do NOT set workerSrc — workerPort takes precedence and pdfjs skips
-    // all URL parsing when a port is provided.
+    // Attempt 4 (current): bare module specifier as workerSrc
+    //   import("pdfjs-dist/legacy/build/pdf.worker.mjs") resolves from
+    //   node_modules with zero URL parsing. No file:// prefix, no path
+    //   construction, no fileURLToPath(). pdfjs-dist is in serverExternalPackages
+    //   (next.config.ts) so it stays in node_modules and is importable at runtime.
+    pdfjsCached.GlobalWorkerOptions.workerSrc =
+      "pdfjs-dist/legacy/build/pdf.worker.mjs";
   }
   return pdfjsCached;
 }
