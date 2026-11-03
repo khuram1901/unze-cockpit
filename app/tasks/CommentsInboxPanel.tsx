@@ -82,11 +82,8 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
         const json = await res.json();
         const loadedTasks: InboxTask[] = json.tasks ?? [];
         setTasks(loadedTasks);
-        // Mark every task as read the moment the inbox opens —
-        // this clears the bell badge even if the user doesn't reply.
-        for (const t of loadedTasks) {
-          authedFetch(`/api/tasks/${t.task_id}/mark-comments-read`, { method: "POST" }).catch(() => {});
-        }
+        // Do NOT auto-mark as read here — only mark read when the user
+        // actually opens a task or sends a reply.
       }
     } finally {
       setLoading(false);
@@ -160,6 +157,8 @@ export default function CommentsInboxPanel({ open, onClose, userEmail, userName,
   }
 
   function handleOpenTask(taskId: string) {
+    // Mark this task's comments as read before navigating
+    authedFetch(`/api/tasks/${taskId}/mark-comments-read`, { method: "POST" }).catch(() => {});
     window.location.href = `/tasks?task=${taskId}`;
     onClose();
   }

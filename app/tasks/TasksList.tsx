@@ -228,6 +228,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Bulk select — List view only, per Khuram. Move/change status/company/
   // owner across many tasks at once instead of one at a time.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [unreadCommentTaskIds, setUnreadCommentTaskIds] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkCompanyId, setBulkCompanyId] = useState("");
   const [bulkOwnerId, setBulkOwnerId] = useState("");
@@ -303,6 +304,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       // with tasks loaded but myEmail still null (which shows an empty list).
       setMyEmail(email);
       setTasks(data || []);
+      // Fetch unread comment task IDs in the background
+      authFetch("/api/tasks/unread-comment-ids")
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+          if (json?.taskIds) setUnreadCommentTaskIds(new Set(json.taskIds));
+        })
+        .catch(() => {});
       const taskIds = (data || []).map((t) => t.id);
       if (taskIds.length > 0) {
         const { data: assigneeRows } = await supabase.from("task_assignees").select("task_id, member_name").in("task_id", taskIds);
@@ -1089,7 +1097,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     return (
       <div id={`task-${task.id}`} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
         <div
-          onClick={() => setExpandedTaskId(isOpen ? null : task.id)}
+          onClick={() => {
+            const opening = !isOpen;
+            setExpandedTaskId(opening ? task.id : null);
+            // Mark comments as read when the task detail panel opens
+            if (opening && unreadCommentTaskIds.has(task.id)) {
+              authFetch(`/api/tasks/${task.id}/mark-comments-read`, { method: "POST" }).catch(() => {});
+              setUnreadCommentTaskIds(prev => { const s = new Set(prev); s.delete(task.id); return s; });
+            }
+          }}
           style={{
             padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between",
             alignItems: "center", gap: "8px",
@@ -1221,7 +1237,19 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {task.task_comments && task.task_comments.length > 0 && (
                 <>
                   <span>·</span>
-                  <span>{task.task_comments.length} comment{task.task_comments.length > 1 ? "s" : ""}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    {unreadCommentTaskIds.has(task.id) && (
+                      <span style={{
+                        display: "inline-block",
+                        width: 7, height: 7,
+                        borderRadius: "50%",
+                        background: "#B3261E",
+                        flexShrink: 0,
+                        verticalAlign: "middle",
+                      }} title="Unread comments" />
+                    )}
+                    {task.task_comments.length} comment{task.task_comments.length > 1 ? "s" : ""}
+                  </span>
                 </>
               )}
               {task.meeting_id && (
