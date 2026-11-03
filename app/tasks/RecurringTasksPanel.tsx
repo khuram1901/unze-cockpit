@@ -101,6 +101,10 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
   const [editDueDays, setEditDueDays] = useState("3");
   const [savingEdit, setSavingEdit] = useState(false);
 
+  const [firingId, setFiringId] = useState<string | null>(null);
+  const [fireDueDate, setFireDueDate] = useState("");
+  const [firingInProgress, setFiringInProgress] = useState(false);
+
   async function loadData() {
     setLoading(true);
     const today = new Date().toISOString().slice(0, 10);
@@ -222,6 +226,29 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
     logAction("Updated", "recurring_tasks", `Edited: ${editDesc}`, id);
     setEditingId(null);
     loadData();
+  }
+
+  async function fireNow(id: string) {
+    if (!fireDueDate) { alert("Please select a due date."); return; }
+    setFiringInProgress(true);
+    try {
+      const res = await fetch("/api/tasks/recurring/fire-now", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId: id, firstDueDate: fireDueDate }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "Failed to fire task"); return; }
+      const tmpl = templates.find((t) => t.id === id);
+      logAction("Fired", "recurring_tasks", `Manually fired: ${tmpl?.description || id}`, id);
+      setFiringId(null);
+      setFireDueDate("");
+      loadData();
+    } catch (err) {
+      alert("Error firing task");
+    } finally {
+      setFiringInProgress(false);
+    }
   }
 
   return (
@@ -360,6 +387,12 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                         backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, border: `1px solid ${COLOURS.HAIRLINE}`,
                         borderRadius: RADII.SM, padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
                       }}>Edit</button>
+                      <button onClick={() => { setFiringId(firingId === t.id ? null : t.id); setFireDueDate(""); }} style={{
+                        backgroundColor: firingId === t.id ? COLOURS.NAVY : COLOURS.CARD,
+                        color: firingId === t.id ? "white" : COLOURS.NAVY,
+                        border: `1px solid ${firingId === t.id ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                        borderRadius: RADII.SM, padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                      }}>Fire Now</button>
                       <button onClick={() => toggleActive(t.id, t.active)} style={{
                         backgroundColor: t.active ? COLOURS.AMBER : COLOURS.GREEN,
                         color: "white", border: "none", borderRadius: RADII.SM,
@@ -371,6 +404,22 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                         backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`,
                         borderRadius: RADII.SM, padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
                       }}>Delete</button>
+                    </div>
+                  )}
+                  {firingId === t.id && (
+                    <div style={{ marginTop: "8px", padding: "10px 14px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <label style={{ ...lbl, marginBottom: 0 }}>Due Date
+                        <input type="date" style={{ ...inp, width: "auto", marginTop: "2px" }} value={fireDueDate} onChange={(e) => setFireDueDate(e.target.value)} required />
+                      </label>
+                      <button onClick={() => fireNow(t.id)} disabled={firingInProgress} style={{
+                        backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: RADII.SM,
+                        padding: "6px 16px", fontSize: "12.5px", fontWeight: 700, cursor: "pointer",
+                        opacity: firingInProgress ? 0.7 : 1, marginTop: "12px",
+                      }}>{firingInProgress ? "Firing..." : "Create Task"}</button>
+                      <button onClick={() => { setFiringId(null); setFireDueDate(""); }} style={{
+                        backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`,
+                        borderRadius: RADII.SM, padding: "6px 16px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer", marginTop: "12px",
+                      }}>Cancel</button>
                     </div>
                   )}
                 </div>
