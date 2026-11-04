@@ -1151,8 +1151,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                   <Legend iconType="plainline" wrapperStyle={{ fontSize: "11px" }} />
                   <Line
                     type="monotone" dataKey="actual" stroke={NAVY} strokeWidth={2.5}
-                    dot={(props: { cx: number; cy: number; value: number | null }) => props.value !== null ? <circle key={`dot-${props.cx}`} cx={props.cx} cy={props.cy} r={3} fill={NAVY} stroke="white" strokeWidth={1} /> : <g key={`dot-${props.cx}`} />}
-                    connectNulls={false} name="Actual Closing"
+                    dot={false} connectNulls={false} name="Actual Closing"
                   />
                   {hasProjection && (
                     <Line
