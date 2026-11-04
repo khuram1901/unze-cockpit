@@ -515,7 +515,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   if (positions.length === 0) alerts.push("No daily position entered yet");
   else if (staleDays > 1) alerts.push(`Cash data is ${staleDays} days old`);
   if (!plan) alerts.push("No monthly plan set");
-  if (!opening) alerts.push("No opening balance set");
 
   // Continuity audit: previous day's closing must match the next day's opening.
   // A break means the sheet may be corrupted or a figure was entered wrong.
