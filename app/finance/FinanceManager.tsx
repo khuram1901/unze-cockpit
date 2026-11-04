@@ -940,67 +940,100 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               </ResponsiveContainer>
             </div>
 
-            {/* RIGHT — Cumulative Receipts vs Payments with pace line */}
+            {/* RIGHT — % of Plan chart: cumulative actuals as % of monthly plan, with pace line */}
             {(() => {
               const monthLabel = positionMonthOptions.find((o) => o.value === positionsMonth)?.label ?? positionsMonth;
               const planRecvTotal = plan?.tentative_receivables ?? 0;
               const planPayTotal  = plan?.tentative_payouts    ?? 0;
+              const hasPlan = planRecvTotal > 0 || planPayTotal > 0;
 
-              // Working days in the selected month = calendar days Mon–Sat (Sat is a work day in Pakistan)
-              // Simple count: total days in month minus Sundays.
+              // Working days Mon–Sat
               const [pY, pM] = positionsMonth.split("-").map(Number);
               const daysInMonth = new Date(Date.UTC(pY, pM, 0)).getUTCDate();
               let workingDays = 0;
               for (let d = 1; d <= daysInMonth; d++) {
-                const dow = new Date(Date.UTC(pY, pM - 1, d)).getUTCDay(); // 0=Sun
-                if (dow !== 0) workingDays++;
+                if (new Date(Date.UTC(pY, pM - 1, d)).getUTCDay() !== 0) workingDays++;
               }
-              const dailyRecvPace = workingDays > 0 ? planRecvTotal / workingDays : 0;
-              const dailyPayPace  = workingDays > 0 ? planPayTotal  / workingDays : 0;
 
-              // Build cumulative series day by day over the whole month,
-              // pace line covers all working days; actual bars only on days with entries.
-              // We index by calendar day number for alignment.
-              type DayPoint = { day: string; cumActualRecv?: number; cumActualPay?: number; paceRecv: number; pacePay: number };
+              // Helper: PKR → "PKR 45.2M" / "PKR 1.3B"
+              const fmtM = (v: number) => {
+                const abs = Math.abs(v);
+                if (abs >= 1_000_000_000) return `PKR ${(v / 1_000_000_000).toFixed(1)}B`;
+                if (abs >= 1_000_000)     return `PKR ${(v / 1_000_000).toFixed(1)}M`;
+                return `PKR ${Math.round(v).toLocaleString()}`;
+              };
+
+              // Build points — Y values are % of plan (0–100)
+              type DayPoint = {
+                day: string;
+                paceRecvPct: number;  pacePayPct: number;
+                recvPct?: number;     payPct?: number;
+                // raw PKR for tooltip
+                recvPKR?: number;     payPKR?: number;
+                paceRecvPKR: number;  pacePayPKR: number;
+              };
               const points: DayPoint[] = [];
               let cumRecv = 0;
               let cumPay  = 0;
-              let paceRecvAcc = 0;
-              let pacePayAcc  = 0;
-              const actualByDay: Record<string, { r: number; p: number }> = {};
+              let workDaysSoFar = 0;
+              const actualByDay: Record<number, { r: number; p: number }> = {};
               for (const dp of actualDays) {
                 const dayNum = parseInt(dp.position_date.split("-")[2], 10);
                 actualByDay[dayNum] = { r: dp.total_receipts, p: dp.total_payments };
               }
               for (let d = 1; d <= daysInMonth; d++) {
-                const dow = new Date(Date.UTC(pY, pM - 1, d)).getUTCDay();
-                if (dow === 0) continue; // skip Sundays for pace line
-                paceRecvAcc += dailyRecvPace;
-                pacePayAcc  += dailyPayPace;
+                if (new Date(Date.UTC(pY, pM - 1, d)).getUTCDay() === 0) continue;
+                workDaysSoFar++;
+                const paceRecvPKR = planRecvTotal > 0 ? planRecvTotal * (workDaysSoFar / workingDays) : 0;
+                const pacePayPKR  = planPayTotal  > 0 ? planPayTotal  * (workDaysSoFar / workingDays) : 0;
                 const hasActual = actualByDay[d] !== undefined;
                 if (hasActual) {
                   cumRecv += actualByDay[d].r;
                   cumPay  += actualByDay[d].p;
                 }
-                const label = `${String(d).padStart(2, "0")}`;
+                const label = String(d).padStart(2, "0");
                 points.push({
                   day: label,
-                  paceRecv: Math.round(paceRecvAcc),
-                  pacePay:  Math.round(pacePayAcc),
-                  ...(hasActual ? { cumActualRecv: Math.round(cumRecv), cumActualPay: Math.round(cumPay) } : {}),
+                  paceRecvPct: planRecvTotal > 0 ? parseFloat(((paceRecvPKR / planRecvTotal) * 100).toFixed(1)) : 0,
+                  pacePayPct:  planPayTotal  > 0 ? parseFloat(((pacePayPKR  / planPayTotal)  * 100).toFixed(1)) : 0,
+                  paceRecvPKR: Math.round(paceRecvPKR),
+                  pacePayPKR:  Math.round(pacePayPKR),
+                  ...(hasActual ? {
+                    recvPct: planRecvTotal > 0 ? parseFloat(((cumRecv / planRecvTotal) * 100).toFixed(1)) : 0,
+                    payPct:  planPayTotal  > 0 ? parseFloat(((cumPay  / planPayTotal)  * 100).toFixed(1)) : 0,
+                    recvPKR: Math.round(cumRecv),
+                    payPKR:  Math.round(cumPay),
+                  } : {}),
                 });
               }
 
-              // Variance vs plan-to-date (based on days elapsed)
-              const lastActual = actualDays[actualDays.length - 1]; // earliest = first of month (asc sorted)
+              // Variance in PKR (for callout)
+              const lastActual = actualDays[actualDays.length - 1];
               const lastActualDay = lastActual ? parseInt(lastActual.position_date.split("-")[2], 10) : 0;
-              // plan-to-date = pace up through the last actual day
-              const planToDateRecv = workingDays > 0 ? planRecvTotal * (points.filter(p => parseInt(p.day) <= lastActualDay).length / workingDays) : 0;
-              const planToDatePay  = workingDays > 0 ? planPayTotal  * (points.filter(p => parseInt(p.day) <= lastActualDay).length / workingDays) : 0;
+              const workDaysToLastActual = points.filter(p => parseInt(p.day) <= lastActualDay).length;
+              const planToDateRecv = planRecvTotal * (workDaysToLastActual / workingDays);
+              const planToDatePay  = planPayTotal  * (workDaysToLastActual / workingDays);
               const varRecv = cumRecv - planToDateRecv;
               const varPay  = cumPay  - planToDatePay;
 
-              const hasPlan = planRecvTotal > 0 || planPayTotal > 0;
+              // Custom tooltip showing % + full PKR
+              const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; payload: DayPoint }[]; label?: string }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const pt = payload[0].payload;
+                return (
+                  <div style={{ background: "#fff", border: `1px solid ${HAIRLINE}`, borderRadius: "8px", padding: "10px 14px", fontSize: "12px", lineHeight: "1.7" }}>
+                    <div style={{ fontWeight: 600, color: NAVY, marginBottom: "4px" }}>Day {label}</div>
+                    {pt.recvPct !== undefined && (
+                      <div style={{ color: "#0F7B5F" }}>Actual Receipts: {pt.recvPct}% &nbsp;<span style={{ color: SLATE }}>({fmtM(pt.recvPKR ?? 0)})</span></div>
+                    )}
+                    {pt.payPct !== undefined && (
+                      <div style={{ color: "#B3261E" }}>Actual Payments: {pt.payPct}% &nbsp;<span style={{ color: SLATE }}>({fmtM(pt.payPKR ?? 0)})</span></div>
+                    )}
+                    <div style={{ color: "#059669", opacity: 0.8 }}>Planned Receipts: {pt.paceRecvPct}% &nbsp;<span style={{ color: SLATE }}>({fmtM(pt.paceRecvPKR)})</span></div>
+                    <div style={{ color: "#D97706", opacity: 0.8 }}>Planned Payments: {pt.pacePayPct}% &nbsp;<span style={{ color: SLATE }}>({fmtM(pt.pacePayPKR)})</span></div>
+                  </div>
+                );
+              };
 
               return (
                 <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
@@ -1014,29 +1047,27 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                     <ComposedChart data={points} barCategoryGap="20%" barGap={2}>
                       <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} vertical={false} />
                       <XAxis dataKey="day" tick={{ fontSize: 10, fill: SLATE }} interval="preserveStartEnd" />
-                      <YAxis tick={{ fontSize: 10, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} width={72} />
-                      <Tooltip
-                        formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]}
-                        labelFormatter={(label) => `Day ${label}`}
+                      <YAxis
+                        tick={{ fontSize: 10, fill: SLATE }}
+                        tickFormatter={(v) => `${v}%`}
+                        domain={[0, 100]}
+                        width={36}
                       />
+                      <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: "11px" }} />
-                      <Bar dataKey="cumActualRecv" name="Actual Receipts" fill="#0F7B5F" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="cumActualPay"  name="Actual Payments" fill="#B3261E" radius={[3, 3, 0, 0]} />
-                      {hasPlan && (
-                        <Line dataKey="paceRecv" name="Planned Receipts" stroke="#34D399" strokeDasharray="6 3" strokeWidth={2} dot={false} />
-                      )}
-                      {hasPlan && (
-                        <Line dataKey="pacePay" name="Planned Payments" stroke="#F59E0B" strokeDasharray="6 3" strokeWidth={2} dot={false} />
-                      )}
+                      <Bar dataKey="recvPct"      name="Actual Receipts"  fill="#0F7B5F" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="payPct"       name="Actual Payments"  fill="#B3261E" radius={[3, 3, 0, 0]} />
+                      {hasPlan && <Line dataKey="paceRecvPct" name="Planned Receipts" stroke="#34D399" strokeDasharray="6 3" strokeWidth={2} dot={false} />}
+                      {hasPlan && <Line dataKey="pacePayPct"  name="Planned Payments" stroke="#F59E0B" strokeDasharray="6 3" strokeWidth={2} dot={false} />}
                     </ComposedChart>
                   </ResponsiveContainer>
-                  {/* Variance callout */}
+                  {/* Variance callout — millions format */}
                   {hasPlan && lastActualDay > 0 && (
                     <div style={{ display: "flex", gap: "24px", marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${HAIRLINE}` }}>
                       <div>
                         <div style={{ fontSize: "11px", color: SLATE, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: "2px" }}>Receipts vs plan</div>
                         <div style={{ fontSize: "13px", fontWeight: 600, color: varRecv >= 0 ? GREEN : RED }}>
-                          {varRecv >= 0 ? "+" : "−"} PKR {Math.abs(Math.round(varRecv)).toLocaleString()}
+                          {varRecv >= 0 ? "+" : "−"} {fmtM(Math.abs(varRecv))}
                           <span style={{ fontWeight: 400, color: SLATE, marginLeft: "4px" }}>
                             {varRecv >= 0 ? "ahead" : "behind"} pace
                           </span>
@@ -1045,7 +1076,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                       <div>
                         <div style={{ fontSize: "11px", color: SLATE, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: "2px" }}>Payments vs plan</div>
                         <div style={{ fontSize: "13px", fontWeight: 600, color: varPay <= 0 ? GREEN : AMBER }}>
-                          {varPay >= 0 ? "+" : "−"} PKR {Math.abs(Math.round(varPay)).toLocaleString()}
+                          {varPay >= 0 ? "+" : "−"} {fmtM(Math.abs(varPay))}
                           <span style={{ fontWeight: 400, color: SLATE, marginLeft: "4px" }}>
                             {varPay <= 0 ? "under budget" : "over budget"}
                           </span>
