@@ -318,7 +318,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         .from("monthly_cash_plan")
         .select("id, plan_month, tentative_receivables, tentative_payouts")
         .eq("company_id", companyId)
-        .eq("plan_month", currentMonthISO())
+        .eq("plan_month", selectedMonth)
         .maybeSingle(),
       supabase
         .from("daily_cash_position")
@@ -940,23 +940,122 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               </ResponsiveContainer>
             </div>
 
-            {/* RIGHT — Daily Receipts vs Payments */}
-            <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
-              <div style={chartLabel}>
-                Receipts vs Payments — {positionMonthOptions.find((o) => o.value === positionsMonth)?.label ?? positionsMonth}
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={flowData} barCategoryGap="20%" barGap={2}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: SLATE }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 10, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} width={72} />
-                  <Tooltip formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <Bar dataKey="receipts" name="Receipts" fill={GREEN} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="payments" name="Payments" fill={RED}   radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {/* RIGHT — Cumulative Receipts vs Payments with pace line */}
+            {(() => {
+              const monthLabel = positionMonthOptions.find((o) => o.value === positionsMonth)?.label ?? positionsMonth;
+              const planRecvTotal = plan?.tentative_receivables ?? 0;
+              const planPayTotal  = plan?.tentative_payouts    ?? 0;
+
+              // Working days in the selected month = calendar days Mon–Sat (Sat is a work day in Pakistan)
+              // Simple count: total days in month minus Sundays.
+              const [pY, pM] = positionsMonth.split("-").map(Number);
+              const daysInMonth = new Date(Date.UTC(pY, pM, 0)).getUTCDate();
+              let workingDays = 0;
+              for (let d = 1; d <= daysInMonth; d++) {
+                const dow = new Date(Date.UTC(pY, pM - 1, d)).getUTCDay(); // 0=Sun
+                if (dow !== 0) workingDays++;
+              }
+              const dailyRecvPace = workingDays > 0 ? planRecvTotal / workingDays : 0;
+              const dailyPayPace  = workingDays > 0 ? planPayTotal  / workingDays : 0;
+
+              // Build cumulative series day by day over the whole month,
+              // pace line covers all working days; actual bars only on days with entries.
+              // We index by calendar day number for alignment.
+              type DayPoint = { day: string; cumActualRecv?: number; cumActualPay?: number; paceRecv: number; pacePay: number };
+              const points: DayPoint[] = [];
+              let cumRecv = 0;
+              let cumPay  = 0;
+              let paceRecvAcc = 0;
+              let pacePayAcc  = 0;
+              const actualByDay: Record<string, { r: number; p: number }> = {};
+              for (const dp of actualDays) {
+                const dayNum = parseInt(dp.position_date.split("-")[2], 10);
+                actualByDay[dayNum] = { r: dp.total_receipts, p: dp.total_payments };
+              }
+              for (let d = 1; d <= daysInMonth; d++) {
+                const dow = new Date(Date.UTC(pY, pM - 1, d)).getUTCDay();
+                if (dow === 0) continue; // skip Sundays for pace line
+                paceRecvAcc += dailyRecvPace;
+                pacePayAcc  += dailyPayPace;
+                const hasActual = actualByDay[d] !== undefined;
+                if (hasActual) {
+                  cumRecv += actualByDay[d].r;
+                  cumPay  += actualByDay[d].p;
+                }
+                const label = `${String(d).padStart(2, "0")}`;
+                points.push({
+                  day: label,
+                  paceRecv: Math.round(paceRecvAcc),
+                  pacePay:  Math.round(pacePayAcc),
+                  ...(hasActual ? { cumActualRecv: Math.round(cumRecv), cumActualPay: Math.round(cumPay) } : {}),
+                });
+              }
+
+              // Variance vs plan-to-date (based on days elapsed)
+              const lastActual = actualDays[actualDays.length - 1]; // earliest = first of month (asc sorted)
+              const lastActualDay = lastActual ? parseInt(lastActual.position_date.split("-")[2], 10) : 0;
+              // plan-to-date = pace up through the last actual day
+              const planToDateRecv = workingDays > 0 ? planRecvTotal * (points.filter(p => parseInt(p.day) <= lastActualDay).length / workingDays) : 0;
+              const planToDatePay  = workingDays > 0 ? planPayTotal  * (points.filter(p => parseInt(p.day) <= lastActualDay).length / workingDays) : 0;
+              const varRecv = cumRecv - planToDateRecv;
+              const varPay  = cumPay  - planToDatePay;
+
+              const hasPlan = planRecvTotal > 0 || planPayTotal > 0;
+
+              return (
+                <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+                    <div style={chartLabel}>Receipts vs Payments — {monthLabel}</div>
+                    {!hasPlan && (
+                      <div style={{ fontSize: "11px", color: AMBER, fontWeight: 500 }}>No plan set for this month</div>
+                    )}
+                  </div>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <ComposedChart data={points} barCategoryGap="20%" barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} vertical={false} />
+                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: SLATE }} interval="preserveStartEnd" />
+                      <YAxis tick={{ fontSize: 10, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} width={72} />
+                      <Tooltip
+                        formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]}
+                        labelFormatter={(label) => `Day ${label}`}
+                      />
+                      <Legend wrapperStyle={{ fontSize: "11px" }} />
+                      <Bar dataKey="cumActualRecv" name="Cumul. Receipts" fill={GREEN} radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="cumActualPay"  name="Cumul. Payments" fill={RED}   radius={[3, 3, 0, 0]} />
+                      {hasPlan && (
+                        <Line dataKey="paceRecv" name="Planned Receipts" stroke={GREEN} strokeDasharray="5 3" strokeWidth={1.5} dot={false} />
+                      )}
+                      {hasPlan && (
+                        <Line dataKey="pacePay" name="Planned Payments" stroke={RED} strokeDasharray="5 3" strokeWidth={1.5} dot={false} />
+                      )}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                  {/* Variance callout */}
+                  {hasPlan && lastActualDay > 0 && (
+                    <div style={{ display: "flex", gap: "24px", marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${HAIRLINE}` }}>
+                      <div>
+                        <div style={{ fontSize: "11px", color: SLATE, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: "2px" }}>Receipts vs plan</div>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: varRecv >= 0 ? GREEN : RED }}>
+                          {varRecv >= 0 ? "+" : "−"} PKR {Math.abs(Math.round(varRecv)).toLocaleString()}
+                          <span style={{ fontWeight: 400, color: SLATE, marginLeft: "4px" }}>
+                            {varRecv >= 0 ? "ahead" : "behind"} pace
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "11px", color: SLATE, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: "2px" }}>Payments vs plan</div>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: varPay <= 0 ? GREEN : AMBER }}>
+                          {varPay >= 0 ? "+" : "−"} PKR {Math.abs(Math.round(varPay)).toLocaleString()}
+                          <span style={{ fontWeight: 400, color: SLATE, marginLeft: "4px" }}>
+                            {varPay <= 0 ? "under budget" : "over budget"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
