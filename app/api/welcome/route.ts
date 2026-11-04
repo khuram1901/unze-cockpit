@@ -46,9 +46,9 @@ function computeQuickLinks(ctx: UserCtx): QuickLink[] {
     return [
       { href: "/home",                 title: "Dashboard",          icon: "📊", color: "navy"   },
       { href: "/tasks",                title: "Tasks",              icon: "🎯", color: "blue"   },
-      { href: "/finance/imperial-pnl", title: "Imperial P&L",       icon: "👟", color: "green"  },
-      { href: "/finance/imperial",     title: "Imperial Footwear",  icon: "👞", color: "amber"  },
-      { href: "/finance/restaurants", title: "Restaurants P&L", icon: "🍽️", color: "green" },
+      { href: "/finance/imperial-pnl", title: "Unze London PK PNL",      icon: "👟", color: "green"  },
+      { href: "/finance/imperial",     title: "Unze London PK Finances", icon: "👞", color: "amber"  },
+      { href: "/finance/restaurants",  title: "Hospitality P&L",         icon: "🍽️", color: "green" },
       { href: "/department/hr",        title: "HR",                 icon: "🧑‍💼", color: "purple" },
       { href: "/my-minutes",           title: "My Minutes",         icon: "🗒️", color: "green"  },
       { href: "/folderit",             title: "Folder-it",          icon: "📁", color: "amber"  },
@@ -84,7 +84,7 @@ function computeQuickLinks(ctx: UserCtx): QuickLink[] {
   if (canViewFinance(ctx))
     links.push({ href: "/finance/profit-and-loss", title: "Finance", icon: "📉", color: "green" });
   if (canViewReceivables(ctx))
-    links.push({ href: "/receivables", title: "Receivables", icon: "💳", color: "red" });
+    links.push({ href: "/receivables", title: "Unze Trading Receivables", icon: "💳", color: "red" });
   if (canViewInvestments(ctx))
     links.push({ href: "/investments", title: "Investments", icon: "📈", color: "amber" });
   if (canViewGuarantees(ctx))
