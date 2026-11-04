@@ -860,7 +860,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       })()}
 
 
-      {/* ── FORECAST + DEPARTMENT BUDGETS side by side ── */}
+      {/* ── FORECAST + DEPARTMENT BUDGETS removed 04/11/2026 — forecast is now
+          set via the KPI cards (Planned Receivables / Planned Payouts edit
+          buttons); department budgets will be rebuilt as a dedicated feature ── */}
+      {false && (
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px", alignItems: "start" }}>
       <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
         <SectionTitle title="Cash Flow Forecast" style={{ margin: "0 0 12px" }} />
@@ -1065,50 +1068,133 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         })()}
       </div>
       </div>
-
-      {/* ── CHARTS ── */}
-      {positions.length > 1 && (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: "14px",
-          marginBottom: "14px",
-        }}>
-          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
-            <div style={{ fontSize: "13px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "16px" }}>
-              Cash Balance — Last 30 Days
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={[...positions].reverse().map((p) => ({ date: axisDate(p.position_date), closing: p.closing_balance, net: p.closing_after_post_dated }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
-                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} />
-                <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
-                <Legend iconType="plainline" wrapperStyle={{ fontSize: "12px" }} />
-                <Line type="monotone" dataKey="closing" stroke={BLUE} strokeWidth={2} dot={{ r: 3 }} name="Closing Balance" />
-                <Line type="monotone" dataKey="net" stroke={NAVY} strokeWidth={2} dot={{ r: 3 }} name="After Post-dated" strokeDasharray="5 3" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
-            <div style={{ fontSize: "13px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "16px" }}>
-              Daily Receipts vs Payments
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={[...positions].reverse().map((p) => ({ date: axisDate(p.position_date), receipts: p.total_receipts, payments: p.total_payments }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
-                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} />
-                <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
-                <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
-                <Bar dataKey="receipts" fill={GREEN} name="Money In" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="payments" fill={RED} name="Money Out" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
       )}
+
+      {/* ── CHARTS — Month View ── */}
+      {positions.length > 0 && (() => {
+        // Build a full-month day sequence for the selected positionsMonth (YYYY-MM)
+        const [chartYear, chartMon] = positionsMonth.split("-").map(Number);
+        const daysInChartMonth = new Date(chartYear, chartMon, 0).getDate();
+
+        // All calendar days in the month as YYYY-MM-DD strings
+        const allDays: string[] = [];
+        for (let d = 1; d <= daysInChartMonth; d++) {
+          allDays.push(`${positionsMonth}-${String(d).padStart(2, "0")}`);
+        }
+
+        // Map actual positions keyed by date
+        const posMap = new Map(positions.map((p) => [p.position_date, p]));
+
+        // Projected trajectory: spread planned net evenly across all days of the month.
+        // Start from the first actual entry's opening balance (most reliable anchor).
+        // If no plan, projected line is omitted.
+        const firstPos = [...positions].sort((a, b) => a.position_date.localeCompare(b.position_date))[0];
+        const monthStartBalance = firstPos?.opening_balance ?? 0;
+        const plannedRecv = plan?.tentative_receivables ?? 0;
+        const plannedPay  = plan?.tentative_payouts ?? 0;
+        const plannedNetPerDay = (plannedRecv - plannedPay) / daysInChartMonth;
+        const hasProjection = plan !== null;
+
+        // Cumulative planned totals per day (for receipts/payments chart)
+        const plannedDailyRecv = plannedRecv / daysInChartMonth;
+        const plannedDailyPay  = plannedPay  / daysInChartMonth;
+
+        // Build chart data: one point per calendar day
+        let cumulActualRecv = 0;
+        let cumulActualPay  = 0;
+        const balanceChartData = allDays.map((day, idx) => {
+          const actual = posMap.get(day);
+          const projected = hasProjection ? monthStartBalance + plannedNetPerDay * (idx + 1) : null;
+          if (actual) {
+            cumulActualRecv += actual.total_receipts;
+            cumulActualPay  += actual.total_payments;
+          }
+          return {
+            date: axisDate(day),
+            actual: actual ? actual.closing_balance : null,
+            projected,
+            cumulRecv: actual ? cumulActualRecv : null,
+            cumulPay:  actual ? cumulActualPay  : null,
+            planRecv:  hasProjection ? plannedDailyRecv * (idx + 1) : null,
+            planPay:   hasProjection ? plannedDailyPay  * (idx + 1) : null,
+          };
+        });
+
+        const chartLabel: React.CSSProperties = {
+          fontSize: "13px", fontWeight: 500, color: SLATE,
+          textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "16px",
+        };
+
+        return (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            gap: "14px",
+            marginBottom: "14px",
+          }}>
+            {/* LEFT — Closing Balance: Actual vs Projected */}
+            <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
+              <div style={chartLabel}>
+                Cash Balance — {positionMonthOptions.find((o) => o.value === positionsMonth)?.label ?? positionsMonth}
+              </div>
+              {!hasProjection && (
+                <div style={{ fontSize: "11px", color: SLATE, marginBottom: "8px" }}>
+                  Set a monthly plan to see projected trajectory
+                </div>
+              )}
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={balanceChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: SLATE }} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 10, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} width={72} />
+                  <Tooltip formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]} />
+                  <Legend iconType="plainline" wrapperStyle={{ fontSize: "11px" }} />
+                  <Line
+                    type="monotone" dataKey="actual" stroke={NAVY} strokeWidth={2.5}
+                    dot={(props: { cx: number; cy: number; value: number | null }) => props.value !== null ? <circle key={`dot-${props.cx}`} cx={props.cx} cy={props.cy} r={3} fill={NAVY} stroke="white" strokeWidth={1} /> : <g key={`dot-${props.cx}`} />}
+                    connectNulls={false} name="Actual Closing"
+                  />
+                  {hasProjection && (
+                    <Line
+                      type="monotone" dataKey="projected" stroke={GREEN} strokeWidth={1.5}
+                      strokeDasharray="6 3" dot={false} name="Projected" connectNulls
+                    />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* RIGHT — Cumulative Receipts vs Payments: Actual vs Planned */}
+            <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
+              <div style={chartLabel}>
+                Receipts vs Payments — {positionMonthOptions.find((o) => o.value === positionsMonth)?.label ?? positionsMonth}
+              </div>
+              {!hasProjection && (
+                <div style={{ fontSize: "11px", color: SLATE, marginBottom: "8px" }}>
+                  Set a monthly plan to see planned trajectory
+                </div>
+              )}
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={balanceChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: SLATE }} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 10, fill: SLATE }} tickFormatter={(v) => axisPKR(Number(v))} width={72} />
+                  <Tooltip formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]} />
+                  <Legend iconType="plainline" wrapperStyle={{ fontSize: "11px" }} />
+                  <Line type="monotone" dataKey="cumulRecv" stroke={GREEN} strokeWidth={2.5} dot={false} connectNulls={false} name="Actual In" />
+                  <Line type="monotone" dataKey="cumulPay"  stroke={RED}   strokeWidth={2.5} dot={false} connectNulls={false} name="Actual Out" />
+                  {hasProjection && (
+                    <>
+                      <Line type="monotone" dataKey="planRecv" stroke={GREEN} strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Planned In"  connectNulls />
+                      <Line type="monotone" dataKey="planPay"  stroke={RED}   strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Planned Out" connectNulls />
+                    </>
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── DAILY POSITION HISTORY (full width) ── */}
       <div>
@@ -1516,8 +1602,8 @@ function SummaryCard({
           {label}
         </div>
         <div style={{
-          fontSize: "40px", fontWeight: 600, color: "white",
-          fontFamily: DISPLAY, lineHeight: 1, letterSpacing: "-0.02em",
+          fontSize: "22px", fontWeight: 600, color: "white",
+          fontFamily: DISPLAY, lineHeight: 1, letterSpacing: "-0.01em",
           fontVariantNumeric: "tabular-nums",
         }}>
           {value}
