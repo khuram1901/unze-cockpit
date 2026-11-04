@@ -892,8 +892,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 </button>
               </form>
               {forecastResult && (
-                <div style={{ marginTop: "6px", fontSize: "12px", color: forecastResult.success ? GREEN : RED, fontWeight: 600 }}>
-                  {forecastResult.success ? `Saved: ${forecastResult.categories} categories, ${forecastResult.totalRows} rows` : forecastResult.error}
+                <div style={{ marginTop: "6px", fontSize: "12px", color: forecastResult?.success ? GREEN : RED, fontWeight: 600 }}>
+                  {forecastResult?.success ? `Saved: ${forecastResult.categories} categories, ${forecastResult.totalRows} rows` : forecastResult?.error}
                 </div>
               )}
               {forecastResult && (forecastResult.checks || []).length > 0 && (
