@@ -6,6 +6,7 @@ import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, cardStyle, SHADOWS, SectionTitle, useConfirm, SkeletonRows, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK } from "../lib/dateUtils";
+import DateInput from "../lib/DateInput";
 
 // The same recurring_tasks table and scheduling engine as the standalone
 // /recurring-tasks page — this is that page's content brought in as a
@@ -244,7 +245,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       setFiringId(null);
       setFireDueDate("");
       loadData();
-    } catch (err) {
+    } catch {
       alert("Error firing task");
     } finally {
       setFiringInProgress(false);
@@ -278,7 +279,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
               <label style={lbl}>Frequency <select style={inp} value={frequency} onChange={(e) => setFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="bimonthly">Bi-Monthly (every 2 months)</option><option value="quarterly">Quarterly (every 3 months)</option></select></label>
               {frequency === "weekly" && <label style={lbl}>Day <select style={inp} value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>}
               {(frequency === "monthly" || frequency === "bimonthly" || frequency === "quarterly") && <label style={lbl}>Day of Month <input type="number" min="1" max="28" style={inp} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} /></label>}
-              <label style={lbl}>First task due date <input type="date" style={inp} value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} required /></label>
+              <label style={lbl}>First task due date <DateInput style={inp} value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} required /></label>
               <label style={lbl}>Due after (days) <input type="number" min="1" style={inp} value={dueDays} onChange={(e) => setDueDays(e.target.value)} /></label>
               <label style={lbl}>Department / Project <input style={inp} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Optional" /></label>
             </div>
@@ -352,7 +353,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                     <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
                     <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
                       {t.assigned_to || "Unassigned"} · {t.frequency === "bimonthly" ? "Bi-Monthly" : t.frequency === "quarterly" ? "Quarterly" : t.frequency.charAt(0).toUpperCase() + t.frequency.slice(1)}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : ["monthly", "bimonthly", "quarterly"].includes(t.frequency) ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
-                      {t.last_created_at && ` · Last: ${t.last_created_at.slice(0, 10)}`}
+                      {t.last_created_at && ` · Last: ${formatDateUK(t.last_created_at)}`}
                     </div>
                     <div style={{ marginTop: "4px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
                       {t.company_id ? (
@@ -407,18 +408,19 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                     </div>
                   )}
                   {firingId === t.id && (
-                    <div style={{ marginTop: "8px", padding: "10px 14px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                      <label style={{ ...lbl, marginBottom: 0 }}>Due Date
-                        <input type="date" style={{ ...inp, width: "auto", marginTop: "2px" }} value={fireDueDate} onChange={(e) => setFireDueDate(e.target.value)} required />
-                      </label>
-                      <button onClick={() => fireNow(t.id)} disabled={firingInProgress} style={{
+                    <div style={{ marginTop: "8px", padding: "10px 14px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, display: "flex", alignItems: "flex-end", gap: "10px", flexWrap: "wrap" }}>
+                      <div>
+                        <span style={lbl}>Due Date</span>
+                        <DateInput style={{ ...inp, width: "160px", marginTop: "2px" }} value={fireDueDate} onChange={(e) => setFireDueDate(e.target.value)} required />
+                      </div>
+                      <button onClick={() => fireNow(t.id)} disabled={firingInProgress || !fireDueDate} style={{
                         backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: RADII.SM,
-                        padding: "6px 16px", fontSize: "12.5px", fontWeight: 700, cursor: "pointer",
-                        opacity: firingInProgress ? 0.7 : 1, marginTop: "12px",
+                        padding: "7px 16px", fontSize: "12.5px", fontWeight: 700, cursor: "pointer",
+                        opacity: firingInProgress || !fireDueDate ? 0.5 : 1,
                       }}>{firingInProgress ? "Firing..." : "Create Task"}</button>
                       <button onClick={() => { setFiringId(null); setFireDueDate(""); }} style={{
                         backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`,
-                        borderRadius: RADII.SM, padding: "6px 16px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer", marginTop: "12px",
+                        borderRadius: RADII.SM, padding: "7px 16px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
                       }}>Cancel</button>
                     </div>
                   )}
