@@ -291,7 +291,10 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       );
     } else if (!isPrivileged && email) {
       const idClause = myCoAssignedIds.length > 0 ? `,id.in.(${myCoAssignedIds.join(",")})` : "";
-      const reportsClause = myReportEmails.length > 0 ? `,assigned_to_email.in.(${myReportEmails.join(",")}),assigned_by_email.in.(${myReportEmails.join(",")})` : "";
+      // canSeeAll === false means an explicit "own tasks only" override (e.g. Kamran).
+      // Skip the reports clause so they don't inherit their direct reports' tasks.
+      const ownTasksOnly = canSeeAll === false;
+      const reportsClause = (!ownTasksOnly && myReportEmails.length > 0) ? `,assigned_to_email.in.(${myReportEmails.join(",")}),assigned_by_email.in.(${myReportEmails.join(",")})` : "";
       query = query.or(`assigned_to_email.eq.${email},assigned_by_email.eq.${email}${idClause}${reportsClause}`);
     }
 
