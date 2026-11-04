@@ -500,6 +500,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   }
 
   const latestPosition = positions[0] || null;
+  // Earliest entry in the selected month = month opening anchor.
+  // positions is fetched descending, so last element = first day with an entry.
+  const firstPosition = positions.length > 0 ? positions[positions.length - 1] : null;
+  const monthOpeningBalance = firstPosition?.opening_balance ?? null;
+  // Running totals across all entries in the month (for the Cash in Hand narrative)
+  const totalReceiptsMonth = positions.reduce((s, p) => s + p.total_receipts, 0);
+  const totalPaymentsMonth = positions.reduce((s, p) => s + p.total_payments, 0);
   const canEditAll = userCanEdit;
   const staleDays = latestPosition ? Math.floor((Date.now() - new Date(latestPosition.position_date + "T00:00:00").getTime()) / 86400000) : 999;
 
@@ -586,10 +593,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         }}
       >
         <SummaryCard
-          label="Opening Balance"
-          value={opening ? formatPKRWhole(opening.opening_amount) : "Not set"}
-          sub={opening ? `as of ${formatDateUK(opening.as_of_date)}` : "Click edit to set"}
-          onEdit={canEditAll ? openOpeningModal : undefined}
+          label="Month Opening Balance"
+          value={monthOpeningBalance !== null ? formatPKRWhole(monthOpeningBalance) : "No entries yet"}
+          sub={firstPosition ? `1st entry: ${formatDateUK(firstPosition.position_date)}` : "Upload a cash sheet to set"}
         />
         <SummaryCard
           label="Planned Receivables"
@@ -615,7 +621,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           <SummaryCard
             label="Cash in Hand"
             value={latestPosition ? formatPKRWhole(latestPosition.closing_balance) : "—"}
-            sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
+            sub={latestPosition ? `As at ${formatDateUK(latestPosition.position_date)}` : "No entries yet"}
             isHero
           />
         )}
@@ -628,6 +634,28 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           />
         )}
       </div>
+
+      {/* ── LIVE CASH CALCULATION NARRATIVE ── */}
+      {latestPosition && monthOpeningBalance !== null && (
+        <div style={{
+          display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px",
+          padding: "10px 16px", marginBottom: "14px",
+          backgroundColor: "#F8F9FB", border: `1px solid ${HAIRLINE}`, borderRadius: "10px",
+          fontSize: "13px", color: SLATE,
+        }}>
+          <span style={{ fontWeight: 600, color: NAVY }}>{formatPKRWhole(monthOpeningBalance)}</span>
+          <span style={{ color: SLATE, fontSize: "11px" }}>month opening</span>
+          <span style={{ color: SLATE }}>+</span>
+          <span style={{ fontWeight: 600, color: GREEN }}>{formatPKRWhole(totalReceiptsMonth)}</span>
+          <span style={{ color: SLATE, fontSize: "11px" }}>receipts to date</span>
+          <span style={{ color: SLATE }}>−</span>
+          <span style={{ fontWeight: 600, color: RED }}>{formatPKRWhole(totalPaymentsMonth)}</span>
+          <span style={{ color: SLATE, fontSize: "11px" }}>payments to date</span>
+          <span style={{ color: SLATE }}>=</span>
+          <span style={{ fontWeight: 700, color: NAVY }}>{formatPKRWhole(latestPosition.closing_balance)}</span>
+          <span style={{ color: SLATE, fontSize: "11px" }}>cash in hand as at {formatDateUK(latestPosition.position_date)}</span>
+        </div>
+      )}
 
       {/* ── PDC OUTLOOK — horizontal week timeline (migration 288) ──
           6 near-term weeks shown as columns on a horizontal baseline.
