@@ -1020,13 +1020,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                         labelFormatter={(label) => `Day ${label}`}
                       />
                       <Legend wrapperStyle={{ fontSize: "11px" }} />
-                      <Bar dataKey="cumActualRecv" name="Cumul. Receipts" fill={GREEN} radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="cumActualPay"  name="Cumul. Payments" fill={RED}   radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="cumActualRecv" name="Actual Receipts" fill="#0F7B5F" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="cumActualPay"  name="Actual Payments" fill="#B3261E" radius={[3, 3, 0, 0]} />
                       {hasPlan && (
-                        <Line dataKey="paceRecv" name="Planned Receipts" stroke={GREEN} strokeDasharray="5 3" strokeWidth={1.5} dot={false} />
+                        <Line dataKey="paceRecv" name="Planned Receipts" stroke="#34D399" strokeDasharray="6 3" strokeWidth={2} dot={false} />
                       )}
                       {hasPlan && (
-                        <Line dataKey="pacePay" name="Planned Payments" stroke={RED} strokeDasharray="5 3" strokeWidth={1.5} dot={false} />
+                        <Line dataKey="pacePay" name="Planned Payments" stroke="#F59E0B" strokeDasharray="6 3" strokeWidth={2} dot={false} />
                       )}
                     </ComposedChart>
                   </ResponsiveContainer>
