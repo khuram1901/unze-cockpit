@@ -119,25 +119,4 @@ button[title] {
   position: relative;
 }
 
-/* ── Generator Report — PDF print styles ──────────────────────────────── */
-@media print {
-  /* Hide everything except the report section */
-  body > * { display: none !important; }
-  #gen-report-print,
-  #gen-report-print * { display: revert !important; }
-  #gen-report-print { 
-    position: static !important;
-    width: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-  /* Hide the control bar buttons (Apply, Download PDF, view switcher) when printing */
-  #gen-report-print button { display: none !important; }
-  /* But keep table contents visible */
-  #gen-report-print table,
-  #gen-report-print td,
-  #gen-report-print th,
-  #gen-report-print tr { display: revert !important; }
-  /* Page break handling */
-  #gen-report-print > div > div { page-break-inside: avoid; }
-}
+/* Generator Report PDF print — handled via printWindow in admin/page.tsx (no globals needed) */

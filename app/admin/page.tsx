@@ -1776,6 +1776,278 @@ export default function AdminDataPage() {
     const pkr = (n: number) => `PKR ${n.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     const pct = (n: number, t: number) => t > 0 ? `${((n / t) * 100).toFixed(0)}%` : "—";
 
+    // ── PDF print — opens a fresh window with styled HTML ─────────────────
+    const printReport = () => {
+      const fmtDate = (iso: string) => iso ? iso.split("-").reverse().join("/") : "—";
+      const fmtPkr  = (n: number)   => `PKR ${Number(n).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+      const fmtPct  = (n: number, t: number) => t > 0 ? `${((n / t) * 100).toFixed(0)}%` : "—";
+
+      const totalCost  = reportFleet.reduce((s, r) => s + r.total_cost,       0);
+      const totalFuel  = reportFleet.reduce((s, r) => s + r.total_fuel_cost,  0);
+      const totalMaint = reportFleet.reduce((s, r) => s + r.total_maint_cost, 0);
+      const totalHrs   = reportFleet.reduce((s, r) => s + r.total_hours_run,  0);
+      const totalLtrs  = reportFleet.reduce((s, r) => s + r.total_litres,     0);
+
+      const viewLabel  = reportView === "fleet" ? "Fleet Overview" : reportView === "single" ? "Single Generator" : "Compare";
+
+      // ── KPI strip ──────────────────────────────────────────────────────
+      const kpiHtml = reportView === "fleet" ? `
+        <div class="kpi-row">
+          <div class="kpi-card"><div class="kpi-label">Total Fleet Cost</div><div class="kpi-value">${fmtPkr(totalCost)}</div><div class="kpi-sub">fuel + maintenance</div></div>
+          <div class="kpi-card"><div class="kpi-label">Total Fuel</div><div class="kpi-value">${fmtPkr(totalFuel)}</div><div class="kpi-sub">${totalLtrs.toFixed(0)} L</div></div>
+          <div class="kpi-card"><div class="kpi-label">Maintenance</div><div class="kpi-value">${fmtPkr(totalMaint)}</div><div class="kpi-sub">${fmtPct(totalMaint, totalCost)} of total</div></div>
+          <div class="kpi-card"><div class="kpi-label">Hours Run</div><div class="kpi-value">${totalHrs.toFixed(0)}</div><div class="kpi-sub">total fleet hours</div></div>
+          <div class="kpi-card"><div class="kpi-label">Generators</div><div class="kpi-value">${reportFleet.length}</div><div class="kpi-sub">active with data</div></div>
+        </div>` : reportView === "single" && reportSingleId ? (() => {
+          const sg = reportFleet.find(r => r.generator_id === reportSingleId);
+          if (!sg) return "";
+          const fe = reportHistory.filter(e => e.event_type === "fuel");
+          const me = reportHistory.filter(e => e.event_type === "maintenance");
+          const sFuel  = fe.reduce((s, e) => s + (e.total_cost ?? 0), 0);
+          const sMaint = me.reduce((s, e) => s + (e.total_cost ?? 0), 0);
+          return `<div class="kpi-row">
+            <div class="kpi-card"><div class="kpi-label">Total Cost</div><div class="kpi-value">${fmtPkr(sFuel + sMaint)}</div></div>
+            <div class="kpi-card"><div class="kpi-label">Fuel Cost</div><div class="kpi-value">${fmtPkr(sFuel)}</div></div>
+            <div class="kpi-card"><div class="kpi-label">Maint Cost</div><div class="kpi-value">${fmtPkr(sMaint)}</div></div>
+            <div class="kpi-card"><div class="kpi-label">Hours Run</div><div class="kpi-value">${sg.total_hours_run.toFixed(0)}</div></div>
+            <div class="kpi-card"><div class="kpi-label">Fuel Used</div><div class="kpi-value">${sg.total_litres.toFixed(0)} L</div></div>
+            <div class="kpi-card"><div class="kpi-label">Avg L/hr</div><div class="kpi-value">${sg.avg_litres_per_hour.toFixed(2)}</div></div>
+            <div class="kpi-card"><div class="kpi-label">Avg Cost/hr</div><div class="kpi-value">PKR ${Number(sg.avg_cost_per_hour).toFixed(0)}</div></div>
+            <div class="kpi-card"><div class="kpi-label">Refuels</div><div class="kpi-value">${fe.length}</div></div>
+          </div>`;
+        })() : "";
+
+      // ── Main data table ────────────────────────────────────────────────
+      let mainTableHtml = "";
+
+      if (reportView === "fleet" && reportFleet.length > 0) {
+        const rows = reportFleet.map((r, i) => {
+          const isFirst = i === 0;
+          const isLast  = i === reportFleet.length - 1 && reportFleet.length > 1;
+          const rowClass = isFirst ? "row-best" : isLast ? "row-worst" : "";
+          const rankCell = isFirst ? "🥇" : isLast ? "⚠" : String(i + 1);
+          return `<tr class="${rowClass}">
+            <td class="rank">${rankCell}</td>
+            <td><strong>${r.generator_label}</strong> <span class="dim">${r.kva} kVA</span></td>
+            <td>${r.location_name}</td>
+            <td class="num bold">${fmtPkr(r.total_cost)}</td>
+            <td class="num">${fmtPkr(r.total_fuel_cost)}<br><span class="dim">${fmtPct(r.total_fuel_cost, r.total_cost)}</span></td>
+            <td class="num">${fmtPkr(r.total_maint_cost)}<br><span class="dim">${fmtPct(r.total_maint_cost, r.total_cost)}</span></td>
+            <td class="num">${r.total_hours_run.toFixed(0)} hrs</td>
+            <td class="num">${r.avg_litres_per_hour.toFixed(2)} L</td>
+            <td class="num ${isFirst ? "green" : isLast ? "red" : ""}"><strong>PKR ${Number(r.avg_cost_per_hour).toFixed(0)}/hr</strong></td>
+            <td class="num">${r.last_refuel_date  ? fmtDate(r.last_refuel_date)  : "—"}</td>
+            <td class="num">${r.last_service_date ? fmtDate(r.last_service_date) : "—"}</td>
+          </tr>`;
+        }).join("");
+        mainTableHtml = `
+          <div class="section">
+            <div class="section-title">🏆 Generator Efficiency Ranking — Lowest Cost/hr is Best</div>
+            <table><thead><tr>
+              <th>#</th><th>Generator</th><th>Location</th><th class="num">Total Cost</th>
+              <th class="num">Fuel</th><th class="num">Maintenance</th><th class="num">Hrs Run</th>
+              <th class="num">Avg L/hr</th><th class="num">Avg Cost/hr</th>
+              <th class="num">Last Refuel</th><th class="num">Last Service</th>
+            </tr></thead><tbody>${rows}</tbody></table>
+          </div>`;
+
+        // Monthly trend table
+        if (reportFleet[0]?.m1_label) {
+          const monthLabels = [reportFleet[0].m1_label, reportFleet[0].m2_label, reportFleet[0].m3_label, reportFleet[0].m4_label].filter(Boolean);
+          const monthRows = reportFleet.map(r => {
+            const vals = [r.m1_fuel, r.m2_fuel, r.m3_fuel, r.m4_fuel].filter((_, i) =>
+              [r.m1_label, r.m2_label, r.m3_label, r.m4_label][i]);
+            return `<tr>
+              <td><strong>${r.generator_label}</strong> <span class="dim">${r.location_name}</span></td>
+              ${vals.map(m => `<td class="num ${m > 0 ? "bold" : "dim"}">${m > 0 ? fmtPkr(m) : "—"}</td>`).join("")}
+              <td class="num bold">${fmtPkr(r.total_fuel_cost)}</td>
+            </tr>`;
+          }).join("");
+          mainTableHtml += `
+            <div class="section" style="page-break-before: always;">
+              <div class="section-title">📅 Monthly Fuel Cost Trend</div>
+              <table><thead><tr>
+                <th>Generator</th>
+                ${monthLabels.map(l => `<th class="num">${l}</th>`).join("")}
+                <th class="num">Total</th>
+              </tr></thead><tbody>${monthRows}</tbody></table>
+            </div>`;
+        }
+
+      } else if (reportView === "single" && reportSingleId) {
+        const sg = reportFleet.find(r => r.generator_id === reportSingleId);
+        const histRows = reportHistory.map(e => `<tr>
+          <td><span class="badge ${e.event_type === "fuel" ? "badge-fuel" : "badge-maint"}">${e.event_type === "fuel" ? "⛽ Fuel" : "🔧 Service"}</span></td>
+          <td>${fmtDate(e.event_date)}</td>
+          <td class="num bold">${fmtPkr(e.total_cost ?? 0)}</td>
+          <td class="num">${e.event_type === "fuel" ? `${e.qty_litres?.toFixed(1) ?? "—"} L` : "—"}</td>
+          <td class="num">${e.event_type === "fuel" ? `PKR ${e.rate_per_litre?.toFixed(0) ?? "—"}/L` : "—"}</td>
+          <td>${e.remarks ?? "—"}</td>
+        </tr>`).join("");
+        mainTableHtml = `
+          <div class="section">
+            <div class="section-title">📋 Event History — ${sg ? `${sg.generator_label}, ${sg.location_name}` : ""}</div>
+            <table><thead><tr>
+              <th>Type</th><th>Date</th><th class="num">Cost</th>
+              <th class="num">Qty</th><th class="num">Rate</th><th>Remarks</th>
+            </tr></thead><tbody>${histRows || '<tr><td colspan="6" style="text-align:center;color:#64748B;padding:20px">No events in period</td></tr>'}</tbody></table>
+          </div>`;
+
+      } else if (reportView === "compare") {
+        const compareData = reportFleet.filter(r => compareIds.includes(r.generator_id));
+        if (compareData.length > 0) {
+          const bestCost = Math.min(...compareData.map(r => Number(r.avg_cost_per_hour)));
+          const worstCost = Math.max(...compareData.map(r => Number(r.avg_cost_per_hour)));
+          const metricsRows = [
+            ["Total Cost",     (r: typeof compareData[0]) => fmtPkr(r.total_cost)],
+            ["Fuel Cost",      (r: typeof compareData[0]) => fmtPkr(r.total_fuel_cost)],
+            ["Maint Cost",     (r: typeof compareData[0]) => fmtPkr(r.total_maint_cost)],
+            ["Hours Run",      (r: typeof compareData[0]) => `${r.total_hours_run.toFixed(0)} hrs`],
+            ["Fuel Used",      (r: typeof compareData[0]) => `${r.total_litres.toFixed(0)} L`],
+            ["Avg L/hr",       (r: typeof compareData[0]) => `${r.avg_litres_per_hour.toFixed(2)} L`],
+            ["Avg Cost/hr",    (r: typeof compareData[0]) => `PKR ${Number(r.avg_cost_per_hour).toFixed(0)}`],
+          ] as const;
+          const tableRows = metricsRows.map(([label, fn]) => `<tr>
+            <td class="metric-label">${label}</td>
+            ${compareData.map(r => {
+              const isBest  = label === "Avg Cost/hr" && Number(r.avg_cost_per_hour) === bestCost;
+              const isWorst = label === "Avg Cost/hr" && Number(r.avg_cost_per_hour) === worstCost && compareData.length > 1;
+              return `<td class="num ${isBest ? "green bold" : isWorst ? "red bold" : ""}">${fn(r)}${isBest ? " ✓" : isWorst ? " ↑" : ""}</td>`;
+            }).join("")}
+          </tr>`).join("");
+          mainTableHtml = `
+            <div class="section">
+              <div class="section-title">⚖ Generator Comparison</div>
+              <table><thead><tr>
+                <th>Metric</th>
+                ${compareData.map(r => `<th class="num">${r.generator_label}<br><span class="dim">${r.location_name}</span></th>`).join("")}
+              </tr></thead><tbody>${tableRows}</tbody></table>
+            </div>`;
+        }
+      }
+
+      // Monthly trend for compare view
+      let compareTrendHtml = "";
+      if (reportView === "compare") {
+        const compareData = reportFleet.filter(r => compareIds.includes(r.generator_id));
+        if (compareData.length > 0 && compareData[0]?.m1_label) {
+          const monthLabels = [compareData[0].m1_label, compareData[0].m2_label, compareData[0].m3_label, compareData[0].m4_label].filter(Boolean);
+          const rows = compareData.map(r => {
+            const vals = [r.m1_fuel, r.m2_fuel, r.m3_fuel, r.m4_fuel].filter((_, i) =>
+              [r.m1_label, r.m2_label, r.m3_label, r.m4_label][i]);
+            return `<tr>
+              <td><strong>${r.generator_label}</strong><br><span class="dim">${r.location_name}</span></td>
+              ${vals.map(m => `<td class="num ${m > 0 ? "bold" : "dim"}">${m > 0 ? fmtPkr(m) : "—"}</td>`).join("")}
+              <td class="num bold">${fmtPkr(r.total_fuel_cost)}</td>
+            </tr>`;
+          }).join("");
+          compareTrendHtml = `
+            <div class="section">
+              <div class="section-title">📅 Monthly Fuel Trend</div>
+              <table><thead><tr>
+                <th>Generator</th>
+                ${monthLabels.map(l => `<th class="num">${l}</th>`).join("")}
+                <th class="num">Total</th>
+              </tr></thead><tbody>${rows}</tbody></table>
+            </div>`;
+        }
+      }
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Unze Group — Generator Report ${fmtDate(reportFrom)} to ${fmtDate(reportTo)}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; color: #0F1720; background: white; padding: 28px 32px; }
+
+  /* Header */
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #0F1720; }
+  .header-left {}
+  .header-logo { font-size: 18px; font-weight: 800; color: #0F1720; letter-spacing: -0.5px; }
+  .header-sub  { font-size: 11px; color: #64748B; margin-top: 2px; }
+  .header-right { text-align: right; }
+  .report-title { font-size: 15px; font-weight: 700; color: #0F1720; }
+  .report-period { font-size: 11px; color: #64748B; margin-top: 3px; }
+  .report-view  { display: inline-block; margin-top: 6px; padding: 2px 10px; background: #0F1720; color: white; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* KPI row */
+  .kpi-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .kpi-card { flex: 1; min-width: 110px; border: 1px solid #EEF0F3; border-radius: 8px; padding: 12px 14px; background: #F8FAFC; }
+  .kpi-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #64748B; margin-bottom: 5px; }
+  .kpi-value { font-size: 16px; font-weight: 800; color: #0F1720; line-height: 1.1; }
+  .kpi-sub   { font-size: 9px; color: #64748B; margin-top: 3px; }
+
+  /* Section */
+  .section { margin-bottom: 24px; border: 1px solid #EEF0F3; border-radius: 8px; overflow: hidden; }
+  .section-title { font-size: 12px; font-weight: 700; color: #0F1720; padding: 10px 14px; background: #F8FAFC; border-bottom: 1px solid #EEF0F3; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: #F1F5F9; }
+  th { padding: 8px 10px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748B; border-bottom: 1px solid #EEF0F3; white-space: nowrap; }
+  td { padding: 8px 10px; border-bottom: 1px solid #EEF0F3; color: #0F1720; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .num { text-align: right; white-space: nowrap; }
+  .bold { font-weight: 700; }
+  .dim  { color: #64748B; font-size: 9px; }
+  .green { color: #0F7B5F; }
+  .red   { color: #B3261E; }
+  .rank  { font-weight: 700; text-align: center; width: 32px; }
+  .metric-label { font-weight: 600; color: #64748B; white-space: nowrap; }
+
+  /* Row highlights */
+  .row-best  td { background: #F0FDF4; }
+  .row-worst td { background: #FEF2F2; }
+
+  /* Event badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+  .badge-fuel  { background: #EFF6FF; color: #1D4ED8; }
+  .badge-maint { background: #FFF7ED; color: #C2410C; }
+
+  /* Footer */
+  .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #EEF0F3; display: flex; justify-content: space-between; color: #94A3B8; font-size: 9px; }
+
+  @media print {
+    body { padding: 16px 20px; }
+    .section { page-break-inside: avoid; }
+    @page { margin: 10mm 12mm; size: A4 landscape; }
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <div class="header-logo">Unze Group</div>
+      <div class="header-sub">Generator Fleet Report</div>
+    </div>
+    <div class="header-right">
+      <div class="report-title">Generator Fleet Report</div>
+      <div class="report-period">Period: ${fmtDate(reportFrom)} — ${fmtDate(reportTo)}</div>
+      <div class="report-view">${viewLabel}</div>
+    </div>
+  </div>
+
+  ${kpiHtml}
+  ${mainTableHtml}
+  ${compareTrendHtml}
+
+  <div class="footer">
+    <span>Unze Group — Confidential</span>
+    <span>Generated: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Karachi" })}</span>
+  </div>
+</body>
+</html>`;
+
+      const w = window.open("", "_blank", "width=1100,height=800");
+      if (!w) { alert("Pop-up blocked — please allow pop-ups for this site and try again."); return; }
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      setTimeout(() => { w.print(); }, 600);
+    };
+
     // All flat generator list for dropdowns — show location only (make/model is secondary context)
     const allGens = genMeta.map(g => ({ id: g.generator_id, label: g.location_name, location: g.location_name, kva: g.kva, model: g.label || `${g.kva} kVA – ${g.model}` }));
 
@@ -1799,7 +2071,7 @@ export default function AdminDataPage() {
           Apply
         </button>
         {/* PDF download */}
-        <button onClick={() => window.print()}
+        <button onClick={printReport}
           style={{ padding:"7px 16px", borderRadius:"24px", fontSize:"12px", fontWeight:600, cursor:"pointer", background:"transparent", color:COLOURS.NAVY, border:`1px solid ${COLOURS.NAVY}`, marginLeft:"auto" }}>
           ⬇ Download PDF
         </button>
