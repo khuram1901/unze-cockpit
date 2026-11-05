@@ -861,11 +861,18 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     return base.filter((t) => {
       const byMe = !!(t.assigned_by_email && myIdentities.includes(t.assigned_by_email.toLowerCase()));
       const toMe = !!(t.assigned_to_email && myIdentities.includes(t.assigned_to_email.toLowerCase()));
+      // Tasks I need to act on (myTasksSource)
       if (toMe) return true;
       if (myCoAssignedTaskIds.has(t.id)) return true;
       if (byMe && t.status === "Submitted" && !myIdentities.includes((t.submitted_by_email || "").toLowerCase())) return true;
       if (byMe && t.status === "Waiting Reply" && t.reply_required) return true;
       if (byMe && t.status === "Stuck" && !toMe) return true;
+      // Tasks I delegated to others (delegatedByMe section) — pill counts must
+      // include these so selecting a Priority or Status pill doesn't show 0 when
+      // the matching tasks only appear in the delegated section.
+      if (byMe && !toMe && !myCoAssignedTaskIds.has(t.id)) return true;
+      // Tasks assigned to my direct reports (teamTasksSection)
+      if (t.assigned_to_email && myReportEmailsState.includes(t.assigned_to_email.toLowerCase())) return true;
       return false;
     });
   })();
