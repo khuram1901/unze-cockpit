@@ -1187,15 +1187,14 @@ export default function AdminDataPage() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    {["Generator","Location","Last Refuel","Last Service","Days Since Refuel","Days Since Service","Total Litres","Avg L/hr"].map(h =>
+                    {["Location","Last Refuel","Last Service","Days Since Refuel","Days Since Service","Total Litres","Avg L/hr"].map(h =>
                       <th key={h} style={TH}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map(r => (
                     <tr key={r.generator_id}>
-                      <td style={TD}><strong>{r.generator_label}</strong> <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{r.kva}KVA</span></td>
-                      <td style={TD}>{r.location_name}</td>
+                      <td style={TD}><strong>{r.location_name}</strong></td>
                       <td style={TD}>{r.last_refuel_date  ? formatDateUK(r.last_refuel_date)  : "—"}</td>
                       <td style={TD}>{r.last_service_date ? formatDateUK(r.last_service_date) : "—"}</td>
                       <td style={TD}>{daysBadge(r.days_since_refuel,  7, 14)  ?? "—"}</td>
