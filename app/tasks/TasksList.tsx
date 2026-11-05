@@ -209,6 +209,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [paFilter, setPaFilter] = useState(false);
   const [listSort, setListSort] = useState<{ col: "created_at" | "due_date" | "status" | "assigned_to"; dir: "asc" | "desc" }>({ col: "due_date", dir: "asc" });
   const [searchQuery, setSearchQuery] = useState("");
+  // Asana-style: each group section can be collapsed/expanded
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
   // Tracks which department/person groups are EXPANDED — starting empty
   // means every group defaults to closed on mount, per the house rule
@@ -1110,38 +1112,43 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             }
           }}
           style={{
-            padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between",
+            padding: "11px 16px 10px", cursor: "pointer", display: "flex", justifyContent: "space-between",
             alignItems: "center", gap: "8px",
-            // A full red-tinted row for every overdue task got cramped and
-            // noisy once there were more than a few of them — a left accent
-            // bar plus the existing red "Xd late" text carries the same
-            // signal without painting the whole row.
+            // Priority stripe on left: overdue = red > Critical/Urgent = red > Medium = amber > Low = slate
+            // A full red-tinted row got cramped; the stripe + red "Xd late" text carries the signal.
             backgroundColor: isOpen ? COLOURS.CARD_ALT : done ? COLOURS.CARD_ALT : COLOURS.CARD,
-            borderLeft: `3px solid ${overdue ? COLOURS.RED : "transparent"}`,
+            borderLeft: `3px solid ${
+              overdue ? COLOURS.RED
+              : task.priority === "Critical" || task.priority === "Urgent" ? COLOURS.RED
+              : task.priority === "Medium" ? COLOURS.AMBER
+              : task.priority === "Low" ? COLOURS.INK_300
+              : "transparent"
+            }`,
             opacity: done ? 0.6 : 1,
           }}
         >
           {selectable && (
-            <input
-              type="checkbox"
-              checked={selectedIds.has(task.id)}
-              onClick={(e) => e.stopPropagation()}
-              onChange={() => toggleSelect(task.id)}
-              style={{ width: "16px", height: "16px", flexShrink: 0, cursor: "pointer" }}
-            />
+            // Asana-style circular checkbox — replaces the native square input
+            <div
+              role="checkbox"
+              aria-checked={selectedIds.has(task.id)}
+              onClick={(e) => { e.stopPropagation(); toggleSelect(task.id); }}
+              style={{
+                width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0, cursor: "pointer",
+                border: selectedIds.has(task.id) ? `2px solid ${COLOURS.GREEN}` : `2px solid ${COLOURS.INK_300}`,
+                backgroundColor: selectedIds.has(task.id) ? COLOURS.GREEN : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "border-color 100ms, background-color 100ms",
+              }}
+            >
+              {selectedIds.has(task.id) && (
+                <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                  <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
           )}
-          {/* Priority badge — left column */}
-          {task.priority && (
-            <div title={task.priority} style={{
-              width: "3px", alignSelf: "stretch",
-              borderRadius: "2px", flexShrink: 0,
-              backgroundColor: task.priority === "Urgent" || task.priority === "High"
-                ? COLOURS.RED
-                : task.priority === "Medium"
-                  ? COLOURS.AMBER
-                  : COLOURS.SLATE,
-            }} />
-          )}
+          {/* Priority is now shown via the border-left stripe on the row */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: "14px", fontWeight: 600, color: done ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
             {/* One muted meta line, dot-separated, instead of a row of
@@ -1881,20 +1888,32 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           ) : (
             myTasksGroupOrder.filter((g) => myTasksGroups.has(g)).map((group) => {
               const groupTasks = myTasksGroups.get(group)!;
+              const isCollapsed = collapsedGroups.has(group);
               return (
-                <div key={group} style={{ marginBottom: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: myTasksGroupColor(group), display: "inline-block" }} />
-                    <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>{group}</span>
+                <div key={group} style={{ marginBottom: "20px" }}>
+                  {/* Asana-style collapsible section header */}
+                  <div
+                    onClick={() => setCollapsedGroups(prev => { const s = new Set(prev); s.has(group) ? s.delete(group) : s.add(group); return s; })}
+                    style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", padding: "5px 2px", cursor: "pointer", userSelect: "none" }}
+                  >
+                    <span style={{
+                      display: "inline-block", fontSize: "10px", color: COLOURS.SLATE, lineHeight: 1, flexShrink: 0,
+                      transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                      transition: "transform 150ms ease",
+                    }}>▼</span>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: myTasksGroupColor(group), display: "inline-block", flexShrink: 0 }} />
+                    <span style={{ fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.NAVY }}>{group}</span>
                     <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{groupTasks.length}</span>
                   </div>
-                  <div style={{ ...cardStyle, overflow: "hidden" }}>
-                    {groupTasks.length === 0 ? (
-                      <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
-                    ) : (
-                      sortListTasks(groupTasks).map((t) => <TaskRow key={t.id} task={t} selectable />)
-                    )}
-                  </div>
+                  {!isCollapsed && (
+                    <div style={{ ...cardStyle, overflow: "hidden" }}>
+                      {groupTasks.length === 0 ? (
+                        <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
+                      ) : (
+                        sortListTasks(groupTasks).map((t) => <TaskRow key={t.id} task={t} selectable />)
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -1908,36 +1927,55 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           {/* ═══ DELEGATED BY ME — tasks I allocated (meetings or direct)
               that others are still working on. Not action items, so they
               sit below my own groups — but always visible. ═══ */}
-          {!listFilteredTasks && delegatedByMe.length > 0 && (
-            <div style={{ marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.SLATE, display: "inline-block" }} />
-                <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>Delegated by me</span>
-                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{delegatedByMe.length}</span>
-                <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— with your team, watching only</span>
+          {!listFilteredTasks && delegatedByMe.length > 0 && (() => {
+            const grpKey = "__delegated__";
+            const isCollapsed = collapsedGroups.has(grpKey);
+            return (
+              <div style={{ marginBottom: "20px" }}>
+                <div
+                  onClick={() => setCollapsedGroups(prev => { const s = new Set(prev); s.has(grpKey) ? s.delete(grpKey) : s.add(grpKey); return s; })}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", padding: "5px 2px", cursor: "pointer", userSelect: "none" }}
+                >
+                  <span style={{ display: "inline-block", fontSize: "10px", color: COLOURS.SLATE, lineHeight: 1, flexShrink: 0, transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 150ms ease" }}>▼</span>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.SLATE, display: "inline-block", flexShrink: 0 }} />
+                  <span style={{ fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.NAVY }}>Delegated by me</span>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{delegatedByMe.length}</span>
+                  <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— with your team, watching only</span>
+                </div>
+                {!isCollapsed && (
+                  <div style={{ ...cardStyle, overflow: "hidden" }}>
+                    {sortListTasks(delegatedByMe).map((t) => <TaskRow key={t.id} task={t} selectable />)}
+                  </div>
+                )}
               </div>
-              <div style={{ ...cardStyle, overflow: "hidden" }}>
-                {sortListTasks(delegatedByMe)
-                  .map((t) => <TaskRow key={t.id} task={t} selectable />)}
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ═══ MY TEAM'S TASKS — tasks assigned TO direct reports by others.
               Visible on home via RLS; was invisible in Mine view before this. ═══ */}
-          {!listFilteredTasks && teamTasksSection.length > 0 && (
-            <div style={{ marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.BLUE, display: "inline-block" }} />
-                <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>My Team&apos;s Tasks</span>
-                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{teamTasksSection.length}</span>
-                <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— assigned to your team by others</span>
+          {!listFilteredTasks && teamTasksSection.length > 0 && (() => {
+            const grpKey = "__myteam__";
+            const isCollapsed = collapsedGroups.has(grpKey);
+            return (
+              <div style={{ marginBottom: "20px" }}>
+                <div
+                  onClick={() => setCollapsedGroups(prev => { const s = new Set(prev); s.has(grpKey) ? s.delete(grpKey) : s.add(grpKey); return s; })}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", padding: "5px 2px", cursor: "pointer", userSelect: "none" }}
+                >
+                  <span style={{ display: "inline-block", fontSize: "10px", color: COLOURS.SLATE, lineHeight: 1, flexShrink: 0, transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 150ms ease" }}>▼</span>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.BLUE, display: "inline-block", flexShrink: 0 }} />
+                  <span style={{ fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.NAVY }}>My Team&apos;s Tasks</span>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{teamTasksSection.length}</span>
+                  <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— assigned to your team by others</span>
+                </div>
+                {!isCollapsed && (
+                  <div style={{ ...cardStyle, overflow: "hidden" }}>
+                    {sortListTasks(teamTasksSection).map((t) => <TaskRow key={t.id} task={t} selectable />)}
+                  </div>
+                )}
               </div>
-              <div style={{ ...cardStyle, overflow: "hidden" }}>
-                {sortListTasks(teamTasksSection).map((t) => <TaskRow key={t.id} task={t} selectable />)}
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
