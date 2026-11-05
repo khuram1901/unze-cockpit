@@ -67,8 +67,8 @@ const KANBAN_COLUMNS: {
 }[] = [
   {
     key: "todo",
-    label: "TODO",
-    statuses: ["Not Started", "Stuck"],
+    label: "TO DO",
+    statuses: ["Not Started"],
     dropStatus: "Not Started",
     headerBg: "#e2e8f0",
     headerColor: "#475569",
@@ -86,6 +86,17 @@ const KANBAN_COLUMNS: {
     countBg: "#3b82f6",
     bodyBg: "#eff6ff",
     stripe: "#3b82f6",
+  },
+  {
+    key: "stuck",
+    label: "STUCK",
+    statuses: ["Stuck"],
+    dropStatus: "Stuck",
+    headerBg: "#fee2e2",
+    headerColor: "#b91c1c",
+    countBg: "#ef4444",
+    bodyBg: "#fff5f5",
+    stripe: "#ef4444",
   },
   {
     key: "inreview",
@@ -287,6 +298,23 @@ export default function TasksBoard({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
+  // Which columns are hidden — persisted so it survives page refresh
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("kanban_hidden_cols");
+      return saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+    } catch { return new Set<string>(); }
+  });
+
+  function toggleCol(key: string) {
+    setHiddenCols((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      try { localStorage.setItem("kanban_hidden_cols", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }
+
   // Tasks in each column
   const allMappedStatuses = new Set(KANBAN_COLUMNS.flatMap((c) => c.statuses));
 
@@ -356,14 +384,64 @@ export default function TasksBoard({
         onChanged={onChanged}
       />
 
+      {/* ── Column toggles ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "12px" }}>
+        <span style={{ fontSize: "11.5px", fontWeight: 600, color: COLOURS.SLATE, marginRight: "2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Columns:</span>
+        {KANBAN_COLUMNS.map((col) => {
+          const count = tasksFor(col).length;
+          const hidden = hiddenCols.has(col.key);
+          return (
+            <button
+              key={col.key}
+              onClick={() => toggleCol(col.key)}
+              style={{
+                display: "flex", alignItems: "center", gap: "5px",
+                border: `1px solid ${hidden ? COLOURS.HAIRLINE : col.countBg}`,
+                borderRadius: RADII.PILL, padding: "4px 10px",
+                fontSize: "11.5px", fontWeight: 600, cursor: "pointer",
+                background: hidden ? COLOURS.CARD : col.headerBg,
+                color: hidden ? COLOURS.SLATE : col.headerColor,
+                opacity: hidden ? 0.6 : 1,
+                transition: "opacity 0.15s",
+              }}
+            >
+              {!hidden && (
+                <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: col.countBg, flexShrink: 0, display: "inline-block" }} />
+              )}
+              {col.label}
+              <span style={{
+                background: hidden ? "#e2e8f0" : col.countBg,
+                color: hidden ? COLOURS.SLATE : "#fff",
+                borderRadius: "99px", fontSize: "10px", fontWeight: 700,
+                padding: "0 5px", minWidth: "16px", textAlign: "center", lineHeight: "16px",
+              }}>{count}</span>
+              {!hidden && (
+                <span style={{ fontSize: "12px", opacity: 0.6, marginLeft: "1px" }}>×</span>
+              )}
+            </button>
+          );
+        })}
+        {hiddenCols.size > 0 && (
+          <button
+            onClick={() => { setHiddenCols(new Set()); try { localStorage.removeItem("kanban_hidden_cols"); } catch {} }}
+            style={{ background: "none", border: "none", color: COLOURS.BLUE, fontSize: "11.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline", padding: "4px 6px" }}
+          >
+            Show all
+          </button>
+        )}
+      </div>
+
       {/* ── Board grid ── */}
+      {(() => {
+        const visibleCols = KANBAN_COLUMNS.filter((c) => !hiddenCols.has(c.key));
+        return (
       <div style={{
         display: "grid",
-        gridTemplateColumns: `repeat(${KANBAN_COLUMNS.length}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${visibleCols.length || 1}, minmax(0, 1fr))`,
         gap: "12px",
         alignItems: "start",
       }}>
-        {KANBAN_COLUMNS.map((col) => {
+        {visibleCols.map((col) => {
           const colTasks = tasksFor(col);
           const isOver = dragOverKey === col.key;
           return (
@@ -604,6 +682,8 @@ export default function TasksBoard({
           );
         })}
       </div>
+        );
+      })()}
 
       {/* Orphan tasks (statuses not mapped to any column) */}
       {orphans.length > 0 && (
