@@ -1187,14 +1187,17 @@ export default function AdminDataPage() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    {["Location","Last Refuel","Last Service","Days Since Refuel","Days Since Service","Total Litres","Avg L/hr"].map(h =>
+                    {["Generator","Last Refuel","Last Service","Days Since Refuel","Days Since Service","Total Litres","Avg L/hr"].map(h =>
                       <th key={h} style={TH}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map(r => (
                     <tr key={r.generator_id}>
-                      <td style={TD}><strong>{r.location_name}</strong></td>
+                      <td style={TD}>
+                        <strong>{r.location_name}</strong>
+                        <span style={{ display: "block", fontSize: "11px", color: COLOURS.SLATE }}>{r.generator_label} · {r.kva} kVA</span>
+                      </td>
                       <td style={TD}>{r.last_refuel_date  ? formatDateUK(r.last_refuel_date)  : "—"}</td>
                       <td style={TD}>{r.last_service_date ? formatDateUK(r.last_service_date) : "—"}</td>
                       <td style={TD}>{daysBadge(r.days_since_refuel,  7, 14)  ?? "—"}</td>
@@ -1220,7 +1223,7 @@ export default function AdminDataPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["Date","Generator","Location","Prev Hrs","Present Hrs","Hrs Run","Qty (L)","Rate/L","Total Cost","L/hr","Cost/hr","Remarks",""].map(h =>
+                  {["Date","Generator","Prev Hrs","Present Hrs","Hrs Run","Qty (L)","Rate/L","Total Cost","L/hr","Cost/hr","Remarks",""].map(h =>
                     <th key={h} style={TH}>{h}</th>)}
                 </tr>
               </thead>
@@ -1231,10 +1234,10 @@ export default function AdminDataPage() {
                     <td style={TD}>
                       <button onClick={() => openGenHistory({ generator_id: r.generator_id, label: r.generator_label, location: r.location_name, kva: r.kva, model: r.model }, "fuel")}
                         style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: COLOURS.NAVY, fontWeight: 600, fontSize: "inherit", textDecoration: "underline", textUnderlineOffset: "2px", textDecorationStyle: "dotted" }}>
-                        {r.generator_label}
+                        {r.location_name}
                       </button>
+                      <span style={{ display: "block", fontSize: "11px", color: COLOURS.SLATE }}>{r.generator_label} · {r.kva} kVA</span>
                     </td>
-                    <td style={TD}>{r.location_name}</td>
                     <td style={TD}>{r.previous_hours ?? "—"}</td>
                     <td style={TD}>{r.present_hours}</td>
                     <td style={TD}>{r.hours_run ?? "—"}</td>
@@ -1284,7 +1287,6 @@ export default function AdminDataPage() {
                 <tr>
                   <th style={TH}>Date</th>
                   <th style={TH}>Generator</th>
-                  <th style={TH}>Location</th>
                   {MAINT_COLS.map(([h]) => <th key={h} style={TH}>{h}</th>)}
                   <th style={TH}>Total</th>
                   <th style={TH}></th>
@@ -1297,10 +1299,10 @@ export default function AdminDataPage() {
                     <td style={TD}>
                       <button onClick={() => openGenHistory({ generator_id: r.generator_id, label: r.generator_label, location: r.location_name, kva: r.kva, model: r.model }, "maintenance")}
                         style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: COLOURS.NAVY, fontWeight: 600, fontSize: "inherit", textDecoration: "underline", textUnderlineOffset: "2px", textDecorationStyle: "dotted" }}>
-                        {r.generator_label}
+                        {r.location_name}
                       </button>
+                      <span style={{ display: "block", fontSize: "11px", color: COLOURS.SLATE }}>{r.generator_label} · {r.kva} kVA</span>
                     </td>
-                    <td style={TD}>{r.location_name}</td>
                     {MAINT_COLS.map(([, key]) => (
                       <td key={key} style={TD}>
                         {(r[key] as number) > 0 ? PKR(r[key] as number) : <span style={{ color: COLOURS.SLATE }}>—</span>}
@@ -1425,10 +1427,10 @@ export default function AdminDataPage() {
                       <span style={{ fontSize: "16px" }}>⚡</span>
                       <div>
                         <p style={{ margin: 0, fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>
-                          {g.label || `${g.kva} kVA`}
+                          {g.kva} kVA
                         </p>
                         <p style={{ margin: 0, fontSize: "11px", color: COLOURS.SLATE }}>
-                          {g.kva} kVA · {g.model}
+                          {g.label || g.model}
                         </p>
                       </div>
                       <span style={{
@@ -1827,8 +1829,7 @@ export default function AdminDataPage() {
           const rankCell = isFirst ? "🥇" : isLast ? "⚠" : String(i + 1);
           return `<tr class="${rowClass}">
             <td class="rank">${rankCell}</td>
-            <td><strong>${r.generator_label}</strong> <span class="dim">${r.kva} kVA</span></td>
-            <td>${r.location_name}</td>
+            <td><strong>${r.location_name}</strong><br><span class="dim">${r.generator_label} · ${r.kva} kVA</span></td>
             <td class="num bold">${fmtPkr(r.total_cost)}</td>
             <td class="num">${fmtPkr(r.total_fuel_cost)}<br><span class="dim">${fmtPct(r.total_fuel_cost, r.total_cost)}</span></td>
             <td class="num">${fmtPkr(r.total_maint_cost)}<br><span class="dim">${fmtPct(r.total_maint_cost, r.total_cost)}</span></td>
@@ -1843,7 +1844,7 @@ export default function AdminDataPage() {
           <div class="section">
             <div class="section-title">🏆 Generator Efficiency Ranking — Lowest Cost/hr is Best</div>
             <table><thead><tr>
-              <th>#</th><th>Generator</th><th>Location</th><th class="num">Total Cost</th>
+              <th>#</th><th>Generator</th><th class="num">Total Cost</th>
               <th class="num">Fuel</th><th class="num">Maintenance</th><th class="num">Hrs Run</th>
               <th class="num">Avg L/hr</th><th class="num">Avg Cost/hr</th>
               <th class="num">Last Refuel</th><th class="num">Last Service</th>
@@ -1857,7 +1858,7 @@ export default function AdminDataPage() {
             const vals = [r.m1_fuel, r.m2_fuel, r.m3_fuel, r.m4_fuel].filter((_, i) =>
               [r.m1_label, r.m2_label, r.m3_label, r.m4_label][i]);
             return `<tr>
-              <td><strong>${r.generator_label}</strong> <span class="dim">${r.location_name}</span></td>
+              <td><strong>${r.location_name}</strong><br><span class="dim">${r.generator_label} · ${r.kva} kVA</span></td>
               ${vals.map(m => `<td class="num ${m > 0 ? "bold" : "dim"}">${m > 0 ? fmtPkr(m) : "—"}</td>`).join("")}
               <td class="num bold">${fmtPkr(r.total_fuel_cost)}</td>
             </tr>`;
@@ -1885,7 +1886,7 @@ export default function AdminDataPage() {
         </tr>`).join("");
         mainTableHtml = `
           <div class="section">
-            <div class="section-title">📋 Event History — ${sg ? `${sg.generator_label}, ${sg.location_name}` : ""}</div>
+            <div class="section-title">📋 Event History — ${sg ? `${sg.location_name} (${sg.generator_label})` : ""}</div>
             <table><thead><tr>
               <th>Type</th><th>Date</th><th class="num">Cost</th>
               <th class="num">Qty</th><th class="num">Rate</th><th>Remarks</th>
@@ -1919,7 +1920,7 @@ export default function AdminDataPage() {
               <div class="section-title">⚖ Generator Comparison</div>
               <table><thead><tr>
                 <th>Metric</th>
-                ${compareData.map(r => `<th class="num">${r.generator_label}<br><span class="dim">${r.location_name}</span></th>`).join("")}
+                ${compareData.map(r => `<th class="num">${r.location_name}<br><span class="dim">${r.generator_label} · ${r.kva} kVA</span></th>`).join("")}
               </tr></thead><tbody>${tableRows}</tbody></table>
             </div>`;
         }
@@ -1935,7 +1936,7 @@ export default function AdminDataPage() {
             const vals = [r.m1_fuel, r.m2_fuel, r.m3_fuel, r.m4_fuel].filter((_, i) =>
               [r.m1_label, r.m2_label, r.m3_label, r.m4_label][i]);
             return `<tr>
-              <td><strong>${r.generator_label}</strong><br><span class="dim">${r.location_name}</span></td>
+              <td><strong>${r.location_name}</strong><br><span class="dim">${r.generator_label} · ${r.kva} kVA</span></td>
               ${vals.map(m => `<td class="num ${m > 0 ? "bold" : "dim"}">${m > 0 ? fmtPkr(m) : "—"}</td>`).join("")}
               <td class="num bold">${fmtPkr(r.total_fuel_cost)}</td>
             </tr>`;
@@ -2146,7 +2147,7 @@ export default function AdminDataPage() {
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12px" }}>
                   <thead>
                     <tr style={{ background:"#F8FAFC" }}>
-                      {["#","Generator","Location","Total Cost","Fuel","Maintenance","Hrs Run","Avg L/hr","Avg Cost/hr","Last Refuel","Last Service"].map(h => (
+                      {["#","Generator","Total Cost","Fuel","Maintenance","Hrs Run","Avg L/hr","Avg Cost/hr","Last Refuel","Last Service"].map(h => (
                         <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontWeight:700, color:COLOURS.SLATE, whiteSpace:"nowrap", fontSize:"11px", textTransform:"uppercase", letterSpacing:"0.04em", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>{h}</th>
                       ))}
                     </tr>
@@ -2162,10 +2163,9 @@ export default function AdminDataPage() {
                             {isEfficient ? "🥇" : isWorse ? "⚠" : i + 1}
                           </td>
                           <td style={{ padding:"10px 12px", fontWeight:600, color:COLOURS.NAVY, whiteSpace:"nowrap" }}>
-                            {r.generator_label}
-                            <span style={{ marginLeft:"6px", fontSize:"10px", color:COLOURS.SLATE }}>{r.kva}kVA</span>
+                            {r.location_name}
+                            <span style={{ display:"block", fontSize:"10px", color:COLOURS.SLATE, fontWeight:400 }}>{r.generator_label} · {r.kva} kVA</span>
                           </td>
-                          <td style={{ padding:"10px 12px", color:COLOURS.SLATE, whiteSpace:"nowrap" }}>{r.location_name}</td>
                           <td style={{ padding:"10px 12px", fontWeight:700, color:COLOURS.NAVY, whiteSpace:"nowrap" }}>{pkr(r.total_cost)}</td>
                           <td style={{ padding:"10px 12px", color:COLOURS.SLATE, whiteSpace:"nowrap" }}>
                             {pkr(r.total_fuel_cost)}
@@ -2214,7 +2214,7 @@ export default function AdminDataPage() {
                         return (
                           <tr key={r.generator_id} style={{ borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
                             <td style={{ padding:"9px 12px", fontWeight:600, color:COLOURS.NAVY, whiteSpace:"nowrap" }}>
-                              {r.generator_label} <span style={{ fontSize:"10px", color:COLOURS.SLATE }}>{r.location_name}</span>
+                              {r.location_name}<span style={{ display:"block", fontSize:"10px", color:COLOURS.SLATE, fontWeight:400 }}>{r.generator_label} · {r.kva} kVA</span>
                             </td>
                             {months.map((m, i) => (
                               <td key={i} style={{ padding:"9px 12px", textAlign:"right", color: m > 0 ? COLOURS.NAVY : COLOURS.SLATE, fontWeight: m > 0 ? 600 : 400 }}>
@@ -2403,7 +2403,7 @@ export default function AdminDataPage() {
                       <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:700, color:COLOURS.SLATE, fontSize:"11px", textTransform:"uppercase", letterSpacing:"0.04em", borderBottom:`1px solid ${COLOURS.HAIRLINE}`, minWidth:"140px" }}>Metric</th>
                       {compareData.map(r => (
                         <th key={r.generator_id} style={{ padding:"10px 12px", textAlign:"right", fontWeight:700, color:COLOURS.NAVY, fontSize:"11px", borderBottom:`1px solid ${COLOURS.HAIRLINE}`, minWidth:"130px", whiteSpace:"nowrap" }}>
-                          {r.generator_label}<br/><span style={{ fontWeight:400, color:COLOURS.SLATE }}>{r.location_name}</span>
+                          {r.location_name}<br/><span style={{ fontWeight:400, color:COLOURS.SLATE }}>{r.generator_label} · {r.kva} kVA</span>
                         </th>
                       ))}
                     </tr>
@@ -2469,7 +2469,7 @@ export default function AdminDataPage() {
                         return (
                           <tr key={r.generator_id} style={{ borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
                             <td style={{ padding:"9px 12px", fontWeight:600, color:COLOURS.NAVY, whiteSpace:"nowrap" }}>
-                              {r.generator_label} <span style={{ fontSize:"10px", color:COLOURS.SLATE }}>{r.location_name}</span>
+                              {r.location_name}<span style={{ display:"block", fontSize:"10px", color:COLOURS.SLATE, fontWeight:400 }}>{r.generator_label} · {r.kva} kVA</span>
                             </td>
                             {months.map((m, i) => (
                               <td key={i} style={{ padding:"9px 12px", textAlign:"right", color: m > 0 ? COLOURS.NAVY : COLOURS.SLATE, fontWeight: m > 0 ? 600 : 400 }}>
