@@ -706,6 +706,14 @@ export function canAccessGeneratorEntry(u: UserCtx): boolean {
   return isAdminTier(u) || widgetVisible(u, "admin_ops.generators_entry", false);
 }
 
+// ── Generator management (edit/delete fuel & maintenance entries) ────
+// Admin tier always has access.
+// Also granted to anyone with the admin_ops.generators widget — same
+// toggle that shows the Generators tab. Matches is_generator_admin() RPC.
+export function canManageGenerators(u: UserCtx): boolean {
+  return isAdminTier(u) || widgetVisible(u, "admin_ops.generators", false);
+}
+
 // ── Daily-entry-only restricted mode ────────────────────────────────
 // True ONLY when can_access_admin_entry is the user's sole capability.
 // We check every meaningful permission so that Sunaina (who also has

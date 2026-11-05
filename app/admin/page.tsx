@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Fragment } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import LegalCases from "./LegalCases";
-import { widgetVisible, isAdminTier, isPrivileged, canAccessAdminOps, canAccessVisitorEntry } from "../lib/permissions";
+import { widgetVisible, isAdminTier, isPrivileged, canAccessAdminOps, canAccessVisitorEntry, canManageGenerators } from "../lib/permissions";
 import { useUserCtx } from "../lib/useUserCtx";
 import { authFetch, supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
@@ -85,7 +85,8 @@ type TabId = "registrations" | "payments" | "compliance" | "documents" | "operat
 type GenTabView = "diesel" | "maintenance" | "master" | "analytics";
 
 type GenFuelRow = {
-  id: string; generator_label: string; location_name: string;
+  id: string; generator_id: string; generator_label: string; location_name: string;
+  kva: number; model: string;
   refuel_date: string; previous_hours: number | null; present_hours: number;
   hours_run: number | null; rate_per_litre: number; qty_litres: number;
   total_cost: number; litres_per_hour: number | null; cost_per_hour: number | null;
@@ -93,7 +94,8 @@ type GenFuelRow = {
 };
 
 type GenMaintRow = {
-  id: string; generator_label: string; location_name: string;
+  id: string; generator_id: string; generator_label: string; location_name: string;
+  kva: number; model: string;
   maintenance_date: string;
   engine_oil: number; oil_filter: number; fuel_filter: number; air_filter: number;
   radiator_service: number; periodic_maintenance: number; other_mechanical_work: number; others: number;
@@ -870,6 +872,31 @@ export default function AdminDataPage() {
   const [savingGenMaster, setSavingGenMaster] = useState(false);
   const [savingGenThresh, setSavingGenThresh] = useState(false);
 
+  // ── Per-generator history drawer ───────────────────────────────────────────
+  type GenHistoryDrawer = { generator_id: string; label: string; location: string; kva: number; model: string };
+  const [genHistoryDrawer, setGenHistoryDrawer] = useState<GenHistoryDrawer | null>(null);
+  const [genHistoryTab, setGenHistoryTab] = useState<"fuel" | "maintenance">("fuel");
+  const [genHistoryFuel, setGenHistoryFuel] = useState<GenFuelRow[]>([]);
+  const [genHistoryMaint, setGenHistoryMaint] = useState<GenMaintRow[]>([]);
+  const [loadingGenHistory, setLoadingGenHistory] = useState(false);
+
+  async function openGenHistory(gen: GenHistoryDrawer, tab: "fuel" | "maintenance" = "fuel") {
+    setGenHistoryDrawer(gen);
+    setGenHistoryTab(tab);
+    setLoadingGenHistory(true);
+    try {
+      const [fuelRes, maintRes] = await Promise.all([
+        authFetch(`/api/admin/generators?type=fuel_table&generator_id=${gen.generator_id}&limit=200`),
+        authFetch(`/api/admin/generators?type=maint_table&generator_id=${gen.generator_id}&limit=200`),
+      ]);
+      const [fuel, maint] = await Promise.all([fuelRes.json(), maintRes.json()]);
+      setGenHistoryFuel(fuel.data ?? []);
+      setGenHistoryMaint(maint.data ?? []);
+    } finally {
+      setLoadingGenHistory(false);
+    }
+  }
+
   // ── Generator Analytics state ──────────────────────────────────────────────
   type GenAnalyticsRow = {
     location_id: string; location_name: string; generator_count: number;
@@ -1168,7 +1195,12 @@ export default function AdminDataPage() {
                 {genFuelRows.map(r => (
                   <tr key={r.id}>
                     <td style={TD}>{formatDateUK(r.refuel_date)}</td>
-                    <td style={TD}>{r.generator_label}</td>
+                    <td style={TD}>
+                      <button onClick={() => openGenHistory({ generator_id: r.generator_id, label: r.generator_label, location: r.location_name, kva: r.kva, model: r.model }, "fuel")}
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: COLOURS.NAVY, fontWeight: 600, fontSize: "inherit", textDecoration: "underline", textUnderlineOffset: "2px", textDecorationStyle: "dotted" }}>
+                        {r.generator_label}
+                      </button>
+                    </td>
                     <td style={TD}>{r.location_name}</td>
                     <td style={TD}>{r.previous_hours ?? "—"}</td>
                     <td style={TD}>{r.present_hours}</td>
@@ -1180,7 +1212,7 @@ export default function AdminDataPage() {
                     <td style={TD}>{NUM(r.cost_per_hour, 0) !== "—" ? PKR(r.cost_per_hour) : "—"}</td>
                     <td style={{ ...TD, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis" }}>{r.remarks ?? "—"}</td>
                     <td style={TD}>
-                      {ctx && isAdminTier(ctx) && (
+                      {ctx && canManageGenerators(ctx) && (
                         <button onClick={() => setEditingGenFuel(r)}
                           style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
                           Edit
@@ -1229,7 +1261,12 @@ export default function AdminDataPage() {
                 {genMaintRows.map(r => (
                   <tr key={r.id}>
                     <td style={TD}>{formatDateUK(r.maintenance_date)}</td>
-                    <td style={TD}>{r.generator_label}</td>
+                    <td style={TD}>
+                      <button onClick={() => openGenHistory({ generator_id: r.generator_id, label: r.generator_label, location: r.location_name, kva: r.kva, model: r.model }, "maintenance")}
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: COLOURS.NAVY, fontWeight: 600, fontSize: "inherit", textDecoration: "underline", textUnderlineOffset: "2px", textDecorationStyle: "dotted" }}>
+                        {r.generator_label}
+                      </button>
+                    </td>
                     <td style={TD}>{r.location_name}</td>
                     {MAINT_COLS.map(([, key]) => (
                       <td key={key} style={TD}>
@@ -1238,7 +1275,7 @@ export default function AdminDataPage() {
                     ))}
                     <td style={{ ...TD, fontWeight: 700 }}>{PKR(r.total_cost)}</td>
                     <td style={TD}>
-                      {ctx && isAdminTier(ctx) && (
+                      {ctx && canManageGenerators(ctx) && (
                         <button onClick={() => setEditingGenMaint(r)}
                           style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
                           Edit
@@ -1272,7 +1309,7 @@ export default function AdminDataPage() {
               ⚡ Changes here sync automatically to the Daily Entry page
             </p>
           </div>
-          {ctx && isAdminTier(ctx) && (
+          {ctx && canManageGenerators(ctx) && (
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => { setShowGenThresholds(v => !v); }}
                 style={{ padding: "6px 12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "12px", cursor: "pointer", background: "white", color: COLOURS.NAVY }}>
@@ -1287,7 +1324,7 @@ export default function AdminDataPage() {
         </div>
 
         {/* Thresholds panel */}
-        {showGenThresholds && ctx && isAdminTier(ctx) && (
+        {showGenThresholds && ctx && canManageGenerators(ctx) && (
           <div style={{ background: "#FFFBEB", border: `1px solid #FDE68A`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
             <p style={{ margin: "0 0 12px", fontSize: "12px", fontWeight: 700, color: COLOURS.AMBER }}>⚙ Alert Thresholds</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
@@ -1368,7 +1405,11 @@ export default function AdminDataPage() {
                       }}>
                         {g.is_active ? "✓" : "off"}
                       </span>
-                      {ctx && isAdminTier(ctx) && (
+                      <button onClick={() => openGenHistory({ generator_id: g.id, label: g.label || `${g.kva} kVA`, location: locName, kva: g.kva, model: g.model })}
+                        style={{ fontSize: "11px", padding: "2px 7px", borderRadius: "4px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.SLATE }}>
+                        History
+                      </button>
+                      {ctx && canManageGenerators(ctx) && (
                         <button onClick={() => {
                           setEditingGenMaster(g);
                           setGenMasterForm({ location_id: g.location_id, kva: String(g.kva), model: g.model, label: g.label ?? "", is_active: g.is_active });
@@ -1879,6 +1920,125 @@ export default function AdminDataPage() {
             </div>
           </div>
         )}
+      {/* ── Per-Generator History Drawer ── */}
+      {genHistoryDrawer && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 10100, display: "flex", justifyContent: "flex-end" }}
+          onClick={() => setGenHistoryDrawer(null)}>
+          <div style={{ width: "min(680px, 95vw)", height: "100%", background: "white", boxShadow: "-8px 0 40px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY }}>
+                    ⚡ {genHistoryDrawer.label}
+                  </p>
+                  <p style={{ margin: "3px 0 0", fontSize: "12px", color: COLOURS.SLATE }}>
+                    {genHistoryDrawer.location} · {genHistoryDrawer.kva} kVA · {genHistoryDrawer.model}
+                  </p>
+                </div>
+                <button onClick={() => setGenHistoryDrawer(null)}
+                  style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: COLOURS.SLATE, lineHeight: 1, padding: "2px 4px" }}>
+                  ×
+                </button>
+              </div>
+              {/* Tabs */}
+              <div style={{ display: "flex", gap: "4px", marginTop: "14px" }}>
+                {(["fuel", "maintenance"] as const).map(tab => (
+                  <button key={tab} onClick={() => setGenHistoryTab(tab)}
+                    style={{ padding: "5px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: "none",
+                      background: genHistoryTab === tab ? COLOURS.NAVY : COLOURS.BORDER,
+                      color: genHistoryTab === tab ? "white" : COLOURS.SLATE }}>
+                    {tab === "fuel" ? "Fuel Log" : "Maintenance Log"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: "16px 24px", flex: 1 }}>
+              {loadingGenHistory ? (
+                <p style={{ color: COLOURS.SLATE, fontSize: "13px", textAlign: "center", marginTop: "40px" }}>Loading…</p>
+              ) : genHistoryTab === "fuel" ? (
+                genHistoryFuel.length === 0 ? (
+                  <p style={{ color: COLOURS.SLATE, fontSize: "13px", textAlign: "center", marginTop: "40px" }}>No fuel entries recorded yet.</p>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                      <thead>
+                        <tr style={{ background: COLOURS.BORDER }}>
+                          {["Date","Hrs Run","Qty (L)","Rate","Total","L/hr","Cost/hr","Remarks",""].map(h => (
+                            <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontWeight: 600, color: COLOURS.SLATE, whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {genHistoryFuel.map((r, i) => (
+                          <tr key={r.id} style={{ background: i % 2 === 0 ? "white" : "#F8FAFC", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                            <td style={{ padding: "7px 10px", whiteSpace: "nowrap" }}>{formatDateUK(r.refuel_date)}</td>
+                            <td style={{ padding: "7px 10px", textAlign: "right" }}>{r.hours_run ?? "—"}</td>
+                            <td style={{ padding: "7px 10px", textAlign: "right" }}>{r.qty_litres.toLocaleString()}</td>
+                            <td style={{ padding: "7px 10px", textAlign: "right" }}>{PKR(r.rate_per_litre)}</td>
+                            <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600 }}>{PKR(r.total_cost)}</td>
+                            <td style={{ padding: "7px 10px", textAlign: "right" }}>{r.litres_per_hour != null ? r.litres_per_hour.toFixed(1) : "—"}</td>
+                            <td style={{ padding: "7px 10px", textAlign: "right" }}>{r.cost_per_hour != null ? PKR(r.cost_per_hour) : "—"}</td>
+                            <td style={{ padding: "7px 10px", color: COLOURS.SLATE, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.remarks || "—"}</td>
+                            <td style={{ padding: "7px 10px" }}>
+                              {ctx && canManageGenerators(ctx) && (
+                                <button onClick={() => { setGenHistoryDrawer(null); setEditingGenFuel(r); }}
+                                  style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
+                                  Edit
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : (
+                genHistoryMaint.length === 0 ? (
+                  <p style={{ color: COLOURS.SLATE, fontSize: "13px", textAlign: "center", marginTop: "40px" }}>No maintenance entries recorded yet.</p>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                      <thead>
+                        <tr style={{ background: COLOURS.BORDER }}>
+                          {["Date","Engine Oil","Oil Filter","Fuel Filter","Air Filter","Radiator","Periodic","Other Mech","Others","Total",""].map(h => (
+                            <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontWeight: 600, color: COLOURS.SLATE, whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {genHistoryMaint.map((r, i) => (
+                          <tr key={r.id} style={{ background: i % 2 === 0 ? "white" : "#F8FAFC", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                            <td style={{ padding: "7px 10px", whiteSpace: "nowrap" }}>{formatDateUK(r.maintenance_date)}</td>
+                            {[r.engine_oil, r.oil_filter, r.fuel_filter, r.air_filter, r.radiator_service, r.periodic_maintenance, r.other_mechanical_work, r.others].map((v, ci) => (
+                              <td key={ci} style={{ padding: "7px 10px", textAlign: "right" }}>
+                                {v > 0 ? PKR(v) : <span style={{ color: COLOURS.SLATE }}>—</span>}
+                              </td>
+                            ))}
+                            <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600 }}>{PKR(r.total_cost)}</td>
+                            <td style={{ padding: "7px 10px" }}>
+                              {ctx && canManageGenerators(ctx) && (
+                                <button onClick={() => { setGenHistoryDrawer(null); setEditingGenMaint(r); }}
+                                  style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px", border: `1px solid ${COLOURS.HAIRLINE}`, background: "white", cursor: "pointer", color: COLOURS.NAVY }}>
+                                  Edit
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     );
   }
