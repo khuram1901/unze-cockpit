@@ -11,7 +11,14 @@ const id =
   process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ||
   Date.now().toString(36);
 
-let src = readFileSync(path, "utf8");
+let src;
+try {
+  src = readFileSync(path, "utf8");
+} catch {
+  // sw.js is gitignored and not present in CI/Vercel — skip silently
+  console.log("stamp-sw: public/sw.js not found — skipping");
+  process.exit(0);
+}
 const stamped = src.replace(
   /const CACHE_NAME = "pulse-[^"]*";/,
   `const CACHE_NAME = "pulse-${id}";`,
