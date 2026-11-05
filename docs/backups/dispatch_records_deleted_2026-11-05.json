@@ -1,0 +1,20 @@
+{
+  "deleted_at": "2026-11-05",
+  "reason": "Incorrect entry — Khuram requested deletion via chat",
+  "table": "dispatch_records",
+  "records": [
+    {
+      "id": "0633b0d1-82da-4217-9b60-e40eadd59e61",
+      "authority_letter_id": null,
+      "dispatch_date": "2026-06-30",
+      "qty_31": 4420,
+      "qty_36": 7504,
+      "qty_45": 1068,
+      "qty_meter": null,
+      "qty_40": null,
+      "notes": null,
+      "created_at": "2026-08-05 05:19:49.317481+00",
+      "note": "Displayed in UI as 31/06/2026 (invalid date, stored as 30/06/2026)"
+    }
+  ]
+}
