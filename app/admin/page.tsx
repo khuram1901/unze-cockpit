@@ -1037,6 +1037,7 @@ export default function AdminDataPage() {
         setGenTabView(id);
         setGenActiveCard(null);
         if (id === "analytics") fetchGenAnalytics(analyticsFrom, analyticsTo);
+        if (id === "report") fetchReportFleet(reportFrom, reportTo);
       }} style={{
         padding: "6px 16px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
         backgroundColor: genTabView === id ? COLOURS.NAVY : "transparent",
