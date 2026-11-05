@@ -449,7 +449,16 @@ export default function StockPage() {
   );
   const totalInStock = plantStock.s31 + plantStock.s36 + plantStock.s40 + plantStock.s45 + plantStock.meter;
   const activePOs = summary.filter((i) => i.po.status === "Active" && !i.po.is_system_unallocated).length;
-  const visibleSummary = showClosed ? summary : summary.filter((i) => i.po.status === "Active");
+  const visibleSummary = (showClosed ? summary : summary.filter((i) => i.po.status === "Active"))
+    .filter((i) => {
+      if (!i.po.is_system_unallocated) return true;
+      const p = i.po;
+      const hasStock =
+        (p.produced_31 || 0) + (p.produced_36 || 0) + (p.produced_40 || 0) + (p.produced_45 || 0) + (p.produced_meter || 0) +
+        (p.dispatched_31 || 0) + (p.dispatched_36 || 0) + (p.dispatched_40 || 0) + (p.dispatched_45 || 0) + (p.dispatched_meter || 0) +
+        (p.in_stock_31 || 0) + (p.in_stock_36 || 0) + (p.in_stock_40 || 0) + (p.in_stock_45 || 0) + (p.in_stock_meter || 0);
+      return hasStock > 0;
+    });
 
   // Khuram, 18 Jul 2026: this banner was "really messy" — every expired
   // letter ever (some from 2022) dumped in one unsorted list, including
