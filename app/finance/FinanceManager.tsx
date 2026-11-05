@@ -137,6 +137,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
   const [positions, setPositions] = useState<DailyPosition[]>([]);
   const [pdcOutlook, setPdcOutlook] = useState<PdcWeek[]>([]);
+  const [pdcMonthTotal, setPdcMonthTotal] = useState<number | null>(null);
   const [chainBreaks, setChainBreaks] = useState<ChainBreak[]>([]);
 
   // ── Month filter for Daily Position table ─────────────────────────────────
@@ -307,7 +308,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     const lastDay = new Date(Date.UTC(posYear, posMonthNum, 0)).getUTCDate();
     const monthEnd = `${selectedMonth}-${String(lastDay).padStart(2, "0")}`;
 
-    const [obRes, planRes, posRes, pdcRes, chainRes] = await Promise.all([
+    const [obRes, planRes, posRes, pdcRes, chainRes, pdcMonthRes] = await Promise.all([
       supabase
         .from("cash_opening_balance")
         .select("id, as_of_date, opening_amount, currency")
@@ -332,11 +333,14 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         .order("position_date", { ascending: false }),
       supabase.rpc("get_pdc_outlook_v2", { p_company_id: companyId, p_today: todayISO() }),
       supabase.rpc("daily_cash_continuity", { p_company_id: companyId }),
+      supabase.rpc("get_pdc_month_total", { p_company_id: companyId, p_month: `${selectedMonth}-01` }),
     ]);
     if (obRes.error) console.error("Opening balance error:", obRes.error);
     if (planRes.error) console.error("Monthly plan error:", planRes.error);
     if (posRes.error) console.error("Positions error:", posRes.error);
     if (pdcRes.error) console.error("PDC outlook error:", pdcRes.error);
+    if (pdcMonthRes.error) console.error("PDC month total error:", pdcMonthRes.error);
+    setPdcMonthTotal(typeof pdcMonthRes.data === "number" ? pdcMonthRes.data : null);
     setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
     setPlan(planRes.data || null);
     // closing_after_post_dated is trusted as stored for both companies — see the save
@@ -610,6 +614,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           valueColor={RED}
           onEdit={canEditAll ? openPlanModal : undefined}
         />
+        {monthOpeningBalance !== null && plan && (
+          <SummaryCard
+            label="Projected Month End"
+            value={formatPKRWhole(monthOpeningBalance + plan.tentative_receivables - plan.tentative_payouts)}
+            sub="Opening + Receivables − Payouts"
+          />
+        )}
         {/* 15 Jul 2026, per Khuram: cash in hand and PDC are two different
             things — a PDC he's issued isn't out of his hand yet, so it must
             never be silently blended into the headline balance. This card
@@ -627,8 +638,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         {wv("finance.pdc_outstanding", true) && (
           <SummaryCard
             label="PDC Outstanding"
-            value={latestPosition ? formatPKRWhole(latestPosition.post_dated_total) : "—"}
-            sub="Issued, not yet cleared — see outlook below"
+            value={pdcMonthTotal !== null ? formatPKRWhole(pdcMonthTotal) : "—"}
+            sub={`PDC dues this month · ${formatMonthUK(selectedMonth)}`}
             valueColor={AMBER}
           />
         )}
@@ -662,8 +673,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           Weeks with PDC due are red. Future commitments below as amber rows.
           Weekly receipts = Planned Receivables PKR 240M Oct ÷ (days/7). ── */}
       {pdcOutlook.length > 0 && (() => {
-        const nearTerm = pdcOutlook.filter((w) => w.near_term);
-        const future   = pdcOutlook.filter((w) => !w.near_term && w.pdc_due > 0);
+        const nearTerm  = pdcOutlook.filter((w) => w.near_term);   // now 8 weeks after RPC change
+        const section1  = nearTerm.slice(0, 4);
+        const section2  = nearTerm.slice(4, 8);
+        const future    = pdcOutlook.filter((w) => !w.near_term && w.pdc_due > 0);
 
         // Compute weekly receipts from Planned Receivables PKR 240M for October 2026
         // (avoid passing the 3rd param to the RPC while two overloads coexist in Postgres)
@@ -681,7 +694,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           weeklyBalance[w.week_number] = runningBal;
         });
 
-        const totalPdcNext6 = nearTerm.reduce((s, w) => s + w.pdc_due, 0);
+        const totalPdcNext8 = nearTerm.reduce((s, w) => s + w.pdc_due, 0);
         const totalPdcAll   = pdcOutlook.reduce((s, w) => s + w.pdc_due, 0);
 
         // Returns [line1, line2] e.g. ["19–25", "Oct 2026"] or ["26 Oct–1 Nov", "2026"]
@@ -755,9 +768,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 {latestPosition && <span style={tileTag("#E6F4F1", GREEN)}>As at {formatDateUK(latestPosition.position_date)}</span>}
               </div>
               <div style={{ flex: 1, minWidth: 0, border: `1px solid ${HAIRLINE}`, borderRadius: "10px", padding: "12px 14px", backgroundColor: CARD }}>
-                <div style={tileLabel}>PDC Due — Next 6 Wks</div>
-                <div style={tileValue(totalPdcNext6 > 0 ? RED : NAVY)}>{formatPKRWhole(totalPdcNext6)}</div>
-                {totalPdcNext6 > 0
+                <div style={tileLabel}>PDC Due — Next 8 Wks</div>
+                <div style={tileValue(totalPdcNext8 > 0 ? RED : NAVY)}>{formatPKRWhole(totalPdcNext8)}</div>
+                {totalPdcNext8 > 0
                   ? <span style={tileTag("#FDECEA", RED)}>Committed</span>
                   : <span style={tileTag("#E6F4F1", GREEN)}>All clear</span>}
               </div>
@@ -768,9 +781,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               </div>
             </div>
 
-            {secDiv("Next 6 weeks", 0)}
+            {secDiv("Next 4 weeks", 0)}
 
-            {/* ── Horizontal timeline ── */}
+            {/* ── Horizontal timeline — Section 1 (weeks 1–4) ── */}
             <div style={{ position: "relative", paddingBottom: "28px" }}>
               {/* Horizontal baseline */}
               <div style={{
@@ -783,7 +796,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
               {/* Week columns */}
               <div style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
-                {nearTerm.map((w) => {
+                {section1.map((w) => {
                   const hasPdc = w.pdc_due > 0;
                   return (
                     <div key={w.week_number} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
@@ -815,12 +828,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                       }}>
                         <div>
                           <div style={{ height: "1px", backgroundColor: hasPdc ? "rgba(179,38,30,.2)" : HAIRLINE, margin: "0 0 6px" }} />
-                          <div style={{ fontSize: "8.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginBottom: "1px" }}>PDC Due</div>
+                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginBottom: "1px" }}>PDC Due</div>
                           {hasPdc
-                            ? <div style={{ fontFamily: MONO, fontSize: "10.5px", fontWeight: 700, color: RED }}>{formatPKRWhole(w.pdc_due)}</div>
-                            : <div style={{ fontFamily: MONO, fontSize: "10px", color: SLATE }}>—</div>}
-                          <div style={{ fontSize: "8.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Net Bal</div>
-                          <div style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: (weeklyBalance[w.week_number] ?? 0) < 0 ? RED : NAVY }}>{formatPKRWhole(weeklyBalance[w.week_number] ?? 0)}</div>
+                            ? <div style={{ fontFamily: MONO, fontSize: "16px", fontWeight: 700, color: RED }}>{formatPKRWhole(w.pdc_due)}</div>
+                            : <div style={{ fontFamily: MONO, fontSize: "14px", color: SLATE }}>—</div>}
+                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Net Bal</div>
+                          <div style={{ fontFamily: MONO, fontSize: "14px", fontWeight: 600, color: (weeklyBalance[w.week_number] ?? 0) < 0 ? RED : NAVY }}>{formatPKRWhole(weeklyBalance[w.week_number] ?? 0)}</div>
                         </div>
                       </div>
 
@@ -840,7 +853,81 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                       <div style={{
                         position: "absolute", bottom: "-20px",
                         left: "50%", transform: "translateX(-50%)",
-                        fontSize: "9px", fontWeight: 600,
+                        fontSize: "11px", fontWeight: 600,
+                        color: hasPdc ? RED : SLATE,
+                        whiteSpace: "nowrap", zIndex: 2,
+                      }}>
+                        {dotLabel(w.week_start, w.week_end, hasPdc)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {secDiv("Following 4 weeks", 20)}
+
+            {/* ── Horizontal timeline — Section 2 (weeks 5–8) ── */}
+            <div style={{ position: "relative", paddingBottom: "28px" }}>
+              <div style={{
+                position: "absolute", bottom: "20px", left: 0, right: 0,
+                height: "2px",
+                background: `linear-gradient(to right, ${GREEN} 85%, ${HAIRLINE} 100%)`,
+                borderRadius: "2px",
+                zIndex: 0,
+              }} />
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
+                {section2.map((w) => {
+                  const hasPdc = w.pdc_due > 0;
+                  return (
+                    <div key={w.week_number} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
+                      <div style={{
+                        position: "absolute", bottom: 0, left: "50%",
+                        transform: "translateX(-50%)",
+                        width: "1.5px",
+                        height: "calc(100% - 10px)",
+                        backgroundColor: hasPdc ? `rgba(179,38,30,0.35)` : HAIRLINE,
+                        zIndex: 0,
+                      }} />
+                      <div style={{
+                        backgroundColor: hasPdc ? "#FDECEA" : CARD,
+                        border: `1px solid ${hasPdc ? RED : HAIRLINE}`,
+                        borderRadius: "8px",
+                        padding: "10px 5px",
+                        width: "calc(100% - 6px)",
+                        textAlign: "center",
+                        position: "relative", zIndex: 1,
+                        marginBottom: "8px",
+                        minHeight: "72px",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        gap: "4px",
+                      }}>
+                        <div>
+                          <div style={{ height: "1px", backgroundColor: hasPdc ? "rgba(179,38,30,.2)" : HAIRLINE, margin: "0 0 6px" }} />
+                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginBottom: "1px" }}>PDC Due</div>
+                          {hasPdc
+                            ? <div style={{ fontFamily: MONO, fontSize: "16px", fontWeight: 700, color: RED }}>{formatPKRWhole(w.pdc_due)}</div>
+                            : <div style={{ fontFamily: MONO, fontSize: "14px", color: SLATE }}>—</div>}
+                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Net Bal</div>
+                          <div style={{ fontFamily: MONO, fontSize: "14px", fontWeight: 600, color: (weeklyBalance[w.week_number] ?? 0) < 0 ? RED : NAVY }}>{formatPKRWhole(weeklyBalance[w.week_number] ?? 0)}</div>
+                        </div>
+                      </div>
+                      <div style={{
+                        width: hasPdc ? "12px" : "10px",
+                        height: hasPdc ? "12px" : "10px",
+                        borderRadius: "50%",
+                        backgroundColor: hasPdc ? RED : CARD,
+                        border: `2px solid ${hasPdc ? RED : GREEN}`,
+                        position: "relative", zIndex: 2,
+                        marginBottom: hasPdc ? "-6px" : "-5px",
+                        flexShrink: 0,
+                      }} />
+                      <div style={{
+                        position: "absolute", bottom: "-20px",
+                        left: "50%", transform: "translateX(-50%)",
+                        fontSize: "11px", fontWeight: 600,
                         color: hasPdc ? RED : SLATE,
                         whiteSpace: "nowrap", zIndex: 2,
                       }}>
