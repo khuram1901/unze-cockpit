@@ -186,11 +186,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>(ownerFromUrl ? ownerFromUrl.trim().replace(/\s+/g, " ") : "all");
   const [periodFilter, setPeriodFilter] = useState<"all" | "week" | "month" | "quarter">("all");
-  // Filter panel used to be collapsed behind a "Filters" toggle button —
-  // Khuram asked for that reverted, so the full dropdown row is always
-  // visible again now. filtersOpen is kept (always true) rather than
-  // ripped out everywhere it's referenced, to keep this change small.
-  const [filtersOpen] = useState(true);
+  // Filter panel toggle — collapsed by default on mobile, open on desktop.
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [advFiltersOpen, setAdvFiltersOpen] = useState(false);
   // stageFilter removed per Khuram (24/07/2026) — stage values are
   // free-text progress notes, useless as a filter. The Workload
@@ -1088,6 +1085,109 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     );
   }
 
+  // ── Searchable dropdown filter ──────────────────────────────────────
+  // Replaces the plain <select> elements with a panel that has a search
+  // input so long lists (owners, depts) are fast to navigate.
+  function SearchableDropdown({
+    value, onChange, label, options, searchable = false, dotMap,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    label: string; // placeholder when nothing selected
+    options: { value: string; label: string }[];
+    searchable?: boolean;
+    dotMap?: Record<string, string>; // value → hex colour dot
+  }) {
+    const [open, setOpen] = React.useState(false);
+    const [query, setQuery] = React.useState("");
+    const ref = React.useRef<HTMLDivElement>(null);
+    const isActive = value !== "all" && value !== "";
+    const displayLabel = isActive ? (options.find((o) => o.value === value)?.label ?? label) : label;
+    const filtered = searchable && query
+      ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
+      : options;
+
+    React.useEffect(() => {
+      function onOutside(e: MouseEvent) {
+        if (ref.current && !ref.current.contains(e.target as Node)) {
+          setOpen(false); setQuery("");
+        }
+      }
+      if (open) document.addEventListener("mousedown", onOutside);
+      return () => document.removeEventListener("mousedown", onOutside);
+    }, [open]);
+
+    return (
+      <div ref={ref} style={{ position: "relative", flex: "1 1 150px", minWidth: 0 }}>
+        <button
+          onClick={() => { setOpen((p) => !p); setQuery(""); }}
+          style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px",
+            border: `1px solid ${isActive ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
+            borderRadius: RADII.SM, padding: "7px 10px",
+            fontSize: "12.5px", fontWeight: isActive ? 700 : 500,
+            cursor: "pointer", background: isActive ? "#EFF6FF" : COLOURS.CARD_ALT,
+            color: isActive ? COLOURS.BLUE : COLOURS.NAVY,
+            textAlign: "left",
+          }}
+        >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayLabel}</span>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" style={{ flexShrink: 0, opacity: .6 }}>
+            <path d="M5 7L1 3h8z"/>
+          </svg>
+        </button>
+        {open && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: "200px", zIndex: 200,
+            background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px",
+            boxShadow: "0 4px 16px rgba(15,23,32,.12)", overflow: "hidden",
+          }}>
+            {searchable && (
+              <div style={{ display: "flex", alignItems: "center", gap: "7px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, padding: "8px 12px" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={COLOURS.SLATE} strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={`Search…`}
+                  style={{ border: "none", outline: "none", fontSize: "12.5px", width: "100%", color: COLOURS.NAVY, background: "transparent", fontFamily: "inherit" }}
+                />
+              </div>
+            )}
+            <div style={{ maxHeight: "220px", overflowY: "auto", padding: "4px 0" }}>
+              {filtered.map((o) => (
+                <div
+                  key={o.value}
+                  onClick={() => { onChange(o.value); setOpen(false); setQuery(""); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    padding: "7px 12px", fontSize: "12.5px", cursor: "pointer",
+                    color: o.value === value ? COLOURS.BLUE : COLOURS.NAVY,
+                    fontWeight: o.value === value ? 700 : 500,
+                    background: "transparent",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = COLOURS.CARD_ALT)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  {dotMap && dotMap[o.value] && (
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: dotMap[o.value], flexShrink: 0, display: "inline-block" }} />
+                  )}
+                  <span style={{ flex: 1 }}>{o.label}</span>
+                  {o.value === value && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={COLOURS.BLUE} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  )}
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <div style={{ padding: "12px", fontSize: "12px", color: COLOURS.SLATE, textAlign: "center" }}>No results</div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ── Avatar helpers ──────────────────────────────────────────────────
   // Deterministic colour from name so the same person always gets the same
   // circle colour regardless of session. Uses the project's colour palette.
@@ -1734,9 +1834,10 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           aren't task lists. ═══ */}
       {timeView !== "team" && timeView !== "recurring" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: filtersOpen ? "8px" : "12px" }}>
-          {/* Row 1: search + reset */}
+          {/* Row 1: search + Filters toggle */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: 1 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={COLOURS.SLATE} strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -1744,12 +1845,59 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%" }}
               />
             </div>
+            {/* Filters toggle button with active-count badge */}
+            <button
+              onClick={() => setFiltersOpen((p) => !p)}
+              style={{
+                display: "flex", alignItems: "center", gap: "6px",
+                border: `1px solid ${filtersActive ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
+                borderRadius: RADII.PILL, padding: "7px 14px",
+                fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                background: filtersActive ? "#EFF6FF" : COLOURS.CARD,
+                color: filtersActive ? COLOURS.BLUE : COLOURS.NAVY,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              Filters
+              {activeFilterCount > 0 && (
+                <span style={{ background: COLOURS.BLUE, color: "#fff", borderRadius: "99px", fontSize: "10px", fontWeight: 700, padding: "1px 6px", minWidth: "18px", textAlign: "center" }}>
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
             {filtersActive && (
               <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}>
-                Reset
+                Clear all
               </button>
             )}
           </div>
+          {/* Active filter chips */}
+          {filtersActive && (() => {
+            const companyName = companyFilter !== "all" ? (companies.find((c) => c.id === companyFilter)?.name ?? (companyFilter === "group" ? "Group" : companyFilter)) : null;
+            const chips: { label: string; clear: () => void }[] = [
+              ...(companyName ? [{ label: companyName, clear: () => setCompanyFilter("all") }] : []),
+              ...(departmentFilter !== "all" ? [{ label: departmentFilter, clear: () => setDepartmentFilter("all") }] : []),
+              ...(priorityFilter !== "all" ? [{ label: priorityFilter, clear: () => setPriorityFilter("all") }] : []),
+              ...(statusFilter !== "all" ? [{ label: statusFilter, clear: () => setStatusFilter("all") }] : []),
+              ...(ownerFilter !== "all" ? [{ label: ownerFilter, clear: () => setOwnerFilter("all") }] : []),
+              ...(periodFilter !== "all" ? [{ label: periodFilter === "week" ? "This week" : periodFilter === "month" ? "This month" : "This quarter", clear: () => setPeriodFilter("all") }] : []),
+              ...(dueFilter !== "all" ? [{ label: dueFilter === "overdue" ? "Overdue" : dueFilter === "today" ? "Due today" : "No due date", clear: () => setDueFilter("all") }] : []),
+              ...(sourceFilter !== "all" ? [{ label: sourceFilter === "meeting" ? "From meeting" : sourceFilter, clear: () => setSourceFilter("all") }] : []),
+              ...(subtaskFilter !== "all" ? [{ label: subtaskFilter === "has" ? "Has subtasks" : subtaskFilter === "complete" ? "All complete" : "No subtasks", clear: () => setSubtaskFilter("all") }] : []),
+              ...(searchQuery.trim() ? [{ label: `"${searchQuery.trim()}"`, clear: () => setSearchQuery("") }] : []),
+            ];
+            return (
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                {chips.map((chip) => (
+                  <span key={chip.label} style={{ display: "flex", alignItems: "center", gap: "5px", background: "#EFF6FF", border: `1px solid #BFDBFE`, borderRadius: RADII.PILL, padding: "4px 10px", fontSize: "12px", fontWeight: 600, color: COLOURS.BLUE }}>
+                    {chip.label}
+                    <span onClick={chip.clear} style={{ cursor: "pointer", opacity: .7, fontSize: "13px", lineHeight: 1 }}>×</span>
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Row 2: filter pills + scope toggle (wraps on mobile) */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
@@ -1818,70 +1966,116 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       )}
 
       {timeView !== "team" && timeView !== "recurring" && filtersOpen && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "12px", width: "100%" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px", width: "100%" }}>
           {/* Row 1 — entity filters: company · dept · priority · status · owner */}
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "nowrap", width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "stretch", gap: "6px", flexWrap: "wrap" }}>
             {!(department === "Internal Audit" && !isPrivileged) && (
-              <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
-                <option value="all">All companies</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                <option value="group">Group / needs review</option>
-              </select>
+              <SearchableDropdown
+                value={companyFilter}
+                onChange={setCompanyFilter}
+                label="Company"
+                options={[
+                  { value: "all", label: "All companies" },
+                  ...companies.map((c) => ({ value: c.id, label: c.name })),
+                  { value: "group", label: "Group / needs review" },
+                ]}
+                dotMap={Object.fromEntries(companies.map((c) => [c.id, (COMPANY_BADGE_COLOURS[c.short_code ?? ""] ?? COMPANY_BADGE_COLOURS[""])?.color ?? COLOURS.SLATE]))}
+              />
             )}
-            <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
-              <option value="all">All depts</option>
-              {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
-            <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
-              <option value="all">All priorities</option>
-              <option>Critical</option><option>Urgent</option><option>Normal</option><option>Low</option>
-            </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
-              <option value="all">All statuses</option>
-              <option>Not Started</option>
-              <option>In Progress</option>
-              <option>Waiting Reply</option>
-              <option>Stuck</option>
-              <option>Submitted</option>
-              <option>Completed</option>
-            </select>
-            <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
-              <option value="all">All owners</option>
-              {ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
+            <SearchableDropdown
+              value={departmentFilter}
+              onChange={setDepartmentFilter}
+              label="Department"
+              searchable
+              options={[
+                { value: "all", label: "All depts" },
+                ...departmentOptions.map((d) => ({ value: d, label: d })),
+              ]}
+            />
+            <SearchableDropdown
+              value={priorityFilter}
+              onChange={setPriorityFilter}
+              label="Priority"
+              options={[
+                { value: "all", label: "All priorities" },
+                { value: "Critical", label: "Critical" },
+                { value: "Urgent", label: "Urgent" },
+                { value: "Normal", label: "Normal" },
+                { value: "Low", label: "Low" },
+              ]}
+            />
+            <SearchableDropdown
+              value={statusFilter}
+              onChange={setStatusFilter}
+              label="Status"
+              options={[
+                { value: "all", label: "All statuses" },
+                { value: "Not Started", label: "Not Started" },
+                { value: "In Progress", label: "In Progress" },
+                { value: "Waiting Reply", label: "Waiting Reply" },
+                { value: "Stuck", label: "Stuck" },
+                { value: "Submitted", label: "Submitted" },
+                { value: "Completed", label: "Completed" },
+              ]}
+            />
+            <SearchableDropdown
+              value={ownerFilter}
+              onChange={setOwnerFilter}
+              label="Owner"
+              searchable
+              options={[
+                { value: "all", label: "All owners" },
+                ...ownerOptions.map((o) => ({ value: o, label: o })),
+              ]}
+            />
           </div>
-          {/* Row 2 — time/date filters: period · due date · source · subtasks + reset */}
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "nowrap", width: "100%" }}>
-            <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
-              <option value="all">Any period</option>
-              <option value="week">This week</option>
-              <option value="month">This month</option>
-              <option value="quarter">This quarter</option>
-            </select>
-            <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
-              <option value="all">Any due date</option>
-              <option value="overdue">Overdue</option>
-              <option value="today">Due today</option>
-              <option value="none">No due date</option>
-            </select>
-            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
-              <option value="all">All sources</option>
-              <option value="meeting">From meeting</option>
-              <option value="manual">Manual</option>
-              <option value="recurring">Recurring</option>
-              <option value="whatsapp">WhatsApp</option>
-            </select>
-            <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
-              <option value="all">Any subtasks</option>
-              <option value="has">Has subtasks</option>
-              <option value="complete">All complete</option>
-              <option value="none">No subtasks</option>
-            </select>
-            {filtersActive && (
-              <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12px", fontWeight: 600, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap", flexShrink: 0 }}>
-                Reset
-              </button>
-            )}
+          {/* Row 2 — time/date filters: period · due date · source · subtasks */}
+          <div style={{ display: "flex", alignItems: "stretch", gap: "6px", flexWrap: "wrap" }}>
+            <SearchableDropdown
+              value={periodFilter}
+              onChange={(v) => setPeriodFilter(v as typeof periodFilter)}
+              label="Period"
+              options={[
+                { value: "all", label: "Any period" },
+                { value: "week", label: "This week" },
+                { value: "month", label: "This month" },
+                { value: "quarter", label: "This quarter" },
+              ]}
+            />
+            <SearchableDropdown
+              value={dueFilter}
+              onChange={setDueFilter}
+              label="Due date"
+              options={[
+                { value: "all", label: "Any due date" },
+                { value: "overdue", label: "Overdue" },
+                { value: "today", label: "Due today" },
+                { value: "none", label: "No due date" },
+              ]}
+            />
+            <SearchableDropdown
+              value={sourceFilter}
+              onChange={setSourceFilter}
+              label="Source"
+              options={[
+                { value: "all", label: "All sources" },
+                { value: "meeting", label: "From meeting" },
+                { value: "manual", label: "Manual" },
+                { value: "recurring", label: "Recurring" },
+                { value: "whatsapp", label: "WhatsApp" },
+              ]}
+            />
+            <SearchableDropdown
+              value={subtaskFilter}
+              onChange={setSubtaskFilter}
+              label="Subtasks"
+              options={[
+                { value: "all", label: "Any subtasks" },
+                { value: "has", label: "Has subtasks" },
+                { value: "complete", label: "All complete" },
+                { value: "none", label: "No subtasks" },
+              ]}
+            />
           </div>
         </div>
       )}

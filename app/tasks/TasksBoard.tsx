@@ -459,17 +459,16 @@ export default function TasksBoard({
                           onDragEnd={() => setDraggingId(null)}
                           onClick={() => setExpandedId(t.id)}
                           style={{
+                            position: "relative",
                             background: "white",
                             border: `1px solid ${COLOURS.HAIRLINE}`,
-                            borderLeft: col.stripe !== "transparent"
-                              ? `3px solid ${col.stripe}`
-                              : `1px solid ${COLOURS.HAIRLINE}`,
-                            borderRadius: "10px",
-                            padding: "11px 12px",
+                            borderRadius: totalSubs > 0 ? "10px 10px 0 0" : "10px",
+                            padding: "11px 12px 11px 15px",
                             cursor: "grab",
                             opacity: isDragging ? 0.4 : done ? 0.65 : 1,
                             boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
                             transition: "box-shadow 0.15s, opacity 0.15s",
+                            overflow: "hidden",
                           }}
                           onMouseEnter={(e) => {
                             if (!isDragging) (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
@@ -478,8 +477,16 @@ export default function TasksBoard({
                             (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 3px rgba(0,0,0,0.05)";
                           }}
                         >
-                          {/* Badges row */}
-                          <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "7px" }}>
+                          {/* Left colour stripe */}
+                          {col.stripe !== "transparent" && (
+                            <div style={{
+                              position: "absolute", left: 0, top: 0, bottom: 0, width: "3px",
+                              background: col.stripe, borderRadius: "10px 0 0 10px",
+                            }} />
+                          )}
+
+                          {/* Top row: priority badge + SLA badge */}
+                          <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "6px" }}>
                             <PriorityBadge priority={t.priority} />
                             <TypeBadge type={t.task_type} />
                             <SlaBadge task={t} />
@@ -488,7 +495,7 @@ export default function TasksBoard({
                           {/* Title */}
                           <div style={{
                             fontSize: "12.5px",
-                            fontWeight: 500,
+                            fontWeight: 600,
                             color: done ? COLOURS.SLATE : COLOURS.NAVY,
                             textDecoration: done ? "line-through" : "none",
                             lineHeight: 1.4,
@@ -518,51 +525,57 @@ export default function TasksBoard({
                             </a>
                           )}
 
-                          {/* Footer: assignee + due date */}
-                          <div style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: "6px",
-                          }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
-                              <div style={{
-                                width: "22px",
-                                height: "22px",
-                                borderRadius: "50%",
-                                background: done ? "#94a3b8" : avatarColor(t.assigned_to),
-                                color: "white",
-                                fontSize: "9px",
-                                fontWeight: 700,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                              }}>
-                                {initials(t.assigned_to)}
-                              </div>
-                              <span style={{
-                                fontSize: "11px",
-                                color: COLOURS.SLATE,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}>
-                                {t.assigned_to || "Unassigned"}
-                              </span>
+                          {/* Meta row: avatar + name */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "5px" }}>
+                            <div style={{
+                              width: "22px", height: "22px", borderRadius: "50%",
+                              background: done ? "#94a3b8" : avatarColor(t.assigned_to),
+                              color: "white", fontSize: "9px", fontWeight: 700,
+                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            }}>
+                              {initials(t.assigned_to)}
                             </div>
-                            <DueLabel task={t} />
+                            <span style={{ fontSize: "11px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {t.assigned_to || "Unassigned"}
+                            </span>
                           </div>
 
-                          {/* Comments count */}
-                          {t.task_comments && t.task_comments.length > 0 && (
-                            <div style={{ marginTop: "6px", fontSize: "10.5px", color: COLOURS.SLATE, fontWeight: 600 }}>
-                              💬 {t.task_comments.length} comment{t.task_comments.length > 1 ? "s" : ""}
+                          {/* Due date row */}
+                          {t.due_date && (
+                            <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "8px" }}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={isOverdue(t) ? "#dc2626" : COLOURS.SLATE} strokeWidth="2" strokeLinecap="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+                              </svg>
+                              <DueLabel task={t} />
                             </div>
                           )}
+
+                          {/* Footer: company dot + name | comment count */}
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+                            {(() => {
+                              const co = companies?.find((c) => c.id === t.company_id);
+                              const code = co?.short_code ?? (emailToCode?.get(t.assigned_to_email ?? "") ?? "");
+                              const DOT_COLOURS: Record<string, string> = {
+                                UTPL: "#0F7B5F", IFPL: "#2563EB", BRNH: "#7C3AED", HD: "#B4791F", DIR: "#B3261E",
+                              };
+                              const dotColor = DOT_COLOURS[code] ?? COLOURS.SLATE;
+                              return co ? (
+                                <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                                  <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                                  <span style={{ fontSize: "10px", color: COLOURS.SLATE, fontWeight: 600 }}>{code || co.name}</span>
+                                </div>
+                              ) : <div />;
+                            })()}
+                            {t.task_comments && t.task_comments.length > 0 && (
+                              <div style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "10px", color: COLOURS.SLATE, fontWeight: 600 }}>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                {t.task_comments.length}
+                              </div>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Subtask progress bar */}
+                        {/* Subtask progress bar + toggle */}
                         {totalSubs > 0 && (
                           <div style={{
                             background: "white",
