@@ -1080,22 +1080,23 @@ export default function AdminDataPage() {
           )}
         </div>
         {/* Row 2: Date range + search + apply */}
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748B" }}>From</span>
-            <DateInput value={genDateFrom} onChange={e => setGenDateFrom(e.target.value)} />
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          {/* Date capsule */}
+          <div style={{ display:"flex", alignItems:"center", border:`1px solid ${COLOURS.BORDER}`, borderRadius:"24px", overflow:"hidden", background:"#F8FAFC" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"6px 14px" }}>
+              <span style={{ fontSize:"10px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", color:COLOURS.SLATE }}>From</span>
+              <DateInput value={genDateFrom} onChange={e => setGenDateFrom(e.target.value)} style={{ border:"none", background:"transparent", padding:"0", fontSize:"13px", fontWeight:600, color:COLOURS.NAVY, minWidth:"96px" }} />
+            </div>
+            <div style={{ width:"1px", height:"24px", background:COLOURS.BORDER }} />
+            <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"6px 14px" }}>
+              <span style={{ fontSize:"10px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", color:COLOURS.SLATE }}>To</span>
+              <DateInput value={genDateTo} onChange={e => setGenDateTo(e.target.value)} style={{ border:"none", background:"transparent", padding:"0", fontSize:"13px", fontWeight:600, color:COLOURS.NAVY, minWidth:"96px" }} />
+            </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748B" }}>To</span>
-            <DateInput value={genDateTo} onChange={e => setGenDateTo(e.target.value)} />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748B" }}>Search</span>
-            <input type="text" placeholder="Search…" value={genSearch} onChange={e => setGenSearch(e.target.value)}
-              style={{ padding: "7px 10px", border: "1px solid #EEF0F3", borderRadius: "8px", fontSize: "13px", minWidth: "160px" }} />
-          </div>
+          <input type="text" placeholder="Search…" value={genSearch} onChange={e => setGenSearch(e.target.value)}
+            style={{ padding: "7px 12px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "24px", fontSize: "13px", minWidth: "160px", outline:"none" }} />
           <button onClick={loadGeneratorData}
-            style={{ padding: "8px 18px", backgroundColor: "#0F1720", color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+            style={{ padding: "7px 20px", backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "24px", fontSize: "13px", fontWeight: 700, cursor: "pointer", letterSpacing:"0.03em" }}>
             {loadingGen ? "Loading…" : "Apply"}
           </button>
         </div>
@@ -1570,19 +1571,25 @@ export default function AdminDataPage() {
           ))}
           {analyticsPeriod === "custom" && (
             <>
-              <input type="date" value={analyticsFrom} onChange={e => setAnalyticsFrom(e.target.value)}
-                style={{ padding:"6px 10px", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"8px", fontSize:"12px" }} />
-              <span style={{ color:COLOURS.SLATE, fontSize:"12px" }}>→</span>
-              <input type="date" value={analyticsTo} onChange={e => setAnalyticsTo(e.target.value)}
-                style={{ padding:"6px 10px", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"8px", fontSize:"12px" }} />
+              <div style={{ display:"flex", alignItems:"center", border:`1px solid ${COLOURS.BORDER}`, borderRadius:"24px", overflow:"hidden", background:"#F8FAFC" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"5px 14px" }}>
+                  <span style={{ fontSize:"10px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", color:COLOURS.SLATE }}>From</span>
+                  <DateInput value={analyticsFrom} onChange={e => setAnalyticsFrom(e.target.value)} style={{ border:"none", background:"transparent", padding:"0", fontSize:"12px", fontWeight:600, color:COLOURS.NAVY, minWidth:"90px" }} />
+                </div>
+                <div style={{ width:"1px", height:"22px", background:COLOURS.BORDER }} />
+                <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"5px 14px" }}>
+                  <span style={{ fontSize:"10px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", color:COLOURS.SLATE }}>To</span>
+                  <DateInput value={analyticsTo} onChange={e => setAnalyticsTo(e.target.value)} style={{ border:"none", background:"transparent", padding:"0", fontSize:"12px", fontWeight:600, color:COLOURS.NAVY, minWidth:"90px" }} />
+                </div>
+              </div>
               <button onClick={() => fetchGenAnalytics(analyticsFrom, analyticsTo)} style={{
-                padding:"6px 16px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer",
+                padding:"6px 18px", borderRadius:"24px", fontSize:"12px", fontWeight:700, cursor:"pointer",
                 background:COLOURS.NAVY, color:"white", border:"none",
               }}>Apply</button>
             </>
           )}
           <span style={{ marginLeft:"auto", fontSize:"11px", color:COLOURS.SLATE }}>
-            {analyticsFrom} → {analyticsTo}
+            {formatDateUK(analyticsFrom)} → {formatDateUK(analyticsTo)}
           </span>
         </div>
 
@@ -1769,30 +1776,38 @@ export default function AdminDataPage() {
     const pkr = (n: number) => `PKR ${n.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     const pct = (n: number, t: number) => t > 0 ? `${((n / t) * 100).toFixed(0)}%` : "—";
 
-    // All flat generator list for dropdowns (from genMeta already loaded)
-    const allGens = genMeta.map(g => ({ id: g.generator_id, label: g.label || `${g.kva} kVA – ${g.model}`, location: g.location_name }));
+    // All flat generator list for dropdowns — show location only (make/model is secondary context)
+    const allGens = genMeta.map(g => ({ id: g.generator_id, label: g.location_name, location: g.location_name, kva: g.kva, model: g.label || `${g.kva} kVA – ${g.model}` }));
 
     // ── Report date controls ──────────────────────────────────────────────
     const reportControls = (
-      <div style={{ display:"flex", flexWrap:"wrap", gap:"10px", alignItems:"center", marginBottom:"20px", background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"16px" }}>
-        <span style={{ fontSize:"12px", fontWeight:700, color:COLOURS.SLATE, textTransform:"uppercase", letterSpacing:"0.05em" }}>Date Range</span>
-        <DateInput value={reportFrom} onChange={e => setReportFrom(e.target.value)} />
-        <span style={{ color:COLOURS.SLATE, fontSize:"12px" }}>→</span>
-        <DateInput value={reportTo}   onChange={e => setReportTo(e.target.value)} />
+      <div style={{ display:"flex", flexWrap:"wrap", gap:"10px", alignItems:"center", marginBottom:"20px", background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"14px 18px" }}>
+        {/* Date range capsule */}
+        <div style={{ display:"flex", alignItems:"center", gap:0, border:`1px solid ${COLOURS.BORDER}`, borderRadius:"24px", overflow:"hidden", background:"#F8FAFC" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"6px 14px" }}>
+            <span style={{ fontSize:"10px", fontWeight:700, color:COLOURS.SLATE, textTransform:"uppercase", letterSpacing:"0.06em" }}>From</span>
+            <DateInput value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ border:"none", background:"transparent", padding:"0", fontSize:"13px", fontWeight:600, color:COLOURS.NAVY, minWidth:"96px" }} />
+          </div>
+          <div style={{ width:"1px", height:"24px", background:COLOURS.BORDER }} />
+          <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"6px 14px" }}>
+            <span style={{ fontSize:"10px", fontWeight:700, color:COLOURS.SLATE, textTransform:"uppercase", letterSpacing:"0.06em" }}>To</span>
+            <DateInput value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ border:"none", background:"transparent", padding:"0", fontSize:"13px", fontWeight:600, color:COLOURS.NAVY, minWidth:"96px" }} />
+          </div>
+        </div>
         <button onClick={() => { fetchReportFleet(reportFrom, reportTo); if (reportSingleId) fetchReportHistory(reportSingleId, reportFrom, reportTo); }}
-          style={{ padding:"6px 18px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer", background:COLOURS.NAVY, color:"white", border:"none" }}>
+          style={{ padding:"7px 20px", borderRadius:"24px", fontSize:"12px", fontWeight:700, cursor:"pointer", background:COLOURS.NAVY, color:"white", border:"none", letterSpacing:"0.03em" }}>
           Apply
         </button>
-        {/* PDF download — prints only the report section */}
+        {/* PDF download */}
         <button onClick={() => window.print()}
-          style={{ padding:"6px 16px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer", background:"transparent", color:COLOURS.NAVY, border:`1px solid ${COLOURS.NAVY}`, marginLeft:"auto" }}>
+          style={{ padding:"7px 16px", borderRadius:"24px", fontSize:"12px", fontWeight:600, cursor:"pointer", background:"transparent", color:COLOURS.NAVY, border:`1px solid ${COLOURS.NAVY}`, marginLeft:"auto" }}>
           ⬇ Download PDF
         </button>
         {/* Sub-view switcher */}
         <div style={{ display:"flex", gap:"6px" }}>
           {(["fleet","single","compare"] as ReportView[]).map(v => (
             <button key={v} onClick={() => setReportView(v)} style={{
-              padding:"5px 14px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer",
+              padding:"6px 16px", borderRadius:"24px", fontSize:"12px", fontWeight:600, cursor:"pointer",
               background: reportView === v ? COLOURS.NAVY : "transparent",
               color:      reportView === v ? "white"      : COLOURS.SLATE,
               border: `1px solid ${reportView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
@@ -1959,7 +1974,7 @@ export default function AdminDataPage() {
             if (e.target.value) fetchReportHistory(e.target.value, reportFrom, reportTo);
           }} style={{ padding:"8px 12px", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"8px", fontSize:"13px", minWidth:"240px" }}>
             <option value="">— Select a generator —</option>
-            {allGens.map(g => <option key={g.id} value={g.id}>{g.label} — {g.location}</option>)}
+            {allGens.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
           </select>
         </div>
 
@@ -2079,7 +2094,7 @@ export default function AdminDataPage() {
                   color:      selected ? "white"      : COLOURS.SLATE,
                   border: `1px solid ${selected ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
                 }}>
-                  {g.label} <span style={{ opacity:0.6, fontSize:"10px" }}>{g.location}</span>
+                  {g.label}
                 </button>
               );
             })}
