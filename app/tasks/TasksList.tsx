@@ -1118,20 +1118,20 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     }, [open]);
 
     return (
-      <div ref={ref} style={{ position: "relative", flex: "1 1 150px", minWidth: 0 }}>
+      <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
         <button
           onClick={() => { setOpen((p) => !p); setQuery(""); }}
           style={{
-            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px",
+            display: "flex", alignItems: "center", gap: "6px",
             border: `1px solid ${isActive ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
-            borderRadius: RADII.SM, padding: "7px 10px",
+            borderRadius: RADII.PILL, padding: "6px 12px",
             fontSize: "12.5px", fontWeight: isActive ? 700 : 500,
-            cursor: "pointer", background: isActive ? "#EFF6FF" : COLOURS.CARD_ALT,
-            color: isActive ? COLOURS.BLUE : COLOURS.NAVY,
-            textAlign: "left",
+            cursor: "pointer", background: isActive ? "#EFF6FF" : COLOURS.CARD,
+            color: isActive ? COLOURS.BLUE : COLOURS.SLATE,
+            whiteSpace: "nowrap",
           }}
         >
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayLabel}</span>
+          <span>{displayLabel}</span>
           <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" style={{ flexShrink: 0, opacity: .6 }}>
             <path d="M5 7L1 3h8z"/>
           </svg>
@@ -1968,7 +1968,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {timeView !== "team" && timeView !== "recurring" && filtersOpen && (
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px", width: "100%" }}>
           {/* Row 1 — entity filters: company · dept · priority · status · owner */}
-          <div style={{ display: "flex", alignItems: "stretch", gap: "6px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             {!(department === "Internal Audit" && !isPrivileged) && (
               <SearchableDropdown
                 value={companyFilter}
@@ -2030,7 +2030,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             />
           </div>
           {/* Row 2 — time/date filters: period · due date · source · subtasks */}
-          <div style={{ display: "flex", alignItems: "stretch", gap: "6px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <SearchableDropdown
               value={periodFilter}
               onChange={(v) => setPeriodFilter(v as typeof periodFilter)}
