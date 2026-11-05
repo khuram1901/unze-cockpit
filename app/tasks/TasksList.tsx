@@ -811,6 +811,65 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         return false;
       })
     : allOpen;
+
+  // Pill counts: tasks passing all non-pill filters + Mine/Everyone scope.
+  // Using raw `tasks` would show org-wide counts that don't match what's
+  // actually visible in Mine view — so we recompute without priority/status
+  // pill filters and then apply the Mine/Everyone scope.
+  const pillCountBase = (() => {
+    const base = tasks.filter((t) => {
+      if (companyFilter !== "all") {
+        if (companyFilter === "group" ? !!t.company_id : t.company_id !== companyFilter) return false;
+      }
+      if (departmentFilter !== "all" && (t.assigned_to_department || "Unassigned") !== departmentFilter) return false;
+      if (ownerFilter !== "all" && normName(t.assigned_to) !== ownerFilter) return false;
+      if (periodFilter !== "all") {
+        if (!t.due_date) return false;
+        if (periodFilter === "week" && !(t.due_date >= periodWeekStart && t.due_date < periodWeekEnd)) return false;
+        if (periodFilter === "month" && !(t.due_date >= periodMonthStart && t.due_date < periodMonthEnd)) return false;
+        if (periodFilter === "quarter" && !(t.due_date >= periodQuarterStart && t.due_date < periodQuarterEnd)) return false;
+      }
+      if (dueFilter !== "all") {
+        const isOd = t.status !== "Completed" && t.status !== "Cancelled" && !!t.due_date && t.due_date < todayStr;
+        if (dueFilter === "overdue" && !isOd) return false;
+        if (dueFilter === "today" && t.due_date !== todayStr) return false;
+        if (dueFilter === "none" && t.due_date) return false;
+      }
+      if (sourceFilter !== "all") {
+        const isRecurring = t.assigned_by === "Recurring Template";
+        if (sourceFilter === "meeting" && !t.meeting_id) return false;
+        if (sourceFilter === "manual" && (t.meeting_id || isRecurring)) return false;
+        if (sourceFilter === "recurring" && !isRecurring) return false;
+        if (sourceFilter === "whatsapp" && t.source_type !== "whatsapp") return false;
+      }
+      if (subtaskFilter !== "all") {
+        const total = t.task_subtasks?.length ?? 0;
+        const done = t.task_subtasks?.filter((s) => s.is_complete).length ?? 0;
+        if (subtaskFilter === "has" && total === 0) return false;
+        if (subtaskFilter === "complete" && !(total > 0 && done === total)) return false;
+        if (subtaskFilter === "none" && total > 0) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        if (!t.description.toLowerCase().includes(q) &&
+            !(t.assigned_to || "").toLowerCase().includes(q) &&
+            !(t.assigned_to_email ? (emailToCode.get(t.assigned_to_email) || "").toLowerCase().includes(q) : false)) return false;
+      }
+      return true;
+    });
+    if (myTasksScope !== "mine") return base;
+    return base.filter((t) => {
+      const byMe = !!(t.assigned_by_email && myIdentities.includes(t.assigned_by_email.toLowerCase()));
+      const toMe = !!(t.assigned_to_email && myIdentities.includes(t.assigned_to_email.toLowerCase()));
+      if (toMe) return true;
+      if (myCoAssignedTaskIds.has(t.id)) return true;
+      if (byMe && t.status === "Submitted" && !myIdentities.includes((t.submitted_by_email || "").toLowerCase())) return true;
+      if (byMe && t.status === "Waiting Reply" && t.reply_required) return true;
+      if (byMe && t.status === "Stuck" && !toMe) return true;
+      return false;
+    });
+  })();
+
   function myTaskGroup(task: Task): string {
     if (isOverdue(task)) return "Overdue";
     if (task.due_date === todayStr) return "Due Today";
@@ -1996,7 +2055,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {companies.map((c) => {
                 const badge = COMPANY_BADGE_COLOURS[c.short_code ?? ""] ?? { color: COLOURS.SLATE, background: COLOURS.HAIRLINE };
                 const isActive = companyFilter === c.id;
-                const count = tasks.filter((t) => t.company_id === c.id).length;
+                const count = pillCountBase.filter((t) => t.company_id === c.id).length;
                 return (
                   <button
                     key={c.id}
@@ -2035,7 +2094,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 {ALL_PRIORITIES.map((p) => {
                   const s = PRIORITY_STYLES[p] ?? PRIORITY_STYLES["Normal"];
                   const isActive = priorityFilters.has(p);
-                  const count = tasks.filter((t) => (t.priority ?? "Normal") === p).length;
+                  const count = pillCountBase.filter((t) => (t.priority ?? "Normal") === p).length;
                   return (
                     <button
                       key={p}
@@ -2082,7 +2141,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 {ALL_STATUSES.map((st) => {
                   const s = STATUS_STYLES[st] ?? STATUS_STYLES["Not Started"];
                   const isActive = statusFilters.has(st);
-                  const count = tasks.filter((t) => t.status === st).length;
+                  const count = pillCountBase.filter((t) => t.status === st).length;
                   return (
                     <button
                       key={st}
