@@ -340,7 +340,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     if (posRes.error) console.error("Positions error:", posRes.error);
     if (pdcRes.error) console.error("PDC outlook error:", pdcRes.error);
     if (pdcMonthRes.error) console.error("PDC month total error:", pdcMonthRes.error);
-    setPdcMonthTotal(typeof pdcMonthRes.data === "number" ? pdcMonthRes.data : null);
+    // Supabase returns PostgreSQL numeric as a string; Number() handles both "12345" and 12345
+    const rawPdcMonth = pdcMonthRes.data;
+    setPdcMonthTotal(rawPdcMonth !== null && rawPdcMonth !== undefined ? Number(rawPdcMonth) : null);
     setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
     setPlan(planRes.data || null);
     // closing_after_post_dated is trusted as stored for both companies — see the save
@@ -1583,9 +1585,10 @@ function SummaryCard({
           {label}
         </div>
         <div style={{
-          fontSize: "22px", fontWeight: 600, color: "white",
-          fontFamily: DISPLAY, lineHeight: 1, letterSpacing: "-0.01em",
+          fontSize: "17px", fontWeight: 600, color: "white",
+          fontFamily: DISPLAY, lineHeight: 1.2, letterSpacing: "-0.01em",
           fontVariantNumeric: "tabular-nums",
+          wordBreak: "break-word",
         }}>
           {value}
         </div>
@@ -1615,9 +1618,10 @@ function SummaryCard({
         {label}
       </div>
       <div style={{
-        fontSize: "22px", fontWeight: 600, color: valueColor || NAVY,
-        fontFamily: DISPLAY, lineHeight: 1, letterSpacing: "-0.01em",
+        fontSize: "17px", fontWeight: 600, color: valueColor || NAVY,
+        fontFamily: DISPLAY, lineHeight: 1.2, letterSpacing: "-0.01em",
         fontVariantNumeric: "tabular-nums",
+        wordBreak: "break-word",
       }}>
         {value}
       </div>
