@@ -1088,16 +1088,76 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     );
   }
 
+  // ── Avatar helpers ──────────────────────────────────────────────────
+  // Deterministic colour from name so the same person always gets the same
+  // circle colour regardless of session. Uses the project's colour palette.
+  function avatarBg(name: string): string {
+    const PALETTE = [COLOURS.GREEN, "#2563EB", COLOURS.AMBER, "#6E45B8", COLOURS.RED, "#0369A1", "#7C2D12"];
+    let h = 0;
+    for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+    return PALETTE[h % PALETTE.length];
+  }
+  function getInitials(name: string): string {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  // ── Column header row (desktop only) ────────────────────────────────
+  // Renders the TASK NAME / DUE DATE / ASSIGNED TO / STATUS / COMPANY
+  // header above a task card. Mirrors the grid defined in TaskRow.
+  function ListColumnHeader() {
+    if (isMobile) return null;
+    const hdr: React.CSSProperties = {
+      fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase",
+      letterSpacing: "0.07em", color: COLOURS.SLATE,
+    };
+    return (
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "32px 1fr 160px 180px 130px 140px",
+        gap: "0 12px",
+        padding: "7px 16px 7px 19px", // 19px = 16px padding + 3px for the border-left space
+        borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+        backgroundColor: COLOURS.CARD,
+      }}>
+        <div /> {/* checkbox column — no label */}
+        <span style={hdr}>Task name</span>
+        <span style={hdr}>Due date</span>
+        <span style={hdr}>Assigned to</span>
+        <span style={hdr}>Status</span>
+        <span style={hdr}>Company</span>
+      </div>
+    );
+  }
+
   function TaskRow({ task, selectable }: { task: Task; selectable?: boolean }) {
     const isOpen = expandedTaskId === task.id;
     const od = daysOverdue(task);
     const overdue = isOverdue(task);
     const otherAssignees = (assigneesByTask.get(task.id) || []).filter((n) => n !== task.assigned_to);
     // Khuram: "once the task is completed then it should be greyed out."
-    // Visual-only here — the actual lock (can't edit unless admin) lives
-    // in TaskStatus.tsx/TaskDetailPanel.tsx; this just signals at a
-    // glance, in every list, that the cycle is closed.
     const done = task.status === "Completed";
+    const assigneeName = task.assigned_to || "Unassigned";
+    const badge = companyBadge(task.company_id);
+
+    // "By:" — who routed this task here (submitted_by takes precedence over assigned_by)
+    const SYSTEM_LABELS = ["system", "recurring template", "recurring task"];
+    const byName = task.submitted_by_name
+      || (task.assigned_by && !SYSTEM_LABELS.includes(task.assigned_by.toLowerCase()) ? task.assigned_by : null);
+    const showBy = byName && byName !== task.assigned_to;
+
+    const priorityColor = overdue ? COLOURS.RED
+      : task.priority === "Critical" || task.priority === "Urgent" ? COLOURS.RED
+      : task.priority === "Medium" ? COLOURS.AMBER
+      : task.priority === "Low" ? COLOURS.INK_300
+      : "transparent";
+
+    // Desktop: 6-column grid matching the ListColumnHeader above.
+    // Mobile: 3-column grid — checkbox | name+meta | status.
+    const gridCols = isMobile
+      ? "24px 1fr auto"
+      : "32px 1fr 160px 180px 130px 140px";
 
     return (
       <div id={`task-${task.id}`} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
@@ -1112,29 +1172,26 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             }
           }}
           style={{
-            padding: "11px 16px 10px", cursor: "pointer", display: "flex", justifyContent: "space-between",
-            alignItems: "center", gap: "8px",
-            // Priority stripe on left: overdue = red > Critical/Urgent = red > Medium = amber > Low = slate
-            // A full red-tinted row got cramped; the stripe + red "Xd late" text carries the signal.
+            display: "grid",
+            gridTemplateColumns: gridCols,
+            alignItems: "center",
+            gap: "0 12px",
+            padding: "10px 16px",
+            cursor: "pointer",
             backgroundColor: isOpen ? COLOURS.CARD_ALT : done ? COLOURS.CARD_ALT : COLOURS.CARD,
-            borderLeft: `3px solid ${
-              overdue ? COLOURS.RED
-              : task.priority === "Critical" || task.priority === "Urgent" ? COLOURS.RED
-              : task.priority === "Medium" ? COLOURS.AMBER
-              : task.priority === "Low" ? COLOURS.INK_300
-              : "transparent"
-            }`,
+            // Priority stripe — overdue beats priority level
+            borderLeft: `3px solid ${priorityColor}`,
             opacity: done ? 0.6 : 1,
           }}
         >
-          {selectable && (
-            // Asana-style circular checkbox — replaces the native square input
+          {/* Col 1: circular checkbox (Asana-style) */}
+          {selectable ? (
             <div
               role="checkbox"
               aria-checked={selectedIds.has(task.id)}
               onClick={(e) => { e.stopPropagation(); toggleSelect(task.id); }}
               style={{
-                width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0, cursor: "pointer",
+                width: "16px", height: "16px", borderRadius: "50%", cursor: "pointer", flexShrink: 0,
                 border: selectedIds.has(task.id) ? `2px solid ${COLOURS.GREEN}` : `2px solid ${COLOURS.INK_300}`,
                 backgroundColor: selectedIds.has(task.id) ? COLOURS.GREEN : "transparent",
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -1147,76 +1204,41 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 </svg>
               )}
             </div>
-          )}
-          {/* Priority is now shown via the border-left stripe on the row */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "14px", fontWeight: 600, color: done ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
-            {/* One muted meta line, dot-separated, instead of a row of
-                boxed badges — same information, far less visual noise. */}
+          ) : <div />}
+
+          {/* Col 2: task name + meta line */}
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontSize: "14px", fontWeight: 600,
+              color: done ? COLOURS.SLATE : COLOURS.NAVY,
+              textDecoration: done ? "line-through" : "none",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {task.description}
+            </div>
+            {/* Meta line — dot-separated. "To:" moved to its own column; meta now shows
+                By / sign-off badge / dept / stage / subtask progress / comments / meeting. */}
             <div style={{ fontSize: "12px", color: COLOURS.INK_400, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-              <span title={otherAssignees.length > 0 ? `Also: ${otherAssignees.join(", ")}` : undefined}>
-                <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>To:</span>{" "}
-                <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>{task.assigned_to || "Unassigned"}</span>
-                {task.assigned_to_email && emailToCode.get(task.assigned_to_email) && (
-                  <span style={{ fontSize: "10px", color: COLOURS.SLATE }}> [{emailToCode.get(task.assigned_to_email)}]</span>
-                )}
-                {otherAssignees.length > 0 && <span style={{ color: COLOURS.SLATE }}> +{otherAssignees.length}</span>}
-              </span>
-              {(() => {
-                // "By:" shows who sent this task to the current owner:
-                // — submitted_by_name if it was routed here via Submitted/
-                //   Waiting Reply (person who submitted it, not the original
-                //   creator which may be "System" or a recurring label)
-                // — otherwise assigned_by, but only if it's a real person
-                //   name (filter out System, Recurring Template, etc.)
-                const SYSTEM_LABELS = ["system", "recurring template", "recurring task"];
-                const byName = task.submitted_by_name
-                  || (task.assigned_by && !SYSTEM_LABELS.includes(task.assigned_by.toLowerCase()) ? task.assigned_by : null);
-                if (!byName || byName === task.assigned_to) return null;
-                return (
-                  <>
-                    <span>·</span>
-                    <span>
-                      <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>By:</span>{" "}
-                      {byName}
-                    </span>
-                  </>
-                );
-              })()}
-              {/* Bug #5 fix: "📋 for sign-off" badge — makes it clear to the recipient (e.g. Khuram)
-                  WHY a Submitted task is in their Mine. Previously the task appeared without context,
-                  looking like a random task assigned to them. The badge signals it was submitted by
-                  a team member and is awaiting their review/approval. */}
+              {showBy && (
+                <span>
+                  <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>By:</span>{" "}
+                  {byName}
+                </span>
+              )}
+              {/* Bug #5 fix: "📋 for sign-off" badge */}
               {task.status === "Submitted" &&
                task.submitted_by_email &&
                myIdentities.includes((task.assigned_to_email || "").toLowerCase()) && (
                 <>
-                  <span>·</span>
-                  <span style={{
-                    fontSize: "10px",
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: "10px",
-                    color: "#6941C6",
-                    backgroundColor: "#F4EBFF",
-                    whiteSpace: "nowrap",
-                  }}>
+                  {showBy && <span>·</span>}
+                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 6px", borderRadius: "10px", color: "#6941C6", backgroundColor: "#F4EBFF", whiteSpace: "nowrap" }}>
                     📋 for sign-off
                   </span>
                 </>
               )}
-              <span>·</span>
-              {(() => {
-                const badge = companyBadge(task.company_id);
-                return (
-                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 8px", borderRadius: RADII.PILL, color: badge.color, backgroundColor: badge.background }}>
-                    {badge.label}
-                  </span>
-                );
-              })()}
               {task.assigned_to_department && (
                 <>
-                  <span>·</span>
+                  {(showBy || (task.status === "Submitted" && task.submitted_by_email && myIdentities.includes((task.assigned_to_email || "").toLowerCase()))) && <span>·</span>}
                   <span>{task.assigned_to_department}</span>
                 </>
               )}
@@ -1234,9 +1256,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   <>
                     <span>·</span>
                     <span title={`${done2}/${total} subtasks complete`} style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 500, whiteSpace: "nowrap" }}>
-                        {done2}/{total}
-                      </span>
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 500, whiteSpace: "nowrap" }}>{done2}/{total}</span>
                       <span style={{ display: "inline-block", width: "48px", height: "4px", borderRadius: "2px", backgroundColor: COLOURS.HAIRLINE, overflow: "hidden" }}>
                         <span style={{ display: "block", height: "100%", width: `${pct}%`, borderRadius: "2px", backgroundColor: pct === 100 ? COLOURS.GREEN : COLOURS.BLUE, transition: "width 200ms" }} />
                       </span>
@@ -1249,14 +1269,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   <span>·</span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                     {unreadCommentTaskIds.has(task.id) && (
-                      <span style={{
-                        display: "inline-block",
-                        width: 7, height: 7,
-                        borderRadius: "50%",
-                        background: "#B3261E",
-                        flexShrink: 0,
-                        verticalAlign: "middle",
-                      }} title="Unread comments" />
+                      <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#B3261E", flexShrink: 0, verticalAlign: "middle" }} title="Unread comments" />
                     )}
                     {task.task_comments.length} comment{task.task_comments.length > 1 ? "s" : ""}
                   </span>
@@ -1265,45 +1278,66 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {task.meeting_id && (
                 <>
                   <span>·</span>
-                  <a
-                    href={`/my-minutes?meeting=${task.meeting_id}`}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ fontWeight: 600, color: COLOURS.BLUE, whiteSpace: "nowrap", textDecoration: "none" }}
-                  >
+                  <a href={`/my-minutes?meeting=${task.meeting_id}`} onClick={(e) => e.stopPropagation()} style={{ fontWeight: 600, color: COLOURS.BLUE, whiteSpace: "nowrap", textDecoration: "none" }}>
                     {meetingTitles[task.meeting_id] || "Meeting"} →
                   </a>
                 </>
               )}
             </div>
           </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
-            {/* Created date */}
-            {!isMobile && task.created_at && (
-              <span style={{
-                fontSize: "11.5px", color: COLOURS.SLATE, fontFamily: "var(--font-mono,'JetBrains Mono',monospace)",
-                whiteSpace: "nowrap", opacity: 0.8,
-              }}>
-                {formatDateUK(task.created_at)}
+
+          {/* Col 3: due date — desktop only */}
+          {!isMobile && (
+            <div style={{ textAlign: "right" }}>
+              {task.due_date ? (
+                <span
+                  title={task.assigned_date ? `Issued ${formatDateUK(task.assigned_date)}` : undefined}
+                  style={{ fontFamily: FONT_MONO, fontSize: "12px", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 500, whiteSpace: "nowrap", lineHeight: 1.4 }}
+                >
+                  {formatDateUK(task.due_date)}{od > 0 && <><br /><span style={{ fontSize: "11px", color: COLOURS.RED }}>{od}d late</span></>}
+                </span>
+              ) : (
+                <span style={{ color: COLOURS.INK_300, fontSize: "13px" }}>—</span>
+              )}
+            </div>
+          )}
+
+          {/* Col 4: assignee avatar + name — desktop only */}
+          {!isMobile && (
+            <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0, overflow: "hidden" }}>
+              {assigneeName !== "Unassigned" && (
+                <div style={{
+                  width: "26px", height: "26px", borderRadius: "50%", flexShrink: 0,
+                  backgroundColor: avatarBg(assigneeName),
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "10px", fontWeight: 700, color: "white", letterSpacing: "0.02em",
+                }}>
+                  {getInitials(assigneeName)}
+                </div>
+              )}
+              <span style={{ fontSize: "12.5px", fontWeight: 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                title={otherAssignees.length > 0 ? `Also: ${otherAssignees.join(", ")}` : undefined}>
+                {assigneeName}
+                {task.assigned_to_email && emailToCode.get(task.assigned_to_email) && (
+                  <span style={{ fontSize: "10px", color: COLOURS.SLATE }}> [{emailToCode.get(task.assigned_to_email)}]</span>
+                )}
+                {otherAssignees.length > 0 && <span style={{ color: COLOURS.SLATE }}> +{otherAssignees.length}</span>}
               </span>
-            )}
-            {/* Status */}
-            <StatusBadge status={task.status} />
-            {/* Due date + days overdue */}
-            {task.due_date ? (
-              <span
-                title={task.assigned_date ? `Issued ${formatDateUK(task.assigned_date)}` : undefined}
-                style={{
-                  fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", fontSize: "12px",
-                  color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 500,
-                  minWidth: isMobile ? "62px" : "76px", textAlign: "right", whiteSpace: "nowrap",
-                }}
-              >
-                {formatDateUK(task.due_date)}{od > 0 && ` · ${od}d`}
+            </div>
+          )}
+
+          {/* Col 5: status badge — always visible */}
+          <StatusBadge status={task.status} />
+
+          {/* Col 6: company coloured dot + name — desktop only */}
+          {!isMobile && (
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, overflow: "hidden" }}>
+              <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: badge.color, flexShrink: 0 }} />
+              <span style={{ fontSize: "12.5px", fontWeight: 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {badge.label}
               </span>
-            ) : (
-              <span style={{ minWidth: isMobile ? "62px" : "76px" }} />
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <MiniSubtaskToggle task={task} onChanged={refreshAll} myEmail={myEmail} currentRole={currentRole} />
@@ -1867,6 +1901,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— flagged for your awareness as HOD</span>
               </div>
               <div style={{ ...cardStyle, overflow: "hidden", borderLeft: `3px solid ${COLOURS.AMBER}` }}>
+                <ListColumnHeader />
                 {stuckNeedsAttention.map((t) => <TaskRow key={t.id} task={t} selectable />)}
               </div>
             </div>
@@ -1878,6 +1913,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             // due-date grouping, so "Overdue" etc. actually means "only
             // these tasks", not "the whole list with a pill highlighted".
             <div style={{ ...cardStyle, overflow: "hidden" }}>
+              <ListColumnHeader />
               {listFilteredTasks.length === 0 ? (
                 <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
               ) : (
@@ -1907,6 +1943,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   </div>
                   {!isCollapsed && (
                     <div style={{ ...cardStyle, overflow: "hidden" }}>
+                      <ListColumnHeader />
                       {groupTasks.length === 0 ? (
                         <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
                       ) : (
@@ -1944,6 +1981,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 </div>
                 {!isCollapsed && (
                   <div style={{ ...cardStyle, overflow: "hidden" }}>
+                    <ListColumnHeader />
                     {sortListTasks(delegatedByMe).map((t) => <TaskRow key={t.id} task={t} selectable />)}
                   </div>
                 )}
@@ -1970,6 +2008,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 </div>
                 {!isCollapsed && (
                   <div style={{ ...cardStyle, overflow: "hidden" }}>
+                    <ListColumnHeader />
                     {sortListTasks(teamTasksSection).map((t) => <TaskRow key={t.id} task={t} selectable />)}
                   </div>
                 )}
