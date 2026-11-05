@@ -869,6 +869,12 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       return false;
     });
   })();
+  // Open-only version of pillCountBase — mirrors allOpen (excludes Completed/Cancelled unless
+  // the user has explicitly enabled them via the status pills). Used for Priority and Company
+  // counts so the number on the pill exactly matches what clicking it will show.
+  const pillCountBaseOpen = statusExplicitlyFiltered
+    ? pillCountBase
+    : pillCountBase.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
 
   function myTaskGroup(task: Task): string {
     if (isOverdue(task)) return "Overdue";
@@ -2055,7 +2061,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {companies.map((c) => {
                 const badge = COMPANY_BADGE_COLOURS[c.short_code ?? ""] ?? { color: COLOURS.SLATE, background: COLOURS.HAIRLINE };
                 const isActive = companyFilter === c.id;
-                const count = pillCountBase.filter((t) => t.company_id === c.id).length;
+                const count = pillCountBaseOpen.filter((t) => t.company_id === c.id).length;
                 return (
                   <button
                     key={c.id}
@@ -2094,15 +2100,23 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 {ALL_PRIORITIES.map((p) => {
                   const s = PRIORITY_STYLES[p] ?? PRIORITY_STYLES["Normal"];
                   const isActive = priorityFilters.has(p);
-                  const count = pillCountBase.filter((t) => (t.priority ?? "Normal") === p).length;
+                  const count = pillCountBaseOpen.filter((t) => (t.priority ?? "Normal") === p).length;
                   return (
                     <button
                       key={p}
                       onClick={() => {
-                        const next = new Set(priorityFilters);
-                        if (isActive) { next.delete(p); if (next.size === 0) next.add(p); }
-                        else next.add(p);
-                        setPriorityFilters(next);
+                        if (priorityFilters.size === ALL_PRIORITIES.length) {
+                          // All active → isolate to this one only
+                          setPriorityFilters(new Set([p]));
+                        } else if (priorityFilters.size === 1 && isActive) {
+                          // Only this one → clicking it resets to all
+                          setPriorityFilters(new Set(ALL_PRIORITIES));
+                        } else {
+                          // Partial selection → toggle membership
+                          const next = new Set(priorityFilters);
+                          if (isActive) next.delete(p); else next.add(p);
+                          if (next.size > 0) setPriorityFilters(next);
+                        }
                       }}
                       style={{
                         display: "inline-flex", alignItems: "center", gap: "5px",
@@ -2146,10 +2160,18 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                     <button
                       key={st}
                       onClick={() => {
-                        const next = new Set(statusFilters);
-                        if (isActive) { next.delete(st); if (next.size === 0) next.add(st); }
-                        else next.add(st);
-                        setStatusFilters(next);
+                        if (statusFilters.size === ALL_STATUSES.length) {
+                          // All active → isolate to this one only
+                          setStatusFilters(new Set([st]));
+                        } else if (statusFilters.size === 1 && isActive) {
+                          // Only this one → clicking it resets to all
+                          setStatusFilters(new Set(ALL_STATUSES));
+                        } else {
+                          // Partial selection → toggle membership
+                          const next = new Set(statusFilters);
+                          if (isActive) next.delete(st); else next.add(st);
+                          if (next.size > 0) setStatusFilters(next);
+                        }
                       }}
                       style={{
                         display: "inline-flex", alignItems: "center", gap: "5px",
