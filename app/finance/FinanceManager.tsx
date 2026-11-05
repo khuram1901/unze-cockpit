@@ -830,11 +830,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                       }}>
                         <div>
                           <div style={{ height: "1px", backgroundColor: hasPdc ? "rgba(179,38,30,.2)" : HAIRLINE, margin: "0 0 6px" }} />
-                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginBottom: "1px" }}>PDC Due</div>
+                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: hasPdc ? SLATE : "#9FB3A8", marginBottom: "1px" }}>PDC Due</div>
                           {hasPdc
                             ? <div style={{ fontFamily: MONO, fontSize: "16px", fontWeight: 700, color: RED }}>{formatPKRWhole(w.pdc_due)}</div>
-                            : <div style={{ fontFamily: MONO, fontSize: "14px", color: SLATE }}>—</div>}
-                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Net Bal</div>
+                            : <div style={{ fontSize: "11px", color: GREEN, fontWeight: 600 }}>✓ Clear</div>}
+                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Cash Position</div>
                           <div style={{ fontFamily: MONO, fontSize: "14px", fontWeight: 600, color: (weeklyBalance[w.week_number] ?? 0) < 0 ? RED : NAVY }}>{formatPKRWhole(weeklyBalance[w.week_number] ?? 0)}</div>
                         </div>
                       </div>
@@ -908,11 +908,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                       }}>
                         <div>
                           <div style={{ height: "1px", backgroundColor: hasPdc ? "rgba(179,38,30,.2)" : HAIRLINE, margin: "0 0 6px" }} />
-                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginBottom: "1px" }}>PDC Due</div>
+                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: hasPdc ? SLATE : "#9FB3A8", marginBottom: "1px" }}>PDC Due</div>
                           {hasPdc
                             ? <div style={{ fontFamily: MONO, fontSize: "16px", fontWeight: 700, color: RED }}>{formatPKRWhole(w.pdc_due)}</div>
-                            : <div style={{ fontFamily: MONO, fontSize: "14px", color: SLATE }}>—</div>}
-                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Net Bal</div>
+                            : <div style={{ fontSize: "11px", color: GREEN, fontWeight: 600 }}>✓ Clear</div>}
+                          <div style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: SLATE, marginTop: "4px", marginBottom: "1px" }}>Cash Position</div>
                           <div style={{ fontFamily: MONO, fontSize: "14px", fontWeight: 600, color: (weeklyBalance[w.week_number] ?? 0) < 0 ? RED : NAVY }}>{formatPKRWhole(weeklyBalance[w.week_number] ?? 0)}</div>
                         </div>
                       </div>
