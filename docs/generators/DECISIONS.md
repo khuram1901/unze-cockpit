@@ -128,10 +128,64 @@ context hint displayed on the form. Only real entries update the hint.
 
 ---
 
+## Report Tab (migration 295 — applied 2026-11-05)
+
+### Overview
+
+A 4th sub-tab "📋 Report" added to Admin Operations → Generators. Provides date-range-scoped
+analytics with three views: Fleet Overview, Single Generator, and Compare.
+
+### Database (migration 295)
+
+| RPC | Signature | Purpose |
+|---|---|---|
+| `get_generator_report_fleet` | `(p_date_from date, p_date_to date)` | Per-generator aggregates + 4-month fuel pivot. Returns one row per active generator with any fuel/maint data in range. Sorted by `avg_cost_per_hour ASC` (most efficient first). |
+| `get_generator_history` | `(p_generator_id uuid, p_date_from date, p_date_to date)` | UNION ALL of fuel + maintenance events for one generator, sorted newest-first. |
+
+Both RPCs: `STABLE SECURITY DEFINER SET search_path = public`. `REVOKE ALL FROM anon; GRANT EXECUTE TO authenticated`.
+
+Monthly pivot in `get_generator_report_fleet` uses `generate_series` CTE to compute up to 4
+months within the range, then pivots with `CASE WHEN ml.rn = N`. Month labels (e.g. "Aug",
+"Sep") embedded as `m1_label`–`m4_label` columns — frontend never computes dates.
+
+### API routes added (`app/api/admin/generators/route.ts`)
+
+- `GET ?type=report_fleet&from=YYYY-MM-DD&to=YYYY-MM-DD` → calls `get_generator_report_fleet`
+- `GET ?type=report_history&generator_id=UUID&from=…&to=…` → calls `get_generator_history`
+
+### UI decisions
+
+**Default date range:** last 3 months (`xMonthsAgo(3)` to today) — same utility already used
+elsewhere in the page.
+
+**Three sub-views:**
+- **Fleet Overview** — 5 KPI cards (total cost, litres, hours, refuels, services) + efficiency
+  ranking table (rank badge, green ✓ first row, red ↑ last row) + monthly fuel cost trend table.
+- **Single Generator** — dropdown (from existing `genMeta` state; no extra fetch) + 8 KPI tiles
+  + event log timeline (⛽ Fuel vs 🔧 Service badges).
+- **Compare** — pill-button multi-selector (up to 5 generators) + side-by-side metric table
+  (best=green ✓, worst=red ↑) + monthly fuel trend table per selected generator.
+
+**PDF download:** `window.print()` + `@media print` CSS in `app/globals.css`. Hides all app
+chrome; shows only `#gen-report-print` div. Zero cost, no library.
+
+**Permission guard:** existing `canManageGenerators(u: UserCtx)` — no new permission needed.
+
+### Commits
+
+- `0db7153` — Generator Report tab (Fleet Overview, Single, Compare, PDF download)
+
+### Live test results (2026-11-05)
+
+All three views confirmed working on `pulse.unze.co.uk` commit `0db7153`:
+- **Fleet Overview:** 22 generators ranked, Aug/Sep/Oct/Nov monthly columns, all KPI cards populated
+- **Single Generator:** KPI tiles + event history; dates in DD/MM/YYYY (e.g. 06/10/2026 ✅)
+- **Compare:** 3 generators selected; green ✓ best / red ↑ highest highlights correct
+
+---
+
 ## Open Items
 
 - [ ] Create `admin_locations` rows for 5 unmatched locations (needs owner approval)
 - [ ] Run full test-user workflow (CEO, manager toggle on/off, member blocked)
-- [ ] Record production rollback ID after first push to main
-- [ ] Take screenshots: `/daily-entry` fuel+maintenance on 360px phone, Admin Generators tab
 - [ ] Clean up test data after smoke test
