@@ -183,7 +183,16 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // not the whole company's task list. "Everyone" is one tap away.
   const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">(scopeFromUrl === "everyone" ? "everyone" : "mine");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  // Multi-select pill filters — a full set means "all shown" (no filtering).
+  const ALL_PRIORITIES = ["Critical", "Urgent", "Normal", "Low"] as const;
+  const ALL_STATUSES   = ["Not Started", "In Progress", "Waiting Reply", "Stuck", "Submitted", "Completed"] as const;
+  const [priorityFilters, setPriorityFilters] = useState<Set<string>>(new Set(ALL_PRIORITIES));
+  const VALID_STATUSES = ALL_STATUSES as unknown as string[];
+  const [statusFilters,   setStatusFilters]   = useState<Set<string>>(
+    statusFromUrl && VALID_STATUSES.includes(statusFromUrl)
+      ? new Set([statusFromUrl])
+      : new Set(ALL_STATUSES)
+  );
   const [ownerFilter, setOwnerFilter] = useState<string>(ownerFromUrl ? ownerFromUrl.trim().replace(/\s+/g, " ") : "all");
   const [periodFilter, setPeriodFilter] = useState<"all" | "week" | "month" | "quarter">("all");
   // Filter panel toggle — collapsed by default on mobile, open on desktop.
@@ -195,14 +204,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [dueFilter, setDueFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [subtaskFilter, setSubtaskFilter] = useState<string>("all");
-  // Explicit status picker (Not Started/In Progress/Waiting Reply/Stuck/
-  // Completed/Cancelled) — separate from the all/overdue/waiting quick
-  // pills below, and the one way to see Completed/Cancelled tasks in the
-  // main list/board/timeline views, which otherwise always hide them.
-  const VALID_STATUSES = ["Not Started","In Progress","Waiting Reply","Stuck","Submitted","Completed"];
-  const [statusFilter, setStatusFilter] = useState<string>(
-    statusFromUrl && VALID_STATUSES.includes(statusFromUrl) ? statusFromUrl : "all"
-  );
+  // VALID_STATUSES + statusFilters live just above (near priorityFilters).
   const [paFilter, setPaFilter] = useState(false);
   const [listSort, setListSort] = useState<{ col: "created_at" | "due_date" | "status" | "assigned_to"; dir: "asc" | "desc" }>({ col: "due_date", dir: "asc" });
   const [searchQuery, setSearchQuery] = useState("");
@@ -350,13 +352,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     setCompanyFilter("all");
     setFilter("all");
     setDepartmentFilter("all");
-    setPriorityFilter("all");
+    setPriorityFilters(new Set(ALL_PRIORITIES));
     setOwnerFilter("all");
     setPeriodFilter("all");
     setDueFilter("all");
     setSourceFilter("all");
     setSubtaskFilter("all");
-    setStatusFilter("all");
+    setStatusFilters(new Set(ALL_STATUSES));
     setPaFilter(false);
     setSearchQuery("");
   }
@@ -465,8 +467,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     // `|| t.project` fallback leaked meeting titles into the department
     // filter as fake departments (Khuram, 24/07/2026).
     if (departmentFilter !== "all" && (t.assigned_to_department || "Unassigned") !== departmentFilter) return false;
-    if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
-    if (statusFilter !== "all" && t.status !== statusFilter) return false;
+    if (priorityFilters.size < ALL_PRIORITIES.length && !priorityFilters.has(t.priority ?? "Normal")) return false;
+    if (statusFilters.size < ALL_STATUSES.length && !statusFilters.has(t.status)) return false;
     if (ownerFilter !== "all" && normName(t.assigned_to) !== ownerFilter) return false;
     if (periodFilter !== "all") {
       if (!t.due_date) return false;
@@ -515,7 +517,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Counts every filter, including Company (left out of the old boolean
   // check by oversight) — drives the badge on the single "Filters" button.
   const activeFilterCount = [
-    companyFilter !== "all", departmentFilter !== "all", priorityFilter !== "all", statusFilter !== "all",
+    companyFilter !== "all", departmentFilter !== "all", priorityFilters.size < ALL_PRIORITIES.length, statusFilters.size < ALL_STATUSES.length,
     ownerFilter !== "all", periodFilter !== "all", dueFilter !== "all",
     sourceFilter !== "all", subtaskFilter !== "all", searchQuery.trim() !== "",
   ].filter(Boolean).length;
@@ -761,11 +763,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     return { label: c?.name || "—", color: found.color, background: found.background };
   }
 
-  // When a specific status is picked, it overrides the default "hide
-  // Completed/Cancelled" behaviour entirely — scopedTasks is already
-  // narrowed to just that status (see the statusFilter check above), so
-  // there's nothing left to additionally exclude.
-  const allOpen = statusFilter !== "all"
+  // When status is filtered to specific values, that overrides the default
+  // "hide Completed/Cancelled" behaviour. If Completed is explicitly
+  // included in the status pills, honour that choice.
+  const statusExplicitlyFiltered = statusFilters.size < ALL_STATUSES.length;
+  const allOpen = statusExplicitlyFiltered
     ? scopedTasks
     : scopedTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const overdueTasks = allOpen.filter(isOverdue);
@@ -1878,8 +1880,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             const chips: { label: string; clear: () => void }[] = [
               ...(companyName ? [{ label: companyName, clear: () => setCompanyFilter("all") }] : []),
               ...(departmentFilter !== "all" ? [{ label: departmentFilter, clear: () => setDepartmentFilter("all") }] : []),
-              ...(priorityFilter !== "all" ? [{ label: priorityFilter, clear: () => setPriorityFilter("all") }] : []),
-              ...(statusFilter !== "all" ? [{ label: statusFilter, clear: () => setStatusFilter("all") }] : []),
+              ...(priorityFilters.size < ALL_PRIORITIES.length ? [{ label: `Priority: ${[...priorityFilters].join(", ")}`, clear: () => setPriorityFilters(new Set(ALL_PRIORITIES)) }] : []),
+              ...(statusFilters.size < ALL_STATUSES.length ? [{ label: `Status: ${[...statusFilters].join(", ")}`, clear: () => setStatusFilters(new Set(ALL_STATUSES)) }] : []),
               ...(ownerFilter !== "all" ? [{ label: ownerFilter, clear: () => setOwnerFilter("all") }] : []),
               ...(periodFilter !== "all" ? [{ label: periodFilter === "week" ? "This week" : periodFilter === "month" ? "This month" : "This quarter", clear: () => setPeriodFilter("all") }] : []),
               ...(dueFilter !== "all" ? [{ label: dueFilter === "overdue" ? "Overdue" : dueFilter === "today" ? "Due today" : "No due date", clear: () => setDueFilter("all") }] : []),
@@ -1967,21 +1969,152 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
       {timeView !== "team" && timeView !== "recurring" && filtersOpen && (
         <div style={{ marginBottom: "12px", width: "100%" }}>
-          {/* Single filter row — all 9 filters wrap naturally on small screens */}
+
+          {/* ── Company pills (single-select) ── */}
+          {!(department === "Internal Audit" && !isPrivileged) && (
+            <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap", marginBottom: "8px" }}>
+              <span style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, letterSpacing: "0.07em", textTransform: "uppercase", marginRight: "2px", whiteSpace: "nowrap" }}>Company:</span>
+              {/* "All" pill */}
+              {(() => {
+                const isAll = companyFilter === "all";
+                return (
+                  <button
+                    onClick={() => setCompanyFilter("all")}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "5px",
+                      padding: "4px 10px", borderRadius: "999px", cursor: "pointer",
+                      fontSize: "11.5px", fontWeight: 600, border: "1.5px solid",
+                      background: isAll ? COLOURS.NAVY : COLOURS.HAIRLINE,
+                      color: isAll ? "#fff" : COLOURS.SLATE,
+                      borderColor: isAll ? COLOURS.NAVY : "#d1d5db",
+                      opacity: isAll ? 1 : 0.5,
+                      transition: "opacity 0.15s",
+                    }}
+                  >All</button>
+                );
+              })()}
+              {companies.map((c) => {
+                const badge = COMPANY_BADGE_COLOURS[c.short_code ?? ""] ?? { color: COLOURS.SLATE, background: COLOURS.HAIRLINE };
+                const isActive = companyFilter === c.id;
+                const count = tasks.filter((t) => t.company_id === c.id).length;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setCompanyFilter(isActive ? "all" : c.id)}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "5px",
+                      padding: "4px 10px 4px 8px", borderRadius: "999px", cursor: "pointer",
+                      fontSize: "11.5px", fontWeight: 600, border: "1.5px solid",
+                      background: isActive ? badge.background : COLOURS.HAIRLINE,
+                      color: isActive ? badge.color : COLOURS.SLATE,
+                      borderColor: isActive ? badge.color : "#d1d5db",
+                      opacity: isActive ? 1 : 0.45,
+                      transition: "opacity 0.15s",
+                    }}
+                  >
+                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: isActive ? badge.color : COLOURS.SLATE, flexShrink: 0 }} />
+                    {c.name} <span style={{ fontFamily: FONT_MONO, fontSize: "10.5px" }}>{count}</span>
+                    {isActive && <span style={{ fontSize: "11px", opacity: 0.6, marginLeft: "2px" }}>×</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Priority pills (multi-select) ── */}
+          {(() => {
+            const PRIORITY_STYLES: Record<string, { bg: string; color: string; dot: string; border: string }> = {
+              "Critical": { bg: "#fee2e2", color: "#991b1b", dot: "#dc2626", border: "#fca5a5" },
+              "Urgent":   { bg: "#fef3c7", color: "#92400e", dot: "#f59e0b", border: "#fcd34d" },
+              "Normal":   { bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6", border: "#93c5fd" },
+              "Low":      { bg: "#f1f5f9", color: "#475569", dot: "#94a3b8", border: "#cbd5e1" },
+            };
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap", marginBottom: "8px" }}>
+                <span style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, letterSpacing: "0.07em", textTransform: "uppercase", marginRight: "2px", whiteSpace: "nowrap" }}>Priority:</span>
+                {ALL_PRIORITIES.map((p) => {
+                  const s = PRIORITY_STYLES[p] ?? PRIORITY_STYLES["Normal"];
+                  const isActive = priorityFilters.has(p);
+                  const count = tasks.filter((t) => (t.priority ?? "Normal") === p).length;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => {
+                        const next = new Set(priorityFilters);
+                        if (isActive) { next.delete(p); if (next.size === 0) next.add(p); }
+                        else next.add(p);
+                        setPriorityFilters(next);
+                      }}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: "5px",
+                        padding: "4px 10px 4px 8px", borderRadius: "999px", cursor: "pointer",
+                        fontSize: "11.5px", fontWeight: 600, border: "1.5px solid",
+                        background: isActive ? s.bg : COLOURS.HAIRLINE,
+                        color: isActive ? s.color : COLOURS.SLATE,
+                        borderColor: isActive ? s.border : "#d1d5db",
+                        opacity: isActive ? 1 : 0.45,
+                        transition: "opacity 0.15s",
+                      }}
+                    >
+                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: isActive ? s.dot : COLOURS.SLATE, flexShrink: 0 }} />
+                      {p} <span style={{ fontFamily: FONT_MONO, fontSize: "10.5px" }}>{count}</span>
+                      {isActive && priorityFilters.size < ALL_PRIORITIES.length && <span style={{ fontSize: "11px", opacity: 0.6, marginLeft: "2px" }}>×</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* ── Status pills (multi-select) ── */}
+          {(() => {
+            const STATUS_STYLES: Record<string, { bg: string; color: string; dot: string; border: string }> = {
+              "Not Started":   { bg: "#f1f5f9", color: "#475569", dot: "#94a3b8", border: "#cbd5e1" },
+              "In Progress":   { bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6", border: "#93c5fd" },
+              "Waiting Reply": { bg: "#fef9c3", color: "#92400e", dot: "#eab308", border: "#fde68a" },
+              "Stuck":         { bg: "#fee2e2", color: "#991b1b", dot: "#ef4444", border: "#fca5a5" },
+              "Submitted":     { bg: "#ede9fe", color: "#5b21b6", dot: "#8b5cf6", border: "#c4b5fd" },
+              "Completed":     { bg: "#dcfce7", color: "#15803d", dot: "#22c55e", border: "#86efac" },
+            };
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap", marginBottom: "8px" }}>
+                <span style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, letterSpacing: "0.07em", textTransform: "uppercase", marginRight: "2px", whiteSpace: "nowrap" }}>Status:</span>
+                {ALL_STATUSES.map((st) => {
+                  const s = STATUS_STYLES[st] ?? STATUS_STYLES["Not Started"];
+                  const isActive = statusFilters.has(st);
+                  const count = tasks.filter((t) => t.status === st).length;
+                  return (
+                    <button
+                      key={st}
+                      onClick={() => {
+                        const next = new Set(statusFilters);
+                        if (isActive) { next.delete(st); if (next.size === 0) next.add(st); }
+                        else next.add(st);
+                        setStatusFilters(next);
+                      }}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: "5px",
+                        padding: "4px 10px 4px 8px", borderRadius: "999px", cursor: "pointer",
+                        fontSize: "11.5px", fontWeight: 600, border: "1.5px solid",
+                        background: isActive ? s.bg : COLOURS.HAIRLINE,
+                        color: isActive ? s.color : COLOURS.SLATE,
+                        borderColor: isActive ? s.border : "#d1d5db",
+                        opacity: isActive ? 1 : 0.45,
+                        transition: "opacity 0.15s",
+                      }}
+                    >
+                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: isActive ? s.dot : COLOURS.SLATE, flexShrink: 0 }} />
+                      {st} <span style={{ fontFamily: FONT_MONO, fontSize: "10.5px" }}>{count}</span>
+                      {isActive && statusFilters.size < ALL_STATUSES.length && <span style={{ fontSize: "11px", opacity: 0.6, marginLeft: "2px" }}>×</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* ── Secondary dropdowns row (Department, Owner, Period, Due, Source, Subtasks) ── */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-            {!(department === "Internal Audit" && !isPrivileged) && (
-              <SearchableDropdown
-                value={companyFilter}
-                onChange={setCompanyFilter}
-                label="Company"
-                options={[
-                  { value: "all", label: "All companies" },
-                  ...companies.map((c) => ({ value: c.id, label: c.name })),
-                  { value: "group", label: "Group / needs review" },
-                ]}
-                dotMap={Object.fromEntries(companies.map((c) => [c.id, (COMPANY_BADGE_COLOURS[c.short_code ?? ""] ?? COMPANY_BADGE_COLOURS[""])?.color ?? COLOURS.SLATE]))}
-              />
-            )}
             <SearchableDropdown
               value={departmentFilter}
               onChange={setDepartmentFilter}
@@ -1990,32 +2123,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               options={[
                 { value: "all", label: "All depts" },
                 ...departmentOptions.map((d) => ({ value: d, label: d })),
-              ]}
-            />
-            <SearchableDropdown
-              value={priorityFilter}
-              onChange={setPriorityFilter}
-              label="Priority"
-              options={[
-                { value: "all", label: "All priorities" },
-                { value: "Critical", label: "Critical" },
-                { value: "Urgent", label: "Urgent" },
-                { value: "Normal", label: "Normal" },
-                { value: "Low", label: "Low" },
-              ]}
-            />
-            <SearchableDropdown
-              value={statusFilter}
-              onChange={setStatusFilter}
-              label="Status"
-              options={[
-                { value: "all", label: "All statuses" },
-                { value: "Not Started", label: "Not Started" },
-                { value: "In Progress", label: "In Progress" },
-                { value: "Waiting Reply", label: "Waiting Reply" },
-                { value: "Stuck", label: "Stuck" },
-                { value: "Submitted", label: "Submitted" },
-                { value: "Completed", label: "Completed" },
               ]}
             />
             <SearchableDropdown
@@ -2386,9 +2493,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             setCompanyFilter("all");
             setDepartmentFilter(d.department ?? "all");
             setOwnerFilter(d.owner ?? "all");
-            setStatusFilter(d.status ?? "all");
+            setStatusFilters(d.status && VALID_STATUSES.includes(d.status) ? new Set([d.status]) : new Set(ALL_STATUSES));
             setDueFilter(d.due ?? "all");
-            setPriorityFilter("all");
+            setPriorityFilters(new Set(ALL_PRIORITIES));
             setPeriodFilter("all");
             setSourceFilter("all");
             setSubtaskFilter("all");
