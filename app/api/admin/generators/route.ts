@@ -123,6 +123,29 @@ export async function GET(request: NextRequest) {
     return Response.json({ data: data ?? [] });
   }
 
+  // ── report_fleet: per-generator aggregates for the Report tab ────────────
+  if (type === "report_fleet") {
+    const { data, error } = await sb.rpc("get_generator_report_fleet", {
+      p_date_from: searchParams.get("from") || null,
+      p_date_to:   searchParams.get("to")   || null,
+    });
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ data: data ?? [] });
+  }
+
+  // ── report_history: combined fuel + maintenance events for one generator ──
+  if (type === "report_history") {
+    const generator_id = searchParams.get("generator_id");
+    if (!generator_id) return Response.json({ error: "generator_id required" }, { status: 400 });
+    const { data, error } = await sb.rpc("get_generator_history", {
+      p_generator_id: generator_id,
+      p_date_from:    searchParams.get("from") || null,
+      p_date_to:      searchParams.get("to")   || null,
+    });
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ data: data ?? [] });
+  }
+
   return Response.json({ error: "Unknown type" }, { status: 400 });
 }
 

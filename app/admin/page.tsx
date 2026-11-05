@@ -82,7 +82,7 @@ type UtilityLocation = {
 type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations" | "legal" | "visitors" | "generators";
 
 // ── Generator types ───────────────────────────────────────────────────
-type GenTabView = "diesel" | "maintenance" | "master" | "analytics";
+type GenTabView = "diesel" | "maintenance" | "master" | "analytics" | "report";
 
 type GenFuelRow = {
   id: string; generator_id: string; generator_label: string; location_name: string;
@@ -917,6 +917,38 @@ export default function AdminDataPage() {
   const [analyticsFrom, setAnalyticsFrom]     = useState<string>(firstOfMonth());
   const [analyticsTo, setAnalyticsTo]         = useState<string>(TODAY);
 
+  // ── Generator Report state ─────────────────────────────────────────────────
+  type GenReportRow = {
+    generator_id: string; generator_label: string; location_name: string;
+    kva: number; model: string; total_refuels: number; total_litres: number;
+    total_fuel_cost: number; total_hours_run: number; avg_litres_per_hour: number;
+    avg_cost_per_hour: number; total_maint_cost: number; maint_event_count: number;
+    total_cost: number; last_refuel_date: string | null; last_service_date: string | null;
+    m1_fuel: number; m2_fuel: number; m3_fuel: number; m4_fuel: number;
+    m1_label: string; m2_label: string; m3_label: string; m4_label: string;
+  };
+  type GenHistoryEvent = {
+    event_id: string; event_type: "fuel" | "maintenance"; event_date: string;
+    qty_litres: number | null; hours_run: number | null; litres_per_hour: number | null;
+    cost_per_hour: number | null; rate_per_litre: number | null;
+    total_cost: number; remarks: string | null; entered_by: string | null;
+    engine_oil: number | null; oil_filter: number | null; fuel_filter: number | null;
+    air_filter: number | null; radiator_service: number | null;
+    periodic_maintenance: number | null; other_mechanical_work: number | null; others: number | null;
+  };
+  type ReportView = "fleet" | "single" | "compare";
+  const [reportView,       setReportView]       = useState<ReportView>("fleet");
+  const [reportFrom,       setReportFrom]       = useState<string>(xMonthsAgo(3));
+  const [reportTo,         setReportTo]         = useState<string>(TODAY);
+  const [reportFleet,      setReportFleet]      = useState<GenReportRow[]>([]);
+  const [loadingReport,    setLoadingReport]    = useState(false);
+  const [reportError,      setReportError]      = useState<string | null>(null);
+  const [reportSingleId,   setReportSingleId]   = useState<string>("");
+  const [reportHistory,    setReportHistory]    = useState<GenHistoryEvent[]>([]);
+  const [loadingHistory,   setLoadingHistory]   = useState(false);
+  const [compareIds,       setCompareIds]       = useState<string[]>([]);
+  const [reportLoaded,     setReportLoaded]     = useState(false);
+
   async function loadGeneratorData() {
     setLoadingGen(true);
     try {
@@ -1707,6 +1739,471 @@ export default function AdminDataPage() {
     );
     // END ANALYTICS VIEW
 
+    // ── Report tab ────────────────────────────────────────────────────────────
+    const fetchReportFleet = async (from: string, to: string) => {
+      setLoadingReport(true); setReportError(null);
+      try {
+        const r = await authFetch(`/api/admin/generators?type=report_fleet&from=${from}&to=${to}`);
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error ?? "Failed");
+        setReportFleet(j.data ?? []);
+        setReportLoaded(true);
+      } catch (e: unknown) {
+        setReportError(e instanceof Error ? e.message : String(e));
+      } finally { setLoadingReport(false); }
+    };
+
+    const fetchReportHistory = async (genId: string, from: string, to: string) => {
+      if (!genId) return;
+      setLoadingHistory(true);
+      try {
+        const r = await authFetch(`/api/admin/generators?type=report_history&generator_id=${genId}&from=${from}&to=${to}`);
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error ?? "Failed");
+        setReportHistory(j.data ?? []);
+      } catch { setReportHistory([]); } finally { setLoadingHistory(false); }
+    };
+
+    // Format helpers (inline, since this is inside the render function)
+    const pkr = (n: number) => `PKR ${n.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    const pct = (n: number, t: number) => t > 0 ? `${((n / t) * 100).toFixed(0)}%` : "—";
+
+    // All flat generator list for dropdowns (from genMeta already loaded)
+    const allGens = genMeta.map(g => ({ id: g.generator_id, label: g.label || `${g.kva} kVA – ${g.model}`, location: g.location_name }));
+
+    // ── Report date controls ──────────────────────────────────────────────
+    const reportControls = (
+      <div style={{ display:"flex", flexWrap:"wrap", gap:"10px", alignItems:"center", marginBottom:"20px", background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"16px" }}>
+        <span style={{ fontSize:"12px", fontWeight:700, color:COLOURS.SLATE, textTransform:"uppercase", letterSpacing:"0.05em" }}>Date Range</span>
+        <DateInput value={reportFrom} onChange={e => setReportFrom(e.target.value)} />
+        <span style={{ color:COLOURS.SLATE, fontSize:"12px" }}>→</span>
+        <DateInput value={reportTo}   onChange={e => setReportTo(e.target.value)} />
+        <button onClick={() => { fetchReportFleet(reportFrom, reportTo); if (reportSingleId) fetchReportHistory(reportSingleId, reportFrom, reportTo); }}
+          style={{ padding:"6px 18px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer", background:COLOURS.NAVY, color:"white", border:"none" }}>
+          Apply
+        </button>
+        {/* PDF download — prints only the report section */}
+        <button onClick={() => window.print()}
+          style={{ padding:"6px 16px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer", background:"transparent", color:COLOURS.NAVY, border:`1px solid ${COLOURS.NAVY}`, marginLeft:"auto" }}>
+          ⬇ Download PDF
+        </button>
+        {/* Sub-view switcher */}
+        <div style={{ display:"flex", gap:"6px" }}>
+          {(["fleet","single","compare"] as ReportView[]).map(v => (
+            <button key={v} onClick={() => setReportView(v)} style={{
+              padding:"5px 14px", borderRadius:"20px", fontSize:"12px", fontWeight:600, cursor:"pointer",
+              background: reportView === v ? COLOURS.NAVY : "transparent",
+              color:      reportView === v ? "white"      : COLOURS.SLATE,
+              border: `1px solid ${reportView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+            }}>
+              {v === "fleet" ? "Fleet Overview" : v === "single" ? "Single Generator" : "Compare"}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+
+    // ── FLEET OVERVIEW ────────────────────────────────────────────────────
+    const fleetTotalFuel  = reportFleet.reduce((s, r) => s + r.total_fuel_cost,  0);
+    const fleetTotalMaint = reportFleet.reduce((s, r) => s + r.total_maint_cost, 0);
+    const fleetTotalCost  = reportFleet.reduce((s, r) => s + r.total_cost,       0);
+    const fleetTotalHrs   = reportFleet.reduce((s, r) => s + r.total_hours_run,  0);
+    const fleetTotalLtrs  = reportFleet.reduce((s, r) => s + r.total_litres,     0);
+
+    const fleetView = (
+      <div>
+        {!reportLoaded && !loadingReport ? (
+          <div style={{ textAlign:"center", padding:"60px", color:COLOURS.SLATE }}>
+            <div style={{ fontSize:"32px", marginBottom:"12px" }}>📋</div>
+            <p style={{ fontSize:"14px", margin:0 }}>Select a date range and click Apply to generate the fleet report.</p>
+          </div>
+        ) : loadingReport ? (
+          <div style={{ textAlign:"center", padding:"60px", color:COLOURS.SLATE, fontSize:"14px" }}>Generating report…</div>
+        ) : reportError ? (
+          <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:"10px", padding:"14px 16px", color:COLOURS.RED, fontSize:"13px" }}>⚠ {reportError}</div>
+        ) : reportFleet.length === 0 ? (
+          <div style={{ textAlign:"center", padding:"60px", color:COLOURS.SLATE, fontSize:"14px" }}>No data for selected period.</div>
+        ) : (
+          <>
+            {/* Fleet KPI strip */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))", gap:"12px", marginBottom:"20px" }}>
+              {[
+                { label:"Total Fleet Cost", value:pkr(fleetTotalCost), sub:"fuel + maintenance" },
+                { label:"Total Fuel",       value:pkr(fleetTotalFuel),  sub:`${fleetTotalLtrs.toFixed(0)} L` },
+                { label:"Maintenance",      value:pkr(fleetTotalMaint), sub:`${((fleetTotalMaint/Math.max(1,fleetTotalCost))*100).toFixed(0)}% of total` },
+                { label:"Hours Run",        value:fleetTotalHrs.toFixed(0), sub:"total fleet hours" },
+                { label:"Generators",       value:reportFleet.length.toString(), sub:"active with data" },
+              ].map(c => (
+                <div key={c.label} style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"16px" }}>
+                  <div style={{ fontSize:"10px", fontWeight:700, color:COLOURS.SLATE, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:"6px" }}>{c.label}</div>
+                  <div style={{ fontSize:"20px", fontWeight:700, color:COLOURS.NAVY }}>{c.value}</div>
+                  <div style={{ fontSize:"11px", color:COLOURS.SLATE, marginTop:"2px" }}>{c.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Fleet ranking table */}
+            <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", overflow:"hidden", marginBottom:"20px" }}>
+              <div style={{ padding:"14px 18px", borderBottom:`1px solid ${COLOURS.HAIRLINE}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <span style={{ fontSize:"13px", fontWeight:700, color:COLOURS.NAVY }}>🏆 Generator Efficiency Ranking — Lowest Cost/hr is Best</span>
+              </div>
+              <div style={{ overflowX:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12px" }}>
+                  <thead>
+                    <tr style={{ background:"#F8FAFC" }}>
+                      {["#","Generator","Location","Total Cost","Fuel","Maintenance","Hrs Run","Avg L/hr","Avg Cost/hr","Last Refuel","Last Service"].map(h => (
+                        <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontWeight:700, color:COLOURS.SLATE, whiteSpace:"nowrap", fontSize:"11px", textTransform:"uppercase", letterSpacing:"0.04em", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportFleet.map((r, i) => {
+                      const isEfficient = i === 0;
+                      const isWorse     = i === reportFleet.length - 1 && reportFleet.length > 1;
+                      const rowBg = isEfficient ? "#F0FDF4" : isWorse ? "#FEF2F2" : "white";
+                      return (
+                        <tr key={r.generator_id} style={{ background: rowBg, borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
+                          <td style={{ padding:"10px 12px", fontWeight:700, color:isEfficient ? COLOURS.GREEN : isWorse ? COLOURS.RED : COLOURS.SLATE }}>
+                            {isEfficient ? "🥇" : isWorse ? "⚠" : i + 1}
+                          </td>
+                          <td style={{ padding:"10px 12px", fontWeight:600, color:COLOURS.NAVY, whiteSpace:"nowrap" }}>
+                            {r.generator_label}
+                            <span style={{ marginLeft:"6px", fontSize:"10px", color:COLOURS.SLATE }}>{r.kva}kVA</span>
+                          </td>
+                          <td style={{ padding:"10px 12px", color:COLOURS.SLATE, whiteSpace:"nowrap" }}>{r.location_name}</td>
+                          <td style={{ padding:"10px 12px", fontWeight:700, color:COLOURS.NAVY, whiteSpace:"nowrap" }}>{pkr(r.total_cost)}</td>
+                          <td style={{ padding:"10px 12px", color:COLOURS.SLATE, whiteSpace:"nowrap" }}>
+                            {pkr(r.total_fuel_cost)}
+                            <span style={{ display:"block", fontSize:"10px" }}>{pct(r.total_fuel_cost, r.total_cost)}</span>
+                          </td>
+                          <td style={{ padding:"10px 12px", color:COLOURS.SLATE, whiteSpace:"nowrap" }}>
+                            {pkr(r.total_maint_cost)}
+                            <span style={{ display:"block", fontSize:"10px" }}>{pct(r.total_maint_cost, r.total_cost)}</span>
+                          </td>
+                          <td style={{ padding:"10px 12px", color:COLOURS.SLATE }}>{r.total_hours_run.toFixed(0)} hrs</td>
+                          <td style={{ padding:"10px 12px", color:COLOURS.SLATE }}>{r.avg_litres_per_hour.toFixed(2)} L</td>
+                          <td style={{ padding:"10px 12px", fontWeight:700, color:isEfficient ? COLOURS.GREEN : isWorse ? COLOURS.RED : COLOURS.NAVY, whiteSpace:"nowrap" }}>
+                            PKR {Number(r.avg_cost_per_hour).toFixed(0)}/hr
+                          </td>
+                          <td style={{ padding:"10px 12px", color:COLOURS.SLATE, whiteSpace:"nowrap" }}>{r.last_refuel_date ? formatDateUK(r.last_refuel_date) : "—"}</td>
+                          <td style={{ padding:"10px 12px", color:COLOURS.SLATE, whiteSpace:"nowrap" }}>{r.last_service_date ? formatDateUK(r.last_service_date) : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Monthly trend table */}
+            {reportFleet[0]?.m1_label && (
+              <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", overflow:"hidden" }}>
+                <div style={{ padding:"14px 18px", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
+                  <span style={{ fontSize:"13px", fontWeight:700, color:COLOURS.NAVY }}>📅 Monthly Fuel Cost Trend</span>
+                </div>
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12px" }}>
+                    <thead>
+                      <tr style={{ background:"#F8FAFC" }}>
+                        <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:700, color:COLOURS.SLATE, fontSize:"11px", textTransform:"uppercase", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>Generator</th>
+                        {[reportFleet[0].m1_label, reportFleet[0].m2_label, reportFleet[0].m3_label, reportFleet[0].m4_label].filter(Boolean).map(l => (
+                          <th key={l} style={{ padding:"10px 12px", textAlign:"right", fontWeight:700, color:COLOURS.SLATE, fontSize:"11px", textTransform:"uppercase", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>{l}</th>
+                        ))}
+                        <th style={{ padding:"10px 12px", textAlign:"right", fontWeight:700, color:COLOURS.SLATE, fontSize:"11px", textTransform:"uppercase", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportFleet.map(r => {
+                        const months = [r.m1_fuel, r.m2_fuel, r.m3_fuel, r.m4_fuel].filter((_, i) =>
+                          [r.m1_label, r.m2_label, r.m3_label, r.m4_label][i]);
+                        return (
+                          <tr key={r.generator_id} style={{ borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
+                            <td style={{ padding:"9px 12px", fontWeight:600, color:COLOURS.NAVY, whiteSpace:"nowrap" }}>
+                              {r.generator_label} <span style={{ fontSize:"10px", color:COLOURS.SLATE }}>{r.location_name}</span>
+                            </td>
+                            {months.map((m, i) => (
+                              <td key={i} style={{ padding:"9px 12px", textAlign:"right", color: m > 0 ? COLOURS.NAVY : COLOURS.SLATE, fontWeight: m > 0 ? 600 : 400 }}>
+                                {m > 0 ? pkr(m) : "—"}
+                              </td>
+                            ))}
+                            <td style={{ padding:"9px 12px", textAlign:"right", fontWeight:700, color:COLOURS.NAVY }}>{pkr(r.total_fuel_cost)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+
+    // ── SINGLE GENERATOR VIEW ─────────────────────────────────────────────
+    const singleGen  = reportFleet.find(r => r.generator_id === reportSingleId);
+    const fuelEvents = reportHistory.filter(e => e.event_type === "fuel");
+    const maintEvents = reportHistory.filter(e => e.event_type === "maintenance");
+    const singleFuelTotal  = fuelEvents.reduce((s, e) => s + (e.total_cost ?? 0), 0);
+    const singleMaintTotal = maintEvents.reduce((s, e) => s + (e.total_cost ?? 0), 0);
+    const singleTotalCost  = singleFuelTotal + singleMaintTotal;
+
+    const singleView = (
+      <div>
+        {/* Generator selector */}
+        <div style={{ display:"flex", gap:"10px", alignItems:"center", marginBottom:"20px", flexWrap:"wrap" }}>
+          <span style={{ fontSize:"12px", fontWeight:700, color:COLOURS.SLATE, textTransform:"uppercase", letterSpacing:"0.05em" }}>Generator</span>
+          <select value={reportSingleId} onChange={e => {
+            setReportSingleId(e.target.value);
+            if (e.target.value) fetchReportHistory(e.target.value, reportFrom, reportTo);
+          }} style={{ padding:"8px 12px", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"8px", fontSize:"13px", minWidth:"240px" }}>
+            <option value="">— Select a generator —</option>
+            {allGens.map(g => <option key={g.id} value={g.id}>{g.label} — {g.location}</option>)}
+          </select>
+        </div>
+
+        {!reportSingleId ? (
+          <div style={{ textAlign:"center", padding:"60px", color:COLOURS.SLATE }}>
+            <div style={{ fontSize:"28px", marginBottom:"10px" }}>⚡</div>
+            <p style={{ fontSize:"14px", margin:0 }}>Select a generator above to view its detailed report.</p>
+          </div>
+        ) : loadingHistory ? (
+          <div style={{ textAlign:"center", padding:"40px", color:COLOURS.SLATE, fontSize:"14px" }}>Loading history…</div>
+        ) : (
+          <>
+            {/* KPI tiles */}
+            {singleGen && (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))", gap:"12px", marginBottom:"20px" }}>
+                {[
+                  { label:"Total Cost",   value:pkr(singleTotalCost),  sub:"fuel + maintenance" },
+                  { label:"Fuel",         value:pkr(singleFuelTotal),  sub:pct(singleFuelTotal, singleTotalCost) + " of total" },
+                  { label:"Maintenance",  value:pkr(singleMaintTotal), sub:pct(singleMaintTotal, singleTotalCost) + " of total" },
+                  { label:"Hours Run",    value:singleGen.total_hours_run.toFixed(0), sub:"total hours" },
+                  { label:"Avg Cost/hr",  value:`PKR ${Number(singleGen.avg_cost_per_hour).toFixed(0)}`, sub:"per hour run" },
+                  { label:"Avg L/hr",     value:`${singleGen.avg_litres_per_hour.toFixed(2)} L`, sub:"efficiency" },
+                  { label:"Refuels",      value:singleGen.total_refuels.toString(), sub:"in period" },
+                  { label:"Services",     value:singleGen.maint_event_count.toString(), sub:"in period" },
+                ].map(c => (
+                  <div key={c.label} style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"14px" }}>
+                    <div style={{ fontSize:"10px", fontWeight:700, color:COLOURS.SLATE, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:"5px" }}>{c.label}</div>
+                    <div style={{ fontSize:"18px", fontWeight:700, color:COLOURS.NAVY }}>{c.value}</div>
+                    <div style={{ fontSize:"11px", color:COLOURS.SLATE, marginTop:"2px" }}>{c.sub}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Event log timeline */}
+            <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", overflow:"hidden" }}>
+              <div style={{ padding:"14px 18px", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
+                <span style={{ fontSize:"13px", fontWeight:700, color:COLOURS.NAVY }}>📋 Full Event History ({reportHistory.length} events)</span>
+              </div>
+              {reportHistory.length === 0 ? (
+                <p style={{ padding:"24px", color:COLOURS.SLATE, fontSize:"13px", margin:0 }}>No events in selected period.</p>
+              ) : (
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12px" }}>
+                    <thead>
+                      <tr style={{ background:"#F8FAFC" }}>
+                        {["Date","Type","Details","Cost","Entered By"].map(h => (
+                          <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontWeight:700, color:COLOURS.SLATE, fontSize:"11px", textTransform:"uppercase", letterSpacing:"0.04em", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportHistory.map(e => (
+                        <tr key={e.event_id} style={{ borderBottom:`1px solid ${COLOURS.HAIRLINE}`, background: e.event_type === "maintenance" ? "#FFFBEB" : "white" }}>
+                          <td style={{ padding:"9px 12px", whiteSpace:"nowrap", color:COLOURS.SLATE }}>{formatDateUK(e.event_date)}</td>
+                          <td style={{ padding:"9px 12px" }}>
+                            <span style={{ display:"inline-block", padding:"2px 10px", borderRadius:"12px", fontSize:"11px", fontWeight:700,
+                              background: e.event_type === "fuel" ? "#EFF6FF" : "#FFFBEB",
+                              color:      e.event_type === "fuel" ? "#1D4ED8" : "#B45309" }}>
+                              {e.event_type === "fuel" ? "⛽ Fuel" : "🔧 Service"}
+                            </span>
+                          </td>
+                          <td style={{ padding:"9px 12px", color:COLOURS.SLATE, fontSize:"11px" }}>
+                            {e.event_type === "fuel" ? (
+                              <span>{e.qty_litres?.toFixed(0)} L · {e.hours_run?.toFixed(0)} hrs · {e.litres_per_hour?.toFixed(2)} L/hr{e.remarks ? ` · ${e.remarks}` : ""}</span>
+                            ) : (
+                              <span>
+                                {[
+                                  e.engine_oil      && e.engine_oil > 0      ? `Engine Oil: PKR ${e.engine_oil.toFixed(0)}` : null,
+                                  e.oil_filter      && e.oil_filter > 0      ? `Oil Filter: PKR ${e.oil_filter.toFixed(0)}` : null,
+                                  e.fuel_filter     && e.fuel_filter > 0     ? `Fuel Filter: PKR ${e.fuel_filter.toFixed(0)}` : null,
+                                  e.air_filter      && e.air_filter > 0      ? `Air Filter: PKR ${e.air_filter.toFixed(0)}` : null,
+                                  e.radiator_service && e.radiator_service > 0 ? `Radiator: PKR ${e.radiator_service.toFixed(0)}` : null,
+                                  e.periodic_maintenance && e.periodic_maintenance > 0 ? `Periodic: PKR ${e.periodic_maintenance.toFixed(0)}` : null,
+                                  e.other_mechanical_work && e.other_mechanical_work > 0 ? `Other: PKR ${e.other_mechanical_work.toFixed(0)}` : null,
+                                  e.others          && e.others > 0          ? `Misc: PKR ${e.others.toFixed(0)}` : null,
+                                ].filter(Boolean).join(" · ") || "Service record"}
+                                {e.remarks ? ` · ${e.remarks}` : ""}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding:"9px 12px", fontWeight:700, color:COLOURS.NAVY, whiteSpace:"nowrap" }}>{pkr(e.total_cost ?? 0)}</td>
+                          <td style={{ padding:"9px 12px", color:COLOURS.SLATE, fontSize:"11px" }}>{e.entered_by ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
+
+    // ── COMPARE VIEW ──────────────────────────────────────────────────────
+    const compareData = reportFleet.filter(r => compareIds.includes(r.generator_id));
+
+    const compareView = (
+      <div>
+        {/* Generator multi-selector */}
+        <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", padding:"16px", marginBottom:"20px" }}>
+          <div style={{ fontSize:"12px", fontWeight:700, color:COLOURS.SLATE, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:"10px" }}>
+            Select up to 5 generators to compare
+          </div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:"8px" }}>
+            {allGens.map(g => {
+              const selected = compareIds.includes(g.id);
+              const disabled = !selected && compareIds.length >= 5;
+              return (
+                <button key={g.id} disabled={disabled} onClick={() => {
+                  setCompareIds(prev => selected ? prev.filter(id => id !== g.id) : [...prev, g.id]);
+                }} style={{
+                  padding:"5px 12px", borderRadius:"20px", fontSize:"11px", fontWeight:600, cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: disabled ? 0.4 : 1,
+                  background: selected ? COLOURS.NAVY : "transparent",
+                  color:      selected ? "white"      : COLOURS.SLATE,
+                  border: `1px solid ${selected ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                }}>
+                  {g.label} <span style={{ opacity:0.6, fontSize:"10px" }}>{g.location}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {compareIds.length === 0 ? (
+          <div style={{ textAlign:"center", padding:"60px", color:COLOURS.SLATE }}>
+            <div style={{ fontSize:"28px", marginBottom:"10px" }}>⚖️</div>
+            <p style={{ fontSize:"14px", margin:0 }}>Select generators above to compare them side-by-side.</p>
+          </div>
+        ) : !reportLoaded ? (
+          <div style={{ textAlign:"center", padding:"40px", color:COLOURS.SLATE, fontSize:"14px" }}>Click Apply to load data for the selected period first.</div>
+        ) : compareData.length === 0 ? (
+          <div style={{ textAlign:"center", padding:"40px", color:COLOURS.SLATE, fontSize:"14px" }}>No data for selected generators in this period.</div>
+        ) : (
+          <>
+            {/* Comparison metric table */}
+            <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", overflow:"hidden", marginBottom:"20px" }}>
+              <div style={{ padding:"14px 18px", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
+                <span style={{ fontSize:"13px", fontWeight:700, color:COLOURS.NAVY }}>📊 Side-by-Side Comparison</span>
+              </div>
+              <div style={{ overflowX:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12px" }}>
+                  <thead>
+                    <tr style={{ background:"#F8FAFC" }}>
+                      <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:700, color:COLOURS.SLATE, fontSize:"11px", textTransform:"uppercase", letterSpacing:"0.04em", borderBottom:`1px solid ${COLOURS.HAIRLINE}`, minWidth:"140px" }}>Metric</th>
+                      {compareData.map(r => (
+                        <th key={r.generator_id} style={{ padding:"10px 12px", textAlign:"right", fontWeight:700, color:COLOURS.NAVY, fontSize:"11px", borderBottom:`1px solid ${COLOURS.HAIRLINE}`, minWidth:"130px", whiteSpace:"nowrap" }}>
+                          {r.generator_label}<br/><span style={{ fontWeight:400, color:COLOURS.SLATE }}>{r.location_name}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { label:"Total Cost",    key:"total_cost",         fmt:(v: number) => pkr(v),          better:"min" },
+                      { label:"Fuel Cost",     key:"total_fuel_cost",    fmt:(v: number) => pkr(v),          better:"min" },
+                      { label:"Maint Cost",    key:"total_maint_cost",   fmt:(v: number) => pkr(v),          better:"min" },
+                      { label:"Hours Run",     key:"total_hours_run",    fmt:(v: number) => `${v.toFixed(0)} hrs`,  better:"max" },
+                      { label:"Avg L/hr",      key:"avg_litres_per_hour",fmt:(v: number) => `${v.toFixed(2)} L`,   better:"min" },
+                      { label:"Avg Cost/hr",   key:"avg_cost_per_hour",  fmt:(v: number) => `PKR ${Number(v).toFixed(0)}`, better:"min" },
+                      { label:"Refuels",       key:"total_refuels",      fmt:(v: number) => v.toString(),    better:null },
+                      { label:"Services",      key:"maint_event_count",  fmt:(v: number) => v.toString(),    better:null },
+                    ].map(metric => {
+                      const vals = compareData.map(r => Number(r[metric.key as keyof GenReportRow]));
+                      const best = metric.better === "min" ? Math.min(...vals) : metric.better === "max" ? Math.max(...vals) : null;
+                      const worst = metric.better === "min" ? Math.max(...vals) : metric.better === "max" ? Math.min(...vals) : null;
+                      return (
+                        <tr key={metric.label} style={{ borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
+                          <td style={{ padding:"9px 12px", fontWeight:600, color:COLOURS.SLATE, fontSize:"12px" }}>{metric.label}</td>
+                          {compareData.map((r, i) => {
+                            const v = vals[i];
+                            const isBest  = best  !== null && v === best  && compareData.length > 1;
+                            const isWorst = worst !== null && v === worst && compareData.length > 1 && best !== worst;
+                            return (
+                              <td key={r.generator_id} style={{ padding:"9px 12px", textAlign:"right", fontWeight: isBest || isWorst ? 700 : 400,
+                                color: isBest ? COLOURS.GREEN : isWorst ? COLOURS.RED : COLOURS.NAVY, whiteSpace:"nowrap" }}>
+                                {metric.fmt(v)}
+                                {isBest  && <span style={{ marginLeft:"4px", fontSize:"10px" }}>✓ best</span>}
+                                {isWorst && <span style={{ marginLeft:"4px", fontSize:"10px" }}>↑ highest</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Monthly fuel trend for compared generators */}
+            {compareData[0]?.m1_label && (
+              <div style={{ background:"white", border:`1px solid ${COLOURS.HAIRLINE}`, borderRadius:"12px", overflow:"hidden" }}>
+                <div style={{ padding:"14px 18px", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
+                  <span style={{ fontSize:"13px", fontWeight:700, color:COLOURS.NAVY }}>📅 Monthly Fuel Cost — Compared</span>
+                </div>
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12px" }}>
+                    <thead>
+                      <tr style={{ background:"#F8FAFC" }}>
+                        <th style={{ padding:"9px 12px", textAlign:"left", fontWeight:700, color:COLOURS.SLATE, fontSize:"11px", textTransform:"uppercase", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>Generator</th>
+                        {[compareData[0].m1_label, compareData[0].m2_label, compareData[0].m3_label, compareData[0].m4_label].filter(Boolean).map(l => (
+                          <th key={l} style={{ padding:"9px 12px", textAlign:"right", fontWeight:700, color:COLOURS.SLATE, fontSize:"11px", textTransform:"uppercase", borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>{l}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {compareData.map(r => {
+                        const months = [r.m1_fuel, r.m2_fuel, r.m3_fuel, r.m4_fuel].filter((_, i) =>
+                          [r.m1_label, r.m2_label, r.m3_label, r.m4_label][i]);
+                        return (
+                          <tr key={r.generator_id} style={{ borderBottom:`1px solid ${COLOURS.HAIRLINE}` }}>
+                            <td style={{ padding:"9px 12px", fontWeight:600, color:COLOURS.NAVY, whiteSpace:"nowrap" }}>
+                              {r.generator_label} <span style={{ fontSize:"10px", color:COLOURS.SLATE }}>{r.location_name}</span>
+                            </td>
+                            {months.map((m, i) => (
+                              <td key={i} style={{ padding:"9px 12px", textAlign:"right", color: m > 0 ? COLOURS.NAVY : COLOURS.SLATE, fontWeight: m > 0 ? 600 : 400 }}>
+                                {m > 0 ? pkr(m) : "—"}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+
+    // ── Compose full report view ──────────────────────────────────────────
+    const reportTabView = (
+      <div id="gen-report-print">
+        {reportControls}
+        {reportView === "fleet"   && fleetView}
+        {reportView === "single"  && singleView}
+        {reportView === "compare" && compareView}
+      </div>
+    );
+
     return (
       <div>
         {/* Sub-tab switcher */}
@@ -1715,11 +2212,13 @@ export default function AdminDataPage() {
           {subTab("maintenance", "🔧 Maintenance")}
           {subTab("master",      "⚙ Master / Settings")}
           {subTab("analytics",   "📊 Analytics")}
+          {subTab("report",      "📋 Report")}
         </div>
         {genTabView === "diesel"      && dieselView}
         {genTabView === "maintenance" && maintView}
         {genTabView === "master"      && masterView}
         {genTabView === "analytics"   && analyticsView}
+        {genTabView === "report"      && reportTabView}
 
         {/* ── Edit Fuel modal ── */}
         {editingGenFuel && (
