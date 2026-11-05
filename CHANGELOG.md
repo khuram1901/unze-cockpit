@@ -4,6 +4,47 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## v4.13 — 2026-11-05 (minor bump)
+
+**Generator Report Tab — Fleet Overview, Single Generator, and Compare views with PDF export**
+
+A 4th sub-tab "📋 Report" added to Admin Operations → Generators (the 5th sub-view after Diesel / Maintenance / Master / Analytics). Provides date-range-scoped analytics for the generator fleet.
+
+**Files changed:**
+- `app/admin/page.tsx` — GenTabView type extended to include "report"; new TypeScript types GenReportRow, GenHistoryEvent, ReportView; three sub-views (Fleet Overview, Single Generator, Compare) with DateInput date-range picker, default last 3 months; PDF download button (window.print())
+- `app/api/admin/generators/route.ts` — two new GET handlers: `?type=report_fleet` and `?type=report_history`
+- `app/globals.css` — @media print block scoped to `#gen-report-print`: hides all app chrome, shows only the report div
+- `supabase/295_generator_report_rpcs.sql` — migration file documenting the two new RPCs
+- `docs/generators/DECISIONS.md` — Report Tab section added with full decisions record
+
+**Database changes:**
+- Migration 295 applied to live DB (05/11/2026):
+  - `get_generator_report_fleet(p_date_from date, p_date_to date)` — per-generator aggregates + 4-month fuel cost pivot; sorted avg_cost_per_hour ASC; STABLE SECURITY DEFINER SET search_path = public; REVOKE from anon, GRANT to authenticated
+  - `get_generator_history(p_generator_id uuid, p_date_from date, p_date_to date)` — UNION ALL of fuel + maintenance events for one generator, newest first; same security pattern
+
+**Behaviour changes:**
+- Generators sub-tab now has 5 views: Diesel, Maintenance, Master, Analytics, Report
+- Fleet Overview: 5 KPI cards + ranked efficiency table (green ✓ best, red ↑ worst) + monthly fuel trend (up to 4 months)
+- Single Generator: 8 KPI tiles + event timeline with ⛽ Fuel and 🔧 Service badges; dates in DD/MM/YYYY
+- Compare: multi-select up to 5 generators side-by-side; best/worst highlighting
+- "Download PDF" button uses window.print() — no library cost; CSS hides sidebar, header, tabs
+- All calculations remain in Supabase (RPCs); client only renders returned data
+
+**Decisions:**
+- PDF via window.print() chosen over a library to avoid cost and dependency; @media print scoped to #gen-report-print
+- No new permission column; existing canManageGenerators() reused
+- genMeta state reused for Single Generator dropdown; no additional API fetch
+- Monthly pivot uses generate_series CTE in Supabase; month labels (m1_label–m4_label) returned by RPC; frontend never computes dates
+
+**Commit:** `0db7153` — pushed to main 2026-11-05; Vercel production deploy confirmed
+
+**Live test (pulse.unze.co.uk):**
+- Fleet Overview: 22 generators ranked, Aug/Sep/Oct/Nov monthly columns ✅
+- Single Generator: KPI tiles + event history, DD/MM/YYYY dates ✅
+- Compare: 3 generators, green/red highlights correct ✅
+
+---
+
 ## v4.12 — 2026-10-26 (patch)
 
 **Cash-flow PDF parser fix — two bugs causing accounting-equation failures on IFPL and UTPL uploads**

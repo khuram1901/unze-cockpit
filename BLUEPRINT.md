@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 03/09/2026 (Security hardening: HTTP response headers, API auth guards, webhook lockdown, pension writer RPC, GitHub Actions SHA pinning — see CHANGELOG 2026-09-03).
+> **This is the source of truth.** Read before touching any code. Last updated: 05/11/2026 (Generator Report tab — 4th sub-tab in Admin Ops → Generators; migrations 295; two new RPCs; three-view report with PDF download — see CHANGELOG 2026-11-05).
 >
 > Previous update: 16/08/2026 (tax consultant access rule centralised as `TAX_CONSULTANT_EMAIL` in permissions.ts — was hardcoded in four separate client files; the exemption itself moved into `canViewDepartment()` and is now subject to Access Matrix overrides; `useRequireCapability` and `useRequireDepartment` refactored onto a shared `useAuthGuard()`).
 >
@@ -156,6 +156,9 @@ app/
 ├── globals.css                       Global CSS variables (light/dark), login animations.
 │                                     Tooltip rule updated: background uses var(--text-primary)
 │                                     instead of raw #1e293b for theme consistency.
+│                                     @media print block scoped to #gen-report-print (05/11/2026):
+│                                     hides all app chrome (sidebar, header, tabs), shows only the
+│                                     generator report div. Used by Report tab PDF download.
 ├── favicon.ico                       App icon
 │
 ├── login/page.tsx                    Login page — time-based greeting, crossfade carousel, Supabase auth.
@@ -362,10 +365,14 @@ app/
 │   ├── page.tsx                      Admin Operations — EOBI registrations, payment tracking,
 │   │                                 compliance (licences/certificates), documents (NTN certs),
 │   │                                 operations (fleet fuel, vehicle maintenance, solar production),
+│   │                                 **Generators** sub-tab (sub-tabs: Diesel | Maintenance | Master |
+│   │                                 Analytics | 📋 Report — Report tab added 05/11/2026 migration 295),
 │   │                                 **Legal Cases** (27/07/2026 — 6th tab, see LegalCases.tsx).
 │   │                                 Six tabs, each gated by a widget key (admin_ops.registrations /
 │   │                                 .payments / .compliance / .documents / .operations / .legal) so
 │   │                                 individual tabs can be hidden per member via the Access Matrix.
+│   │                                 Generators sub-tabs also include the Report tab (Fleet Overview /
+│   │                                 Single Generator / Compare views, PDF export via window.print()).
 │   │                                 safeActiveTab pattern used: if the current tab is hidden for this
 │   │                                 member, auto-jump to the first visible tab.
 │   │                                 All colours via COLOURS tokens; RADII.CARD, RADII.PILL, RADII.SM
@@ -491,6 +498,10 @@ app/
 api/
 ├── admin/
 │   ├── cron-health/route.ts          GET — checks health of 6 integrations (Gmail, Calendar, etc.)
+│   ├── generators/route.ts           GET — multiple handler types for generator data:
+│   │                                 `?type=report_fleet&from=…&to=…` → calls get_generator_report_fleet RPC
+│   │                                 `?type=report_history&generator_id=UUID&from=…&to=…` → calls get_generator_history RPC
+│   │                                 (additional types for diesel, maintenance, master, analytics existed prior)
 │   ├── list-backups/route.ts         GET — lists backup files in Supabase Storage + returns Google
 │   │                                 Drive folder URL and per-file Drive links (20/07/2026).
 │   ├── list-documents/route.ts       GET — lists source documents archive
@@ -784,7 +795,7 @@ All major pages have been made mobile-safe (iPhone + Android). Approach:
 
 ## 4. Complete Database Schema
 
-> Source of truth: `supabase/` migration files 001–197. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run. Recent migrations (27/07/2026): 196 (`can_access_banking` column in member_permissions, granted to Khuram + Kamran), 197 (`legal_cases` and `legal_case_updates` tables with auto-incrementing `case_number` sequence, `legal_case_seq`). Previous migrations (20/07/2026): 153 (audit visibility — daily log scoped to assigned member), 179 (tax_accounts_signoffs table), 180 (last_email_sent_at on tax_deadline_alerts), 181 (get_tax_dashboard_summary RPC), 182 (tax_notices gmail_source field), 183 (chat tables — chat_conversations, chat_participants, chat_messages with Realtime).
+> Source of truth: `supabase/` migration files 001–295. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run. Recent migrations (05/11/2026): 295 (`get_generator_report_fleet` and `get_generator_history` RPCs for the Generator Report tab). Previous migrations (earlier 2026): 276–282 (generators schema, RPCs, historical import, analytics, widget grants); 196 (`can_access_banking` column in member_permissions), 197 (`legal_cases` and `legal_case_updates` tables); 153 (audit visibility), 179–183 (tax/chat).
 
 ### Core tables
 
@@ -1690,6 +1701,76 @@ Admin department budget tracking.
 
 ---
 
+### Generator tables (migrations 276–282, 295)
+
+#### `generators`
+Master list of diesel generators.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | gen_random_uuid() |
+| name | text NOT NULL | Generator display name (e.g. "John Deere – Outlet Mall") |
+| location_id | uuid FK → admin_locations | NULL for 5 unmatched locations (Family Residences, Warehouse Gajumatta) |
+| is_active | boolean | DEFAULT true |
+| deleted_at | timestamptz | Soft delete |
+| created_at | timestamptz | |
+
+#### `generator_fuel_log`
+Per-refuel records.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| generator_id | uuid FK → generators | |
+| refuel_date | date NOT NULL | |
+| previous_hours | numeric | Meter reading before refuel |
+| present_hours | numeric | Meter reading after refuel |
+| qty_litres | numeric | Litres dispensed |
+| rate_per_litre | numeric | PKR per litre |
+| total_cost | numeric GENERATED | rate_per_litre × qty_litres |
+| hours_run | numeric GENERATED | present_hours − previous_hours |
+| litres_per_hour | numeric GENERATED | qty_litres / hours_run |
+| cost_per_hour | numeric GENERATED | total_cost / hours_run |
+| is_seed | boolean | DEFAULT false — historical import rows; excluded from "last refuel" hints |
+| deleted_at / deleted_by / delete_reason | | Soft delete with audit |
+| updated_at / updated_by | | Edit audit trail |
+
+#### `generator_maintenance_log`
+Per-service records.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| generator_id | uuid FK → generators | |
+| service_date | date NOT NULL | |
+| 8 cost columns | numeric | Individual maintenance cost components |
+| total_cost | numeric GENERATED | Sum of all 8 cost columns |
+| deleted_at / deleted_by / delete_reason | | Soft delete with audit |
+| updated_at / updated_by | | Edit audit trail |
+
+#### `generator_thresholds`
+Admin-editable alert thresholds.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| unusual_pct | numeric | % deviation triggering unusual-usage alert |
+| service_hours | numeric | Hours since last service before amber alert |
+| days_amber | integer | Days since last refuel for amber |
+| days_red | integer | Days since last refuel for red |
+
+**RPCs (migration 277):** insert_fuel_log, fetch_fuel_log, update_fuel_log, soft_delete_fuel_log, insert_maintenance_log, fetch_maintenance_log, update_maintenance_log, soft_delete_maintenance_log, get_generator_summary, get_generator_thresholds, update_generator_thresholds. All SECURITY DEFINER SET search_path = public; REVOKE from anon, GRANT to authenticated.
+
+**RPCs (migration 280):** get_generator_analytics — per-location infographics.
+
+**RPCs (migration 295 — 05/11/2026):**
+- `get_generator_report_fleet(p_date_from date, p_date_to date)` — per-generator aggregates for date range. One row per active generator with fuel or maintenance data in range. Columns: totals (refuels, litres, fuel_cost, hours_run, maint_cost, total_cost), averages (avg_litres_per_hour, avg_cost_per_hour), last_refuel_date, last_service_date, plus 4-month pivot (m1_fuel–m4_fuel, m1_label–m4_label). Sorted avg_cost_per_hour ASC (most efficient first).
+- `get_generator_history(p_generator_id uuid, p_date_from date, p_date_to date)` — UNION ALL of fuel + maintenance events for one generator, newest first. Event type distinguishes ⛽ Fuel vs 🔧 Service.
+
+**Widget keys:** `admin_ops.generators` (Generators tab), `admin_ops.generators_entry` (daily-entry forms).
+**Access:** Admin/CEO always; role=Manager/Member AND dept=Admin; OR widget override `admin_ops.generators_entry = true`. Enforced at RPC level.
+
+**Pages reading:** `admin/page.tsx` (Generators sub-tab: Diesel, Maintenance, Master, Analytics, Report views)
+**Pages writing:** `admin/page.tsx` (Diesel and Maintenance entry forms), `/daily-entry` (generator entry forms for entry users)
+
+---
+
 ### Other tables
 
 #### `leave_records`
@@ -2005,6 +2086,19 @@ Exception management.
 
 #### `/admin`
 Admin Operations — six tabs (27/07/2026; was five tabs): Registrations, Payments, Compliance, Documents, Operations, **Legal Cases**. Tab 6 (Legal Cases) uses `LegalCases.tsx` — the same shared component as the HR Legal tab. khuram1901@gmail.com ONLY for the top-level admin page; Legal Cases tab is also visible to HR Managers.
+
+**Operations tab → Generators sub-tab (05/11/2026)** now has 5 sub-views:
+- **Diesel** — refuel log entry and history
+- **Maintenance** — service log entry and history
+- **Master** — generator master list management
+- **Analytics** — per-location infographics (migration 280)
+- **📋 Report** (new, migration 295) — date-range scoped analytics with three views:
+  - **Fleet Overview:** 5 KPI cards (total cost, litres, hours run, refuels, services) + efficiency ranking table (rank badge, green ✓ most efficient, red ↑ least efficient) + monthly fuel cost trend table (up to 4 months).
+  - **Single Generator:** dropdown selector (from existing genMeta state) + 8 KPI tiles (total refuels, litres, fuel cost, hours run, services, maint cost, combined cost, avg cost/hour) + event log timeline (⛽ Fuel vs 🔧 Service with DD/MM/YYYY dates).
+  - **Compare:** pill multi-selector up to 5 generators + side-by-side metric table (best value green ✓, worst value red ↑) + monthly fuel trend table per selected generator.
+  - **Date range picker:** DateInput from and to fields; default = last 3 months.
+  - **PDF download:** window.print() + @media print rule in globals.css (`#gen-report-print`); hides all app chrome.
+  - Permission: existing `canManageGenerators(u: UserCtx)` — no new permission column needed.
 
 #### `/monthly-operations-targets`
 Monthly production/dispatch targets per plant.
