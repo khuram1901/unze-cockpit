@@ -1309,7 +1309,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           {/* Col 2: task name + meta line */}
           <div style={{ minWidth: 0 }}>
             <div style={{
-              fontSize: "14px", fontWeight: 600,
+              fontSize: "15px", fontWeight: 600,
               color: done ? COLOURS.SLATE : COLOURS.NAVY,
               textDecoration: done ? "line-through" : "none",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -1392,7 +1392,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {task.due_date ? (
                 <span
                   title={task.assigned_date ? `Issued ${formatDateUK(task.assigned_date)}` : undefined}
-                  style={{ fontFamily: FONT_MONO, fontSize: "12px", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 500, whiteSpace: "nowrap", lineHeight: 1.4 }}
+                  style={{ fontSize: "13px", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 500, whiteSpace: "nowrap", lineHeight: 1.4 }}
                 >
                   {formatDateUK(task.due_date)}{od > 0 && <><br /><span style={{ fontSize: "11px", color: COLOURS.RED }}>{od}d late</span></>}
                 </span>
@@ -1836,13 +1836,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: filtersOpen ? "8px" : "12px" }}>
           {/* Row 1: search + Filters toggle */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", maxWidth: "300px", flex: "0 1 300px" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={COLOURS.SLATE} strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search tasks…"
-                style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%" }}
+                style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%", fontFamily: "inherit" }}
               />
             </div>
             {/* Filters toggle button with active-count badge */}
@@ -1966,8 +1966,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       )}
 
       {timeView !== "team" && timeView !== "recurring" && filtersOpen && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px", width: "100%" }}>
-          {/* Row 1 — entity filters: company · dept · priority · status · owner */}
+        <div style={{ marginBottom: "12px", width: "100%" }}>
+          {/* Single filter row — all 9 filters wrap naturally on small screens */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             {!(department === "Internal Audit" && !isPrivileged) && (
               <SearchableDropdown
@@ -2028,9 +2028,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 ...ownerOptions.map((o) => ({ value: o, label: o })),
               ]}
             />
-          </div>
-          {/* Row 2 — time/date filters: period · due date · source · subtasks */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <SearchableDropdown
               value={periodFilter}
               onChange={(v) => setPeriodFilter(v as typeof periodFilter)}
