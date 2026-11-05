@@ -2041,7 +2041,15 @@ export default function AdminDataPage() {
 </html>`;
 
       const w = window.open("", "_blank", "width=1100,height=800");
-      if (!w) { alert("Pop-up blocked — please allow pop-ups for this site and try again."); return; }
+      if (!w) {
+        // Pop-up blocked — fall back to a data URI download
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href = url; a.download = `generator-report-${reportFrom}-to-${reportTo}.html`; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        return;
+      }
       w.document.write(html);
       w.document.close();
       w.focus();
