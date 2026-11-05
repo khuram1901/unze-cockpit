@@ -639,7 +639,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           <SummaryCard
             label="PDC Outstanding"
             value={pdcMonthTotal !== null ? formatPKRWhole(pdcMonthTotal) : "—"}
-            sub={`PDC dues this month · ${formatMonthUK(selectedMonth)}`}
+            sub={`PDC dues this month · ${formatMonthUK(positionsMonth)}`}
             valueColor={AMBER}
           />
         )}
