@@ -473,7 +473,7 @@ function ManagerView() {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export default function PreAuditTab({ userCtx }: { userCtx: UserCtx | null }) {
-  const isManager = userCtx?.role === "Admin" || userCtx?.role === "Manager";
+  const isManager = userCtx?.role === "Admin" || userCtx?.role === "Manager" || userCtx?.role === "CEO";
   const [view, setView] = useState<"my" | "team">("my");
 
   // Once userCtx loads, switch managers to Team View by default

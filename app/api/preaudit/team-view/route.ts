@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     .eq("email", auth.email)
     .maybeSingle();
 
-  if (!member || !["Admin", "Manager"].includes(member.role)) {
+  if (!member || !["Admin", "Manager", "CEO"].includes(member.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
