@@ -94,6 +94,10 @@
     {
       "path": "/api/preaudit/weekly-email",
       "schedule": "0 3 * * 1"
+    },
+    {
+      "path": "/api/preaudit/daily-tasks",
+      "schedule": "0 3 * * 1-5"
     }
   ]
 }
