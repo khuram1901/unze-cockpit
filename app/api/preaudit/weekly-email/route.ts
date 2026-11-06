@@ -24,10 +24,10 @@ function statusBadge(is_complete: boolean, is_late: boolean): string {
   return '<span style="color:#B3261E;font-weight:600;">Overdue</span>';
 }
 
-export async function POST(request: NextRequest) {
-  // Verify cron secret
-  const secret = request.headers.get("x-cron-secret");
-  if (!secret || secret !== process.env.CRON_SECRET) {
+export async function GET(request: NextRequest) {
+  // Verify cron secret (matches existing cron pattern: Authorization: Bearer <CRON_SECRET>)
+  const authHeader = request.headers.get("authorization");
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
