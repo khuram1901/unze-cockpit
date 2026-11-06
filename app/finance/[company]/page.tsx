@@ -7,7 +7,7 @@ import { getCompanyBySlug } from "../../lib/constants";
 import { PageHeader } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
 import { useUserCtx } from "../../lib/useUserCtx";
-import { financeCompanies, canViewFinance, widgetVisible } from "../../lib/permissions";
+import { financeCompanies, canViewFinance, widgetVisible, canViewRestaurantCompanyFinance } from "../../lib/permissions";
 import FinanceManager from "../FinanceManager";
 import RetailSalesTab from "../RetailSalesTab";
 
@@ -34,7 +34,7 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
     !!ctx && (
       company === "imperial"
         ? (hasFullFinance || isAdminOrCEO || widgetVisible(ctx, "imperial.finance_overview", false))
-        : (hasFullFinance || isAdminOrCEO)
+        : (hasFullFinance || isAdminOrCEO || canViewRestaurantCompanyFinance(ctx, company))
     );
 
   // Retail Sales: Admin/CEO always; others need explicit imperial.retail_sales widget.
@@ -60,10 +60,11 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
         if (scope !== "both" && scope !== "IFPL") { router.replace("/home"); return; }
       }
     } else {
-      // Non-imperial: must have full finance role with correct company scope.
-      // (mirrors the original useRequireCapability("finance") + per-company check)
-      if (!hasFullFinance && !isAdminOrCEO) { router.replace("/home"); return; }
-      if (config) {
+      // Non-imperial: must have full finance role, Admin/CEO, OR a per-company restaurant key.
+      const hasRestaurantPerm = canViewRestaurantCompanyFinance(ctx, company);
+      if (!hasFullFinance && !isAdminOrCEO && !hasRestaurantPerm) { router.replace("/home"); return; }
+      // Company-scope check only applies to general finance users, not per-company restaurant users.
+      if (!hasRestaurantPerm && config) {
         const scope = financeCompanies(ctx);
         const allowed = scope === "both" || scope === config.shortCode;
         if (!allowed) { router.replace("/home"); return; }

@@ -243,6 +243,39 @@ export function canViewRestaurantsPnl(u: UserCtx) {
   return isAdminTier(u);
 }
 
+// ── Per-company hospitality finance pages (migration 298) ─────────
+// Three separate keys so a Baranh/HD/KKJ manager can be granted access
+// to only their own company's finance page without seeing the others.
+// PA is always blocked; Admin/CEO always allowed; everyone else needs
+// the specific toggle in the Access Matrix.
+export function canViewBaranhFinance(u: UserCtx) {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_baranh_finance");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+export function canViewHauteDolciFinance(u: UserCtx) {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_haute_dolci_finance");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+export function canViewKkJhangFinance(u: UserCtx) {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_kk_jhang_finance");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+
+// Helper used by the [company] finance page to check per-company restaurant
+// access when the user does not hold general finance access.
+export function canViewRestaurantCompanyFinance(u: UserCtx, slug: string): boolean {
+  if (slug === "baranh")      return canViewBaranhFinance(u);
+  if (slug === "haute-dolci") return canViewHauteDolciFinance(u);
+  if (slug === "kk-jhang")    return canViewKkJhangFinance(u);
+  return false;
+}
+
 // ── Receivables ───────────────────────────────────────────────────
 export function canViewReceivables(u: UserCtx) {
   // Same override-before-PA ordering bug as canViewFinance, fixed the
