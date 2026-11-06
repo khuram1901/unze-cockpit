@@ -269,10 +269,54 @@ export function canViewKkJhangFinance(u: UserCtx) {
 
 // Helper used by the [company] finance page to check per-company restaurant
 // access when the user does not hold general finance access.
+// @deprecated — use canViewCompanyFinance() which also covers UTPL and Imperial.
 export function canViewRestaurantCompanyFinance(u: UserCtx, slug: string): boolean {
   if (slug === "baranh")      return canViewBaranhFinance(u);
   if (slug === "haute-dolci") return canViewHauteDolciFinance(u);
   if (slug === "kk-jhang")    return canViewKkJhangFinance(u);
+  return false;
+}
+
+// ── Per-company finance pages for UTPL and Imperial (migration 299) ───
+// Same pattern as migration 298 (restaurant companies). The Imperial
+// toggle grants Finance Overview only — the Retail Sales tab remains gated
+// by the separate imperial.retail_sales widget.
+export function canViewUnzeTradingFinance(u: UserCtx): boolean {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_unze_trading_finance");
+  if (o !== null) return o;
+  if (isAdminTier(u)) return true;
+  // Fall through: existing UTPL-scoped finance users keep access unchanged.
+  if (canViewFinance(u)) {
+    const scope = financeCompanies(u);
+    return scope === "both" || scope === "UTPL";
+  }
+  return false;
+}
+
+export function canViewImperialFinance(u: UserCtx): boolean {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_imperial_finance");
+  if (o !== null) return o;
+  if (isAdminTier(u)) return true;
+  // Fall through: existing IFPL-scoped finance users keep access unchanged.
+  if (canViewFinance(u)) {
+    const scope = financeCompanies(u);
+    return scope === "both" || scope === "IFPL";
+  }
+  return false;
+}
+
+// Covers all per-company finance page grants — restaurants, Unze Trading,
+// and Imperial. Used by the [company] finance page access guard and
+// canSeeFinanceOverview to let through users who hold only a single-company
+// toggle rather than the full finance role.
+export function canViewCompanyFinance(u: UserCtx, slug: string): boolean {
+  if (slug === "baranh")       return canViewBaranhFinance(u);
+  if (slug === "haute-dolci")  return canViewHauteDolciFinance(u);
+  if (slug === "kk-jhang")     return canViewKkJhangFinance(u);
+  if (slug === "unze-trading") return canViewUnzeTradingFinance(u);
+  if (slug === "imperial")     return canViewImperialFinance(u);
   return false;
 }
 

@@ -894,12 +894,15 @@ export default function MemberDrawer({
                     </div>
                   </div>
 
-                  {/* Per-company restaurant finance toggles — always visible in Finance section */}
+                  {/* Per-company finance toggles — always visible in Finance section.
+                      Imperial toggle grants Finance Overview only, NOT Retail Sales tab. */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                     {[
-                      { key: "can_view_baranh_finance",      label: "Baranh Finances" },
-                      { key: "can_view_haute_dolci_finance", label: "Haute Dolci Finances" },
-                      { key: "can_view_kk_jhang_finance",    label: "K&K Jhang Finances" },
+                      { key: "can_view_unze_trading_finance",  label: "Unze Trading Finances" },
+                      { key: "can_view_imperial_finance",      label: "Imperial Finances" },
+                      { key: "can_view_baranh_finance",        label: "Baranh Finances" },
+                      { key: "can_view_haute_dolci_finance",   label: "Haute Dolci Finances" },
+                      { key: "can_view_kk_jhang_finance",      label: "K&K Jhang Finances" },
                     ].map(({ key, label: itemLabel }) => (
                       <div key={key} style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",

@@ -7,7 +7,7 @@ import { getCompanyBySlug } from "../../lib/constants";
 import { PageHeader } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
 import { useUserCtx } from "../../lib/useUserCtx";
-import { financeCompanies, canViewFinance, widgetVisible, canViewRestaurantCompanyFinance } from "../../lib/permissions";
+import { financeCompanies, canViewFinance, widgetVisible, canViewCompanyFinance, canViewImperialFinance } from "../../lib/permissions";
 import FinanceManager from "../FinanceManager";
 import RetailSalesTab from "../RetailSalesTab";
 
@@ -33,8 +33,12 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
   const canSeeFinanceOverview =
     !!ctx && (
       company === "imperial"
-        ? (hasFullFinance || isAdminOrCEO || widgetVisible(ctx, "imperial.finance_overview", false))
-        : (hasFullFinance || isAdminOrCEO || canViewRestaurantCompanyFinance(ctx, company))
+        // canViewImperialFinance covers: Admin/CEO, IFPL-scoped finance users,
+        // and explicit can_view_imperial_finance toggle — but NOT retail_sales widget.
+        // finance_overview widget is kept separate so it cannot accidentally be
+        // conflated with the new per-member toggle.
+        ? (canViewImperialFinance(ctx) || widgetVisible(ctx, "imperial.finance_overview", false))
+        : (hasFullFinance || isAdminOrCEO || canViewCompanyFinance(ctx, company))
     );
 
   // Retail Sales: Admin/CEO always; others need explicit imperial.retail_sales widget.
@@ -47,24 +51,27 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
     if (ctxLoading || !ctx) return;
 
     if (company === "imperial") {
-      // Imperial: allow if user has any access (role or either tab widget).
+      // Imperial: allow if user has any access (role, widget, or explicit per-member toggle).
+      // canViewImperialFinance covers Admin/CEO + IFPL-scoped finance + can_view_imperial_finance toggle.
       const canAccess =
-        hasFullFinance || isAdminOrCEO ||
+        canViewImperialFinance(ctx) ||
         widgetVisible(ctx, "imperial.retail_sales", false) ||
         widgetVisible(ctx, "imperial.finance_overview", false);
       if (!canAccess) { router.replace("/home"); return; }
 
-      // Finance-role users: additionally enforce company scope.
-      if (hasFullFinance && !isAdminOrCEO) {
+      // Finance-role users without an explicit company toggle: enforce IFPL scope.
+      // Toggle-only users (hasFullFinance=false) skip this — they already passed via canViewImperialFinance.
+      if (hasFullFinance && !isAdminOrCEO && !ctx.overrides?.can_view_imperial_finance) {
         const scope = financeCompanies(ctx);
         if (scope !== "both" && scope !== "IFPL") { router.replace("/home"); return; }
       }
     } else {
-      // Non-imperial: must have full finance role, Admin/CEO, OR a per-company restaurant key.
-      const hasRestaurantPerm = canViewRestaurantCompanyFinance(ctx, company);
-      if (!hasFullFinance && !isAdminOrCEO && !hasRestaurantPerm) { router.replace("/home"); return; }
-      // Company-scope check only applies to general finance users, not per-company restaurant users.
-      if (!hasRestaurantPerm && config) {
+      // Non-imperial: must have full finance role, Admin/CEO, OR a per-company toggle.
+      // canViewCompanyFinance covers all companies incl. unze-trading (migration 299).
+      const hasCompanyPerm = canViewCompanyFinance(ctx, company);
+      if (!hasFullFinance && !isAdminOrCEO && !hasCompanyPerm) { router.replace("/home"); return; }
+      // Company-scope check only applies to general finance users without an explicit per-company grant.
+      if (!hasCompanyPerm && config) {
         const scope = financeCompanies(ctx);
         const allowed = scope === "both" || scope === config.shortCode;
         if (!allowed) { router.replace("/home"); return; }

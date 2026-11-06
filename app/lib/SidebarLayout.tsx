@@ -21,6 +21,7 @@ import {
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
   canViewIfplPnl, canViewUnzePnl, canViewRestaurantsPnl, canViewGroupHR,
   canViewBaranhFinance, canViewHauteDolciFinance, canViewKkJhangFinance,
+  canViewUnzeTradingFinance, canViewImperialFinance,
   canViewTeamPerformance,
   isMainAdmin, isSecondaryCEO, isDailyEntryOnly, isCEO,
   widgetVisible,
@@ -86,18 +87,14 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   // Opening Balances: secondary CEO (Kamran) can't edit finance
   if (isSecondaryCEO(ctx) && card.permKey === "can_edit_finance") return false;
   if (card.permKey === "can_view_finance_utpl") {
-    if (!canViewFinance(ctx)) return false;
-    const scope = financeCompanies(ctx);
-    return scope === "both" || scope === "UTPL";
+    // Full finance role scoped to UTPL, OR explicit per-member toggle (migration 299).
+    return canViewUnzeTradingFinance(ctx);
   }
   if (card.permKey === "can_view_finance_ifpl") {
-    // Full finance role: check company scope as before.
-    if (canViewFinance(ctx)) {
-      const scope = financeCompanies(ctx);
-      return scope === "both" || scope === "IFPL";
-    }
-    // Widget-only users: show the Imperial Footwear link if they have either tab widget.
+    // Full finance role scoped to IFPL, OR explicit per-member toggle (migration 299).
+    // Widget-only users (retail_sales or finance_overview) also see the sidebar link.
     return (
+      canViewImperialFinance(ctx) ||
       widgetVisible(ctx, "imperial.retail_sales", false) ||
       widgetVisible(ctx, "imperial.finance_overview", false)
     );
