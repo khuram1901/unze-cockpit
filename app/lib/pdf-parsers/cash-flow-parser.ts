@@ -815,12 +815,16 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
   // lookahead bleeds into the following "Closing Balance\n(161,609,884)"
   // line and incorrectly treats that closing-balance "(" as a negative sign.
   let pdcTotal = 0;
-  const pdcMatch = text.match(/Total\s+PDC[''']s\s+Balance\s+\(?([,\d]+(?:\.\d+)?)\)?/i);
+  // The PDF sometimes renders large numbers with an embedded space due to
+  // column layout (e.g. "1 81,462,666" for 181,462,666). Strip all spaces
+  // between digits so parseAmount always gets a clean number string.
+  const pdcMatch = text.match(/Total\s+PDC[''']s\s+Balance\s+\(?([,\d][\s,\d]*(?:\.\d+)?)\)?/i);
   if (pdcMatch) {
     const pdcStart = text.search(/Total\s+PDC/i);
     const pdcLineEnd = text.indexOf("\n", pdcStart);
-    const chunk = text.slice(pdcStart, pdcLineEnd >= 0 ? pdcLineEnd : pdcStart + 50);
-    pdcTotal = chunk.includes("(") ? -parseAmount(pdcMatch[1]) : parseAmount(pdcMatch[1]);
+    const chunk = text.slice(pdcStart, pdcLineEnd >= 0 ? pdcLineEnd : pdcStart + 60);
+    const cleanedAmount = pdcMatch[1].replace(/\s+/g, "");
+    pdcTotal = chunk.includes("(") ? -parseAmount(cleanedAmount) : parseAmount(cleanedAmount);
   }
 
   // ── Closing after PDC ──
@@ -924,12 +928,14 @@ function parseBaranhStyle(
 
   // PDC total — "Total PDC's Balance  1,348,420"
   let pdcTotal = 0;
-  const pdcMatch = text.match(/Total\s+PDC[''']?s?\s+Balance\s+\(?([,\d]+(?:\.\d+)?)\)?/i);
+  // Also handles embedded-space artefact in amount (e.g. "1 81,462,666" → 181,462,666)
+  const pdcMatch = text.match(/Total\s+PDC[''']?s?\s+Balance\s+\(?([,\d][\s,\d]*(?:\.\d+)?)\)?/i);
   if (pdcMatch) {
     const searchStart = text.search(/Total\s+PDC[''']?s?\s+Balance/i);
     const lineEnd = text.indexOf("\n", searchStart);
     const chunk = text.slice(searchStart, lineEnd >= 0 ? lineEnd : searchStart + 80);
-    pdcTotal = chunk.includes("(") ? -parseAmount(pdcMatch[1]) : parseAmount(pdcMatch[1]);
+    const cleanedAmount = pdcMatch[1].replace(/\s+/g, "");
+    pdcTotal = chunk.includes("(") ? -parseAmount(cleanedAmount) : parseAmount(cleanedAmount);
   }
 
   // Closing balance after PDC — always use formula: closingBalance - pdcTotal.
