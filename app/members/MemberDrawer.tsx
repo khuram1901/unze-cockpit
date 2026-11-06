@@ -894,6 +894,24 @@ export default function MemberDrawer({
                     </div>
                   </div>
 
+                  {/* Per-company restaurant finance toggles — always visible in Finance section */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                    {[
+                      { key: "can_view_baranh_finance",      label: "Baranh Finances" },
+                      { key: "can_view_haute_dolci_finance", label: "Haute Dolci Finances" },
+                      { key: "can_view_kk_jhang_finance",    label: "K&K Jhang Finances" },
+                    ].map(({ key, label: itemLabel }) => (
+                      <div key={key} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: 6,
+                        background: COLOURS.CARD,
+                      }}>
+                        <span style={{ fontSize: 12, color: COLOURS.NAVY }}>{itemLabel}</span>
+                        <Toggle on={ep[key] === true} onChange={(v) => toggle(key, v)} disabled={isProtected} />
+                      </div>
+                    ))}
+                  </div>
+
                   {/* Finance area toggles — only when scope is not none */}
                   {getFinanceScope() !== "none" && (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
@@ -904,9 +922,6 @@ export default function MemberDrawer({
                         { key: "can_view_ifpl_pnl", label: "Imperial P&L (IFPL)" },
                         { key: "can_view_unze_pnl", label: "Unze P&L (UTPL)" },
                         { key: "can_view_restaurants_pnl", label: "Restaurants P&L" },
-                        { key: "can_view_baranh_finance",      label: "Baranh Finances" },
-                        { key: "can_view_haute_dolci_finance", label: "Haute Dolci Finances" },
-                        { key: "can_view_kk_jhang_finance",    label: "K&K Jhang Finances" },
                         { key: "can_view_guarantees", label: "Bank facilities" },
                         { key: "can_manage_guarantees", label: "Manage guarantees" },
                         { key: "can_view_investments", label: "View investments" },
