@@ -1,8 +1,7 @@
 "use client";
 
-// Audit department page. Since 18/07/2026 everything lives in the Annual
-// Internal Audit Plan (AnnualAuditPlan.tsx) — the legacy ad-hoc records list
-// was merged into the plan (migration 150) and removed from this page.
+// Audit department page.
+// Two tabs: "Audit Plan" (AnnualAuditPlan) and "Pre-Audit" (PreAuditTab).
 
 import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
@@ -10,12 +9,37 @@ import { useMobile } from "../../lib/useMobile";
 import { COLOURS, RADII, PageHeader, useToast } from "../../lib/SharedUI";
 import type { UserCtx, PermOverrides } from "../../lib/permissions";
 import AnnualAuditPlan from "./AnnualAuditPlan";
+import PreAuditTab from "./PreAuditTab";
+
+const TAB_STYLE_BASE: React.CSSProperties = {
+  padding: "10px 20px",
+  fontSize: 13,
+  fontWeight: 500,
+  color: "#64748B",
+  cursor: "pointer",
+  borderBottom: "2px solid transparent",
+  marginBottom: -1,
+  background: "none",
+  border: "none",
+  borderBottomStyle: "solid",
+  borderBottomWidth: 2,
+  borderBottomColor: "transparent",
+  transition: "color 0.15s",
+  fontFamily: "inherit",
+};
+
+const TAB_ACTIVE_EXTRA: React.CSSProperties = {
+  color: "#0F1720",
+  borderBottomColor: "#0F1720",
+  fontWeight: 600,
+};
 
 export default function AuditDashboard() {
   const isMobile = useMobile();
   const toast = useToast();
   const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [message, setMessage] = useState("");
+  const [activeTab, setActiveTab] = useState<"plan" | "preaudit">("plan");
 
   useEffect(() => {
     (async () => {
@@ -45,7 +69,24 @@ export default function AuditDashboard() {
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px", backgroundColor: COLOURS.CARD, fontSize: "14px", color: COLOURS.NAVY }}>{message}</div>
       )}
 
-      <AnnualAuditPlan userCtx={userCtx} showMsg={showMsg} />
+      {/* Tab bar */}
+      <div style={{ display: "flex", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, marginBottom: 20, gap: 0 }}>
+        <button
+          style={{ ...TAB_STYLE_BASE, ...(activeTab === "plan" ? TAB_ACTIVE_EXTRA : {}) }}
+          onClick={() => setActiveTab("plan")}
+        >
+          Audit Plan
+        </button>
+        <button
+          style={{ ...TAB_STYLE_BASE, ...(activeTab === "preaudit" ? TAB_ACTIVE_EXTRA : {}) }}
+          onClick={() => setActiveTab("preaudit")}
+        >
+          Pre-Audit
+        </button>
+      </div>
+
+      {activeTab === "plan"    && <AnnualAuditPlan userCtx={userCtx} showMsg={showMsg} />}
+      {activeTab === "preaudit" && <PreAuditTab userCtx={userCtx} />}
     </main>
   );
 }
