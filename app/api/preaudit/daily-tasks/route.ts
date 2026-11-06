@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       description: `Pre-Audit: ${companyName} — ${todayUK}`,
       assigned_to: memberName,
       assigned_to_email: memberEmail,
-      assigned_by_email: "system@unze.co.uk",   // required by check constraint
+      assigned_by_email: memberEmail,   // must equal assigned_to_email so assignee can self-complete (requires_manager_signoff=false)
       company_id: a.company_id,
       due_date: today,
       source_type: "preaudit",
