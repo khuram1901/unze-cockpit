@@ -33,9 +33,12 @@ export async function GET(request: NextRequest) {
   const errors: string[] = [];
 
   for (const a of assignments) {
-    const memberEmail = (a.members as { email: string; name: string } | null)?.email;
-    const memberName  = (a.members as { email: string; name: string } | null)?.name ?? "";
-    const companyName = (a.companies as { name: string } | null)?.name ?? "Company";
+    // Supabase returns joined rows as arrays; take the first entry
+    const membersArr = a.members as unknown as { email: string; name: string }[] | null;
+    const companiesArr = a.companies as unknown as { name: string }[] | null;
+    const memberEmail = Array.isArray(membersArr) ? membersArr[0]?.email : undefined;
+    const memberName  = Array.isArray(membersArr) ? (membersArr[0]?.name ?? "") : "";
+    const companyName = Array.isArray(companiesArr) ? (companiesArr[0]?.name ?? "Company") : "Company";
 
     if (!memberEmail) { skipped++; continue; }
 
