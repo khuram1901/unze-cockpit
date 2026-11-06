@@ -333,7 +333,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         .order("position_date", { ascending: false }),
       supabase.rpc("get_pdc_outlook_v2", { p_company_id: companyId, p_today: todayISO() }),
       supabase.rpc("daily_cash_continuity", { p_company_id: companyId }),
-      supabase.rpc("get_pdc_month_total", { p_company_id: companyId, p_month: `${selectedMonth}-01` }),
+      supabase.rpc("get_pdc_month_total", { p_company_id: companyId, p_month: `${currentMonthISO()}-01` }),
     ]);
     if (obRes.error) console.error("Opening balance error:", obRes.error);
     if (planRes.error) console.error("Monthly plan error:", planRes.error);
@@ -641,7 +641,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           <SummaryCard
             label="PDC Outstanding"
             value={pdcMonthTotal !== null ? formatPKRWhole(pdcMonthTotal) : "—"}
-            sub={`PDC dues this month · ${formatMonthUK(positionsMonth)}`}
+            sub={`PDC dues this month · ${formatMonthUK(currentMonthISO())}`}
             valueColor={AMBER}
           />
         )}
