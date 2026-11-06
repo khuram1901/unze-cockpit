@@ -123,15 +123,16 @@ function findAmount(text: string, label: string): number {
 //   "(Total )?Balance DD/MM/YYYY\n<amount>" rows
 //   "Total PDC's Balance  <total>"
 //
-// NEW format (Nov 2026+): one row per individual cheque
-//   "Post Dated CHQsAmount"  ← pdf-parse glues column headers; NO "Date" prefix
-//   Each cheque: a date on its own line, then payee + amount (glued or next line)
-//   e.g. "07/11/2026\nGhous-E-Azam Dastgeer Packages519,755"
-//     or "07/11/2026\nAk Shoes\n1,000,000"
-//   "Total PDC's Balance  \n<total>"
+// NEW format (Nov 2026+): one row per individual cheque.
+//   The pdfjs-dist coordinate extractor (extract-text.ts) groups all items on
+//   the same Y position into ONE line, so each cheque row lands as:
+//     "07/11/2026 Ghous-E-Azam Dastgeer Packages 519,755"
+//   We match: date at the start of a line, payee in the middle, amount at end.
+//   Rows with the same due-date are grouped and their amounts summed →
+//   one PdcBucket per unique due-date (the shape the DB and RPCs expect).
 //
-// The function tries the new per-cheque format first; falls back to old aggregate.
-// 05/11/2026: handles "Imperial Footwear Pvt Ltd" page-break headers mid-list.
+// FALLBACK: if no single-line rows are found, try dates-on-own-lines layout
+// (older pdf extraction fallback), then the original aggregate-bucket pattern.
 function extractImperialPdcBuckets(text: string): PdcBucket[] {
   // Handle both old format ("Date Post Dated CHQs") and new ("Post Dated CHQsAmount")
   const startIdx = text.search(/(?:Date\s*)?Post\s*Dated\s*CHQs/i);
@@ -140,52 +141,50 @@ function extractImperialPdcBuckets(text: string): PdcBucket[] {
   const end = totalIdx > startIdx ? totalIdx : text.length;
   const block = text.slice(startIdx, end);
 
-  // ── New per-cheque format (Nov 2026+) ──
-  // A date on its own line is the row marker: preceded by \n (or block start),
-  // followed by \n. Old format always has "Balance" before the date, so it never
-  // produces standalone date-only lines inside the block.
+  // ── Format 1 (primary): pdfjs-dist single-line per cheque ──
+  // "DD/MM/YYYY Payee Name 1,234,567"
+  // The amount is the LAST comma-grouped number on the line.
+  const lineRe = /^(\d{2})\/(\d{2})\/(\d{4})\s+.+?([\d,]+(?:\.\d+)?)\s*$/gm;
+  const dateAmountMap = new Map<string, number>();
+  let m: RegExpExecArray | null;
+  let lineCount = 0;
+  while ((m = lineRe.exec(block))) {
+    const isoDate = `${m[3]}-${m[2]}-${m[1]}`;
+    const amount = parseAmount(m[4]);
+    if (amount > 0) {
+      dateAmountMap.set(isoDate, (dateAmountMap.get(isoDate) ?? 0) + amount);
+      lineCount++;
+    }
+  }
+  if (lineCount > 0) {
+    return Array.from(dateAmountMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dueDate, amount]) => ({ label: "Balance", dueDate, amount }));
+  }
+
+  // ── Format 2 (fallback): date on its own line, payee+amount on next line(s) ──
   const dateOnlyRe = /(?:^|\n)\s*(\d{2})\/(\d{2})\/(\d{4})\s*(?:\n|$)/gm;
   const newDateMatches = [...block.matchAll(dateOnlyRe)];
-
   if (newDateMatches.length > 0) {
     const buckets: PdcBucket[] = [];
     for (let i = 0; i < newDateMatches.length; i++) {
-      const m = newDateMatches[i];
-      const dueDate = `${m[3]}-${m[2]}-${m[1]}`;
-      const chunkStart = m.index! + m[0].length;
+      const dm = newDateMatches[i];
+      const dueDate = `${dm[3]}-${dm[2]}-${dm[1]}`;
+      const chunkStart = dm.index! + dm[0].length;
       const chunkEnd = i + 1 < newDateMatches.length ? newDateMatches[i + 1].index! : block.length;
       const chunk = block.slice(chunkStart, chunkEnd);
-
-      // Amount = last comma-grouped number in the chunk.
-      // PDC amounts are always large (always have commas); plain integers are
-      // year fragments, page numbers etc. and are intentionally ignored.
-      const commaNumMatches = [...chunk.matchAll(/(\d{1,3}(?:,\d{3})+(?:\.\d+)?)/g)];
-      if (commaNumMatches.length === 0) continue;
-      const lastNum = commaNumMatches[commaNumMatches.length - 1];
-      const amount = parseAmount(lastNum[1]);
+      const commaNums = [...chunk.matchAll(/(\d{1,3}(?:,\d{3})+(?:\.\d+)?)/g)];
+      if (commaNums.length === 0) continue;
+      const amount = parseAmount(commaNums[commaNums.length - 1][1]);
       if (amount <= 0) continue;
-
-      // Label = everything before the last number, stripped of page-break
-      // artefacts (pdf-parse re-emits the company header on each page, which
-      // may land mid-list between a previous row's amount and the next date).
-      const rawLabel = chunk.slice(0, lastNum.index!).replace(/\s+/g, " ").trim();
-      const label = rawLabel
-        .replace(/\bImperial Footwear Pvt\.? Ltd\.?\b/gi, "")
-        .replace(/\s+/g, " ")
-        .trim() || null;
-
-      buckets.push({ dueDate, amount, label });
+      buckets.push({ dueDate, amount, label: null });
     }
     if (buckets.length > 0) return buckets;
   }
 
-  // ── Old aggregate format (pre-Nov 2026, backward compatibility) ──
-  // Pattern: "(Total )?Balance DD/MM/YYYY\n<amount>"
-  // No date directly follows "Balance" in the grand-total line ("PDC's" sits
-  // between), so the grand total is never mistaken for another bucket.
+  // ── Format 3 (legacy): "(Total )?Balance DD/MM/YYYY\n<amount>" ──
   const buckets: PdcBucket[] = [];
   const re = /((?:Total\s+)?Balance)\s+(\d{2})\/(\d{2})\/(\d{4})\s*\n\s*([\d,]+(?:\.\d+)?)/gi;
-  let m: RegExpExecArray | null;
   while ((m = re.exec(block))) {
     buckets.push({ label: m[1].trim(), dueDate: `${m[4]}-${m[3]}-${m[2]}`, amount: parseAmount(m[5]) });
   }
