@@ -90,14 +90,14 @@ export const PAGE_REGISTRY: PageCard[] = [
   // Tasks page as a tab. The standalone /recurring-tasks page itself was
   // deleted (15/07/2026 audit fix) since it had drifted behind the merged
   // panel (no company field, no per-template edit).
-  { permKey: "_folderit", title: "Folder-it", subtitle: "Documents pending approval & filing", href: "/folderit", icon: "📁", group: "My Workspace" },
-  { permKey: "can_see_all_minutes", title: "Meetings", subtitle: "Minutes, approvals, action items", href: "/meetings", icon: "💬", group: "My Workspace", badgeKey: "meetings" },
-  { permKey: "_my_minutes", title: "My Minutes", subtitle: "Meeting minutes you attended", href: "/my-minutes", icon: "🗒️", group: "My Workspace", badgeKey: "minutes" },
-  { permKey: "_tasks", title: "Tasks", subtitle: "View and manage tasks", href: "/tasks", icon: "🎯", group: "My Workspace", badgeKey: "tasks" },
-  { permKey: "can_review_tasks", title: "Escalations", subtitle: "Overdue tasks escalated to you by priority level", href: "/escalations", icon: "🚨", group: "My Workspace" },
-  { permKey: "can_view_hr_performance", title: "HR Performance", subtitle: "Team and full company performance overview", href: "/department/hr?tab=performance", icon: "📊", group: "My Workspace" },
-  { permKey: "can_view_team_performance", title: "My Team", subtitle: "Your team's task performance", href: "/my-team", icon: "👥", group: "My Workspace" },
-  { permKey: "can_see_all_tasks", title: "Task Dashboard", subtitle: "Performance KPIs, SLA breaches, department breakdown", href: "/task-dashboard", icon: "📊", group: "My Workspace" },
+  { permKey: "_tasks",               title: "Tasks",          subtitle: "View and manage tasks",                                   href: "/tasks",                      icon: "🎯", group: "My Workspace", subgroup: "Tasks",     subgroupOrder: 1, badgeKey: "tasks" },
+  { permKey: "can_review_tasks",     title: "Escalations",    subtitle: "Overdue tasks escalated to you by priority level",        href: "/escalations",                icon: "🚨", group: "My Workspace", subgroup: "Tasks",     subgroupOrder: 1 },
+  { permKey: "can_see_all_tasks",    title: "Task Dashboard", subtitle: "Performance KPIs, SLA breaches, department breakdown",    href: "/task-dashboard",             icon: "📊", group: "My Workspace", subgroup: "Tasks",     subgroupOrder: 1 },
+  { permKey: "can_see_all_minutes",  title: "Meetings",       subtitle: "Minutes, approvals, action items",                        href: "/meetings",                   icon: "💬", group: "My Workspace", subgroup: "Meetings",  subgroupOrder: 2, badgeKey: "meetings" },
+  { permKey: "_my_minutes",          title: "My Minutes",     subtitle: "Meeting minutes you attended",                            href: "/my-minutes",                 icon: "🗒️", group: "My Workspace", subgroup: "Meetings",  subgroupOrder: 2, badgeKey: "minutes" },
+  { permKey: "can_view_team_performance",  title: "My Team",        subtitle: "Your team's task performance",                      href: "/my-team",                    icon: "👥", group: "My Workspace", subgroup: "People",    subgroupOrder: 3 },
+  { permKey: "can_view_hr_performance",    title: "HR Performance", subtitle: "Team and full company performance overview",         href: "/department/hr?tab=performance", icon: "📊", group: "My Workspace", subgroup: "People", subgroupOrder: 3 },
+  { permKey: "_folderit",            title: "Folder-it",      subtitle: "Documents pending approval & filing",                     href: "/folderit",                   icon: "📁", group: "My Workspace", subgroup: "Documents", subgroupOrder: 4 },
 
   // ── Settings ──
   { permKey: "can_view_members", title: "Members", subtitle: "Team members, roles, access", href: "/members", icon: "👥", group: "Settings", badgeKey: "members" },
