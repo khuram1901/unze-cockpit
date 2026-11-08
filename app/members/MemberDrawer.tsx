@@ -903,6 +903,8 @@ export default function MemberDrawer({
                       { key: "can_view_baranh_finance",        label: "Baranh Finances" },
                       { key: "can_view_haute_dolci_finance",   label: "Haute Dolci Finances" },
                       { key: "can_view_kk_jhang_finance",      label: "K&K Jhang Finances" },
+                      { key: "can_view_unze_london_finance",   label: "Unze-UK CashFlow" },
+                      { key: "can_view_uzl_pnl",               label: "Unze-UK P&L" },
                     ].map(({ key, label: itemLabel }) => (
                       <div key={key} style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",

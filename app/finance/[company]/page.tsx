@@ -158,7 +158,8 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
         )}
 
         {/* FinanceManager: only when user can see Finance Overview AND that tab is active.
-            Widget-only Retail-Sales users never see or mount this component. */}
+            Widget-only Retail-Sales users never see or mount this component.
+            Unze London UK has its own dedicated route (/finance/unze-london) — not served here. */}
         {canSeeFinanceOverview && displayTab === "overview" && (
           <FinanceManager companyId={config.id} companyName={config.name} />
         )}

@@ -311,12 +311,35 @@ export function canViewImperialFinance(u: UserCtx): boolean {
 // and Imperial. Used by the [company] finance page access guard and
 // canSeeFinanceOverview to let through users who hold only a single-company
 // toggle rather than the full finance role.
+// ── Unze London UK finance page (migration 304) ───────────────────────
+// Same pattern as the UTPL/Imperial toggles above. PA always blocked;
+// Admin/CEO always allowed; everyone else needs the explicit toggle.
+export function canViewUnzeLondonFinance(u: UserCtx): boolean {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_unze_london_finance");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+
+// ── Unze London UK P&L page (migration 304) ────────────────────────────
+export function canViewUzlPnl(u: UserCtx): boolean {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_uzl_pnl");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+
+// Covers all per-company finance page grants — restaurants, Unze Trading,
+// Imperial, and Unze London UK. Used by the [company] finance page access
+// guard and canSeeFinanceOverview to let through users who hold only a
+// single-company toggle rather than the full finance role.
 export function canViewCompanyFinance(u: UserCtx, slug: string): boolean {
   if (slug === "baranh")       return canViewBaranhFinance(u);
   if (slug === "haute-dolci")  return canViewHauteDolciFinance(u);
   if (slug === "kk-jhang")     return canViewKkJhangFinance(u);
   if (slug === "unze-trading") return canViewUnzeTradingFinance(u);
   if (slug === "imperial")     return canViewImperialFinance(u);
+  if (slug === "unze-london")  return canViewUnzeLondonFinance(u);
   return false;
 }
 

@@ -21,7 +21,7 @@ import {
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
   canViewIfplPnl, canViewUnzePnl, canViewRestaurantsPnl, canViewGroupHR,
   canViewBaranhFinance, canViewHauteDolciFinance, canViewKkJhangFinance,
-  canViewUnzeTradingFinance, canViewImperialFinance,
+  canViewUnzeTradingFinance, canViewImperialFinance, canViewUnzeLondonFinance, canViewUzlPnl,
   canViewTeamPerformance,
   isMainAdmin, isSecondaryCEO, isDailyEntryOnly, isCEO,
   widgetVisible,
@@ -68,6 +68,8 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_view_baranh_finance:      canViewBaranhFinance,
   can_view_haute_dolci_finance: canViewHauteDolciFinance,
   can_view_kk_jhang_finance:    canViewKkJhangFinance,
+  can_view_unze_london_finance: canViewUnzeLondonFinance,
+  can_view_uzl_pnl: canViewUzlPnl,
   can_view_group_hr: canViewGroupHR,
   can_access_banking: canAccessBanking,
   can_view_team_performance: canViewTeamPerformance,
@@ -98,6 +100,14 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
       widgetVisible(ctx, "imperial.retail_sales", false) ||
       widgetVisible(ctx, "imperial.finance_overview", false)
     );
+  }
+  if (card.permKey === "can_view_finance_uzl") {
+    // Admin/CEO by default, OR explicit per-member can_view_unze_london_finance toggle (migration 304).
+    return canViewUnzeLondonFinance(ctx);
+  }
+  if (card.permKey === "can_view_uzl_pnl") {
+    // Admin/CEO by default, OR explicit per-member can_view_uzl_pnl toggle (migration 304).
+    return canViewUzlPnl(ctx);
   }
   if (perms) {
     const val = perms[card.permKey];

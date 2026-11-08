@@ -55,9 +55,12 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_restaurants_pnl",     title: "Hospitality P&L",        subtitle: "Baranh & Haute Dolci — branches, food cost, trends", href: "/finance/restaurants",      icon: "🍽️", group: "Finance", subgroup: "Hospitality",           subgroupOrder: 2 },
   { permKey: "can_view_finance_ifpl",        title: "Unze-PK CashFlow",       subtitle: "Cash position, forecasts, budgets",                  href: "/finance/imperial",         icon: "👞", group: "Finance", subgroup: "Unze London PK",        subgroupOrder: 3, badgeKey: "ifplFinance" },
   { permKey: "can_view_ifpl_pnl",            title: "Unze-PK P&L",            subtitle: "Unze London retail — plan vs actual, branch league", href: "/finance/imperial-pnl",     icon: "👟", group: "Finance", subgroup: "Unze London PK",        subgroupOrder: 3 },
-  { permKey: "can_view_finance_utpl",        title: "Unze Trading CashFlow",  subtitle: "Cash position, forecasts, budgets",                  href: "/finance/unze-trading",     icon: "🏦", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 4, badgeKey: "utplFinance" },
-  { permKey: "can_view_unze_pnl",            title: "Unze Trading P&L",       subtitle: "Unze Trading — plants, margins, CEO view",           href: "/finance/profit-and-loss",  icon: "📉", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 4 },
-  { permKey: "can_view_receivables",         title: "Unze Trading Receivables",subtitle: "Track bills through collection stages",              href: "/receivables",              icon: "💳", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 4, badgeKey: "receivables" },
+  { permKey: "can_view_finance_uzl",         title: "Unze-UK CashFlow",        subtitle: "Cash position and Xero Cashflow",                    href: "/finance/unze-london",      icon: "🇬🇧", group: "Finance", subgroup: "Unze London UK",        subgroupOrder: 4 },
+  { permKey: "can_view_uzl_pnl",            title: "Unze-UK P&L",             subtitle: "Xero profit & loss — brands, margins, CEO view",     href: "/finance/unze-london-pnl",  icon: "📊", group: "Finance", subgroup: "Unze London UK",        subgroupOrder: 4 },
+  { permKey: "can_view_finance_utpl",        title: "Unze Trading CashFlow",  subtitle: "Cash position, forecasts, budgets",                  href: "/finance/unze-trading",     icon: "🏦", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 5, badgeKey: "utplFinance" },
+  { permKey: "can_view_unze_pnl",            title: "Unze Trading P&L",       subtitle: "Unze Trading — plants, margins, CEO view",           href: "/finance/profit-and-loss",  icon: "📉", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 5 },
+  { permKey: "can_view_receivables",         title: "Unze Trading Receivables",subtitle: "Track bills through collection stages",              href: "/receivables",              icon: "💳", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 5, badgeKey: "receivables" },
+  { permKey: "can_access_banking", title: "Cash Banking", subtitle: "EOBI, Social Security and payment tracking", href: "/banking", icon: "🏦", group: "Finance", subgroup: "Banking & Investments", subgroupOrder: 1 },
 
   // ── Departments ──
   { permKey: "can_view_dept_tax_accounts", title: "Accounts & Returns", subtitle: "Quarterly accounts schedule and return filings", href: "/accounts-tax",        icon: "📂", group: "Departments", subgroup: "Accounts & Taxation",  subgroupOrder: 1 },
@@ -68,7 +71,6 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_group_hr",          title: "Group HR",           subtitle: "People, payroll and movement across all companies",  href: "/group-hr",            icon: "👥", group: "Departments", subgroup: "Human Resources", subgroupOrder: 3 },
   { permKey: "can_view_dept_audit",        title: "Audit",              subtitle: "Internal audit tracking",                            href: "/department/audit",    icon: "🔎", group: "Departments", subgroup: "Audit",           subgroupOrder: 4, badgeKey: "audit" },
   { permKey: "can_view_dept_it",           title: "IT",                 subtitle: "IT department dashboard",                            href: "/department/it",       icon: "🖥️", group: "Departments", subgroup: "IT",              subgroupOrder: 5 },
-  { permKey: "can_access_banking", title: "Cash Banking", subtitle: "EOBI, Social Security and payment tracking", href: "/banking", icon: "🏦", group: "Finance", subgroup: "Banking & Investments", subgroupOrder: 1 },
 
   // ── Operations (alphabetical) ──
   // Admin Entry (/daily-entry) and Daily Entry (/production) are intentionally
