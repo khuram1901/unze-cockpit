@@ -60,8 +60,8 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_receivables",         title: "Unze Trading Receivables",subtitle: "Track bills through collection stages",              href: "/receivables",              icon: "💳", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 4, badgeKey: "receivables" },
 
   // ── Departments ──
-  { permKey: "can_view_dept_tax_accounts", title: "Accounts & Returns", subtitle: "Quarterly accounts schedule and return filings", href: "/accounts-tax",        icon: "📂", group: "Departments", subgroup: "Tax & Accounts",  subgroupOrder: 1 },
-  { permKey: "can_view_dept_tax",          title: "Tax Notices",        subtitle: "Tax notices and compliance",                         href: "/department/taxation", icon: "🧾", group: "Departments", subgroup: "Tax & Accounts",  subgroupOrder: 1 },
+  { permKey: "can_view_dept_tax_accounts", title: "Accounts & Returns", subtitle: "Quarterly accounts schedule and return filings", href: "/accounts-tax",        icon: "📂", group: "Departments", subgroup: "Accounts & Taxation",  subgroupOrder: 1 },
+  { permKey: "can_view_dept_tax",          title: "Tax Notices",        subtitle: "Tax notices and compliance",                         href: "/department/taxation", icon: "🧾", group: "Departments", subgroup: "Accounts & Taxation",  subgroupOrder: 1 },
   { permKey: "can_view_dept_admin",        title: "Admin",              subtitle: "Administration dashboard",                           href: "/department/admin",    icon: "🏛️", group: "Departments", subgroup: "Administration",  subgroupOrder: 2 },
   { permKey: "can_access_admin_page",      title: "Admin Operations",   subtitle: "Registrations, compliance, payments, fleet, solar",  href: "/admin",               icon: "⚙️", group: "Departments", subgroup: "Administration",  subgroupOrder: 2 },
   { permKey: "can_view_dept_hr",           title: "HR",                 subtitle: "Human resources dashboard",                          href: "/department/hr",       icon: "🧑‍💼", group: "Departments", subgroup: "Human Resources", subgroupOrder: 3 },
