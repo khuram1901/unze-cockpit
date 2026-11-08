@@ -16,6 +16,8 @@ export type PageCard = {
   href: string;
   icon: string;
   group: string;
+  subgroup?: string;   // optional — used for dividers within a group
+  subgroupOrder?: number; // controls section order
   badgeKey?: string;
 };
 
@@ -44,23 +46,23 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_pa_dashboard", title: "PA Dashboard", subtitle: "Tasks, notes, quick actions, delegations", href: "/pa", icon: "⚡", group: "Overview", badgeKey: "pa" },
 
   // ── Finance ──
-  { permKey: "can_view_guarantees", title: "Bank Facilities", subtitle: "Guarantees, pay orders & bank facility utilisation", href: "/finance/guarantees", icon: "🔐", group: "Finance" },
-  { permKey: "can_view_finance_ifpl", title: "Unze-PK CashFlow", subtitle: "Cash position, forecasts, budgets", href: "/finance/imperial", icon: "👞", group: "Finance", badgeKey: "ifplFinance" },
-  { permKey: "can_view_investments", title: "Investments", subtitle: "PSX stock portfolio tracker", href: "/investments", icon: "📈", group: "Finance" },
-  { permKey: "can_view_ifpl_pnl", title: "Unze-PK P&L", subtitle: "Unze London retail — plan vs actual, branch league", href: "/finance/imperial-pnl", icon: "👟", group: "Finance" },
-  { permKey: "can_view_restaurants_pnl", title: "Hospitality P&L", subtitle: "Baranh & Haute Dolci — branches, food cost, trends", href: "/finance/restaurants", icon: "🍽️", group: "Finance" },
-  { permKey: "can_view_baranh_finance",      title: "Baranh CashFlow",   subtitle: "Cash position, PDC outlook, forecasts", href: "/finance/baranh",      icon: "🍽️", group: "Finance" },
-  { permKey: "can_view_haute_dolci_finance", title: "HD CashFlow",       subtitle: "Cash position, PDC outlook, forecasts", href: "/finance/haute-dolci", icon: "🍰", group: "Finance" },
-  { permKey: "can_view_kk_jhang_finance",    title: "K&K CashFlow",      subtitle: "Cash position, PDC outlook, forecasts", href: "/finance/kk-jhang",   icon: "🏪", group: "Finance" },
-  { permKey: "can_view_unze_pnl", title: "Unze Trading P&L", subtitle: "Unze Trading — plants, margins, CEO view", href: "/finance/profit-and-loss", icon: "📉", group: "Finance" },
-  { permKey: "can_edit_finance", title: "Opening Balances", subtitle: "Set starting balances for companies", href: "/opening-balances", icon: "🏧", group: "Finance" },
-  { permKey: "can_view_receivables", title: "Unze Trading Receivables", subtitle: "Track bills through collection stages", href: "/receivables", icon: "💳", group: "Finance", badgeKey: "receivables" },
-  { permKey: "can_view_finance_utpl", title: "Unze Trading CashFlow", subtitle: "Cash position, forecasts, budgets", href: "/finance/unze-trading", icon: "🏦", group: "Finance", badgeKey: "utplFinance" },
+  { permKey: "can_view_guarantees",          title: "Bank Facilities",        subtitle: "Guarantees, pay orders & bank facility utilisation", href: "/finance/guarantees",       icon: "🔐", group: "Finance", subgroup: "Banking & Investments", subgroupOrder: 1 },
+  { permKey: "can_view_investments",         title: "Investments",            subtitle: "PSX stock portfolio tracker",                        href: "/investments",              icon: "📈", group: "Finance", subgroup: "Banking & Investments", subgroupOrder: 1 },
+  { permKey: "can_edit_finance",             title: "Opening Balances",       subtitle: "Set starting balances for companies",                href: "/opening-balances",         icon: "🏧", group: "Finance", subgroup: "Banking & Investments", subgroupOrder: 1 },
+  { permKey: "can_view_baranh_finance",      title: "Baranh CashFlow",        subtitle: "Cash position, PDC outlook, forecasts",              href: "/finance/baranh",           icon: "🍽️", group: "Finance", subgroup: "Hospitality",           subgroupOrder: 2 },
+  { permKey: "can_view_haute_dolci_finance", title: "HD CashFlow",            subtitle: "Cash position, PDC outlook, forecasts",              href: "/finance/haute-dolci",      icon: "🍰", group: "Finance", subgroup: "Hospitality",           subgroupOrder: 2 },
+  { permKey: "can_view_kk_jhang_finance",    title: "K&K CashFlow",           subtitle: "Cash position, PDC outlook, forecasts",              href: "/finance/kk-jhang",         icon: "🏪", group: "Finance", subgroup: "Hospitality",           subgroupOrder: 2 },
+  { permKey: "can_view_restaurants_pnl",     title: "Hospitality P&L",        subtitle: "Baranh & Haute Dolci — branches, food cost, trends", href: "/finance/restaurants",      icon: "🍽️", group: "Finance", subgroup: "Hospitality",           subgroupOrder: 2 },
+  { permKey: "can_view_finance_ifpl",        title: "Unze-PK CashFlow",       subtitle: "Cash position, forecasts, budgets",                  href: "/finance/imperial",         icon: "👞", group: "Finance", subgroup: "Unze London PK",        subgroupOrder: 3, badgeKey: "ifplFinance" },
+  { permKey: "can_view_ifpl_pnl",            title: "Unze-PK P&L",            subtitle: "Unze London retail — plan vs actual, branch league", href: "/finance/imperial-pnl",     icon: "👟", group: "Finance", subgroup: "Unze London PK",        subgroupOrder: 3 },
+  { permKey: "can_view_finance_utpl",        title: "Unze Trading CashFlow",  subtitle: "Cash position, forecasts, budgets",                  href: "/finance/unze-trading",     icon: "🏦", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 4, badgeKey: "utplFinance" },
+  { permKey: "can_view_unze_pnl",            title: "Unze Trading P&L",       subtitle: "Unze Trading — plants, margins, CEO view",           href: "/finance/profit-and-loss",  icon: "📉", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 4 },
+  { permKey: "can_view_receivables",         title: "Unze Trading Receivables",subtitle: "Track bills through collection stages",              href: "/receivables",              icon: "💳", group: "Finance", subgroup: "Unze Trading",          subgroupOrder: 4, badgeKey: "receivables" },
 
   // ── Departments ──
   { permKey: "can_view_dept_admin", title: "Admin", subtitle: "Administration dashboard", href: "/department/admin", icon: "🏛️", group: "Departments" },
   { permKey: "can_access_admin_page", title: "Admin Operations", subtitle: "Registrations, compliance, payments, fleet, solar", href: "/admin", icon: "⚙️", group: "Departments" },
-  { permKey: "can_access_banking", title: "Cash Banking", subtitle: "EOBI, Social Security and payment tracking", href: "/banking", icon: "🏦", group: "Finance" },
+  { permKey: "can_access_banking", title: "Cash Banking", subtitle: "EOBI, Social Security and payment tracking", href: "/banking", icon: "🏦", group: "Finance", subgroup: "Banking & Investments", subgroupOrder: 1 },
   { permKey: "can_view_dept_audit", title: "Audit", subtitle: "Internal audit tracking", href: "/department/audit", icon: "🔎", group: "Departments", badgeKey: "audit" },
   { permKey: "can_view_dept_hr", title: "HR", subtitle: "Human resources dashboard", href: "/department/hr", icon: "🧑‍💼", group: "Departments" },
   { permKey: "can_view_group_hr", title: "Group HR", subtitle: "People, payroll and movement across all companies", href: "/group-hr", icon: "👥", group: "Departments" },

@@ -412,10 +412,31 @@ export default function SidebarLayout({
     ? activeGroup
     : (visibleGroups[0] ?? "Finance");
 
-  // Pages in the current panel — sorted A–Z
+  // Pages in the current panel
   const panelPages = visibleCards
     .filter((c) => c.group === effectiveGroup)
-    .sort((a, b) => a.title.localeCompare(b.title));
+    .sort((a, b) => {
+      // Finance: order by subgroupOrder first, then A-Z within subgroup
+      if (a.subgroupOrder !== undefined && b.subgroupOrder !== undefined) {
+        if (a.subgroupOrder !== b.subgroupOrder) return a.subgroupOrder - b.subgroupOrder;
+        return a.title.localeCompare(b.title);
+      }
+      return a.title.localeCompare(b.title);
+    });
+
+  // Build subgroup sections for the panel (Finance only)
+  type SubgroupSection = { label: string; items: typeof panelPages };
+  const panelSections: SubgroupSection[] = (() => {
+    const hasSubgroups = panelPages.some((c) => c.subgroup);
+    if (!hasSubgroups) return [{ label: "", items: panelPages }];
+    const seen = new Map<string, typeof panelPages>();
+    panelPages.forEach((c) => {
+      const key = c.subgroup ?? "";
+      if (!seen.has(key)) seen.set(key, []);
+      seen.get(key)!.push(c);
+    });
+    return Array.from(seen.entries()).map(([label, items]) => ({ label, items }));
+  })();
 
   const initials = userName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "U";
   function isActive(href: string) { return pathname === href; }
@@ -587,14 +608,34 @@ export default function SidebarLayout({
 
             {/* Page list */}
             <nav style={{ flex: 1, padding: "8px 6px" }}>
-              {panelPages.map((card) => (
-                <PanelItem key={card.href} item={card} active={isActive(card.href)} />
-              ))}
               {panelPages.length === 0 && (
                 <div style={{ padding: "12px", fontSize: "12px", color: "var(--text-muted)" }}>
                   No pages available
                 </div>
               )}
+              {panelSections.map((section, i) => (
+                <div key={section.label || i}>
+                  {section.label && (
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: "6px",
+                      padding: i === 0 ? "4px 6px 2px" : "10px 6px 2px",
+                    }}>
+                      {i > 0 && <div style={{ flex: 1, height: "1px", backgroundColor: "var(--sidebar-border)" }} />}
+                      <span style={{
+                        fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em",
+                        textTransform: "uppercase", color: "var(--text-muted)",
+                        whiteSpace: "nowrap", flexShrink: 0,
+                      }}>
+                        {section.label}
+                      </span>
+                      <div style={{ flex: 1, height: "1px", backgroundColor: "var(--sidebar-border)" }} />
+                    </div>
+                  )}
+                  {section.items.map((card) => (
+                    <PanelItem key={card.href} item={card} active={isActive(card.href)} />
+                  ))}
+                </div>
+              ))}
             </nav>
           </div>
         </aside>
