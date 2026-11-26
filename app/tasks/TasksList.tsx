@@ -277,6 +277,18 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         `assigned_to_email.eq.${email},assigned_by_email.eq.${email},` +
         `assigned_to_email.eq.${scopedEmail},assigned_by_email.eq.${scopedEmail}${idClause}`
       );
+    } else if (isPrivileged && !scopedEmail && email) {
+      // CEO / Admin (Khuram): scope to own tasks only via both identity
+      // emails. Without this filter PostgREST's default 1 000-row limit
+      // silently drops older tasks — the notification bell (which uses an
+      // RPC with no row cap) counts them, but the page never receives them.
+      const myEmails = myIdentityEmails(email);
+      const idClause = myCoAssignedIds.length > 0 ? `,id.in.(${myCoAssignedIds.join(",")})` : "";
+      const emailParts = myEmails.flatMap((e) => [
+        `assigned_to_email.eq.${e}`,
+        `assigned_by_email.eq.${e}`,
+      ]);
+      query = query.or(emailParts.join(",") + idClause);
     } else if (!isPrivileged && email) {
       const idClause = myCoAssignedIds.length > 0 ? `,id.in.(${myCoAssignedIds.join(",")})` : "";
       const reportsClause = myReportEmails.length > 0 ? `,assigned_to_email.in.(${myReportEmails.join(",")}),assigned_by_email.in.(${myReportEmails.join(",")})` : "";
