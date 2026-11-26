@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
@@ -139,8 +139,6 @@ function getWeekStart(d: Date): string {
 export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport, department, scopedEmail }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean; department?: string | null; scopedEmail?: string | null }) {
   const isMobile = useMobile();
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
   const taskIdFromUrl = searchParams.get("task");
   // Khuram (18/07/2026): the notification bell deep-links here with
   // ?filter=overdue|waiting|exception|submitted&scope=mine so clicking a
@@ -149,8 +147,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // matching filter state below.
   const filterFromUrl = searchParams.get("filter");
   const scopeFromUrl = searchParams.get("scope");
-  const statusFromUrl = searchParams.get("status");
-  const ownerFromUrl = searchParams.get("owner");
   const toast = useToast();
   const dlg = useConfirm();
 
@@ -164,13 +160,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Monthly/Quarterly were removed as separate tabs — folded into the
   // periodFilter dropdown below instead, per Khuram.
   const [timeView, setTimeView] = useState<"list" | "board" | "tree" | "timeline" | "team" | "recurring">("list");
-  const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "exception" | "submitted" | "escalated">(
-    filterFromUrl === "overdue" || filterFromUrl === "waiting" || filterFromUrl === "exception" || filterFromUrl === "submitted" || filterFromUrl === "escalated" ? filterFromUrl : "all"
+  const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "exception" | "submitted">(
+    filterFromUrl === "overdue" || filterFromUrl === "waiting" || filterFromUrl === "exception" || filterFromUrl === "submitted" ? filterFromUrl : "all"
   );
-  // Escalated task IDs — populated via RPC when the escalated filter is active.
-  const [escalatedIds, setEscalatedIds] = useState<Set<string>>(new Set());
-  // Escalation count for the stat strip tile — fetched once on mount.
-  const [escalatedCount, setEscalatedCount] = useState<number>(0);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [companies, setCompanies] = useState<CompanyLite[]>([]);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
@@ -183,20 +175,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // not the whole company's task list. "Everyone" is one tap away.
   const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">(scopeFromUrl === "everyone" ? "everyone" : "mine");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-  // Multi-select pill filters — a full set means "all shown" (no filtering).
-  const ALL_PRIORITIES = ["Critical", "Urgent", "Normal", "Low"] as const;
-  const ALL_STATUSES   = ["Not Started", "In Progress", "Waiting Reply", "Stuck", "Submitted", "Completed"] as const;
-  const [priorityFilters, setPriorityFilters] = useState<Set<string>>(new Set(ALL_PRIORITIES));
-  const VALID_STATUSES = ALL_STATUSES as unknown as string[];
-  const [statusFilters,   setStatusFilters]   = useState<Set<string>>(
-    statusFromUrl && VALID_STATUSES.includes(statusFromUrl)
-      ? new Set([statusFromUrl])
-      : new Set(ALL_STATUSES)
-  );
-  const [ownerFilter, setOwnerFilter] = useState<string>(ownerFromUrl ? ownerFromUrl.trim().replace(/\s+/g, " ") : "all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<"all" | "week" | "month" | "quarter">("all");
-  // Filter panel toggle — collapsed by default on mobile, open on desktop.
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  // Filter panel used to be collapsed behind a "Filters" toggle button —
+  // Khuram asked for that reverted, so the full dropdown row is always
+  // visible again now. filtersOpen is kept (always true) rather than
+  // ripped out everywhere it's referenced, to keep this change small.
+  const [filtersOpen] = useState(true);
   const [advFiltersOpen, setAdvFiltersOpen] = useState(false);
   // stageFilter removed per Khuram (24/07/2026) — stage values are
   // free-text progress notes, useless as a filter. The Workload
@@ -204,12 +190,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [dueFilter, setDueFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [subtaskFilter, setSubtaskFilter] = useState<string>("all");
-  // VALID_STATUSES + statusFilters live just above (near priorityFilters).
+  // Explicit status picker (Not Started/In Progress/Waiting Reply/Stuck/
+  // Completed/Cancelled) — separate from the all/overdue/waiting quick
+  // pills below, and the one way to see Completed/Cancelled tasks in the
+  // main list/board/timeline views, which otherwise always hide them.
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [paFilter, setPaFilter] = useState(false);
   const [listSort, setListSort] = useState<{ col: "created_at" | "due_date" | "status" | "assigned_to"; dir: "asc" | "desc" }>({ col: "due_date", dir: "asc" });
   const [searchQuery, setSearchQuery] = useState("");
-  // Asana-style: each group section can be collapsed/expanded
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
   // Tracks which department/person groups are EXPANDED — starting empty
   // means every group defaults to closed on mount, per the house rule
@@ -229,7 +217,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Bulk select — List view only, per Khuram. Move/change status/company/
   // owner across many tasks at once instead of one at a time.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [unreadCommentTaskIds, setUnreadCommentTaskIds] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkCompanyId, setBulkCompanyId] = useState("");
   const [bulkOwnerId, setBulkOwnerId] = useState("");
@@ -292,10 +279,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       );
     } else if (!isPrivileged && email) {
       const idClause = myCoAssignedIds.length > 0 ? `,id.in.(${myCoAssignedIds.join(",")})` : "";
-      // canSeeAll === false means an explicit "own tasks only" override (e.g. Kamran).
-      // Skip the reports clause so they don't inherit their direct reports' tasks.
-      const ownTasksOnly = canSeeAll === false;
-      const reportsClause = (!ownTasksOnly && myReportEmails.length > 0) ? `,assigned_to_email.in.(${myReportEmails.join(",")}),assigned_by_email.in.(${myReportEmails.join(",")})` : "";
+      const reportsClause = myReportEmails.length > 0 ? `,assigned_to_email.in.(${myReportEmails.join(",")}),assigned_by_email.in.(${myReportEmails.join(",")})` : "";
       query = query.or(`assigned_to_email.eq.${email},assigned_by_email.eq.${email}${idClause}${reportsClause}`);
     }
 
@@ -308,13 +292,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       // with tasks loaded but myEmail still null (which shows an empty list).
       setMyEmail(email);
       setTasks(data || []);
-      // Fetch unread comment task IDs in the background
-      authFetch("/api/tasks/unread-comment-ids")
-        .then(r => r.ok ? r.json() : null)
-        .then(json => {
-          if (json?.taskIds) setUnreadCommentTaskIds(new Set(json.taskIds));
-        })
-        .catch(() => {});
       const taskIds = (data || []).map((t) => t.id);
       if (taskIds.length > 0) {
         const { data: assigneeRows } = await supabase.from("task_assignees").select("task_id, member_name").in("task_id", taskIds);
@@ -352,13 +329,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     setCompanyFilter("all");
     setFilter("all");
     setDepartmentFilter("all");
-    setPriorityFilters(new Set(ALL_PRIORITIES));
+    setPriorityFilter("all");
     setOwnerFilter("all");
     setPeriodFilter("all");
     setDueFilter("all");
     setSourceFilter("all");
     setSubtaskFilter("all");
-    setStatusFilters(new Set(ALL_STATUSES));
+    setStatusFilter("all");
     setPaFilter(false);
     setSearchQuery("");
   }
@@ -371,7 +348,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       setMemberPhones(phones);
     });
     supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).then(({ data }) => setCompanies(data || []));
-    supabase.from("department_owners").select("department_name").eq("active", true).order("department_name").then(({ data }) => setAllDepartments((data || []).map((d) => d.department_name)));
+    supabase.from("department_owners").select("department_name").order("department_name").then(({ data }) => setAllDepartments((data || []).map((d) => d.department_name)));
     supabase.rpc("get_tasks_department_breakdown").then(({ data, error }) => { if (!error) setDeptBreakdown(data || []); });
     supabase.from("members").select("id, name, email, department, business_unit, employee_code").eq("is_active", true).order("name").then(({ data }) => {
       setBulkMembers(data || []);
@@ -380,17 +357,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       setEmailToCode(codeMap);
     });
   }, []);
-
-  // Load escalated task IDs when the escalated filter is active (e.g. from URL deep-link or KPI card).
-  // Must be a top-level useEffect — React's Rules of Hooks forbid calling hooks inside async functions.
-  useEffect(() => {
-    if (filter !== "escalated") return;
-    supabase.rpc("get_my_escalation_count").then(({ data, error }) => { if (!error && data != null) setEscalatedCount(data); });
-    supabase.rpc("get_my_escalated_tasks").then(({ data }) => {
-      if (data) setEscalatedIds(new Set((data as { task_id: string }[]).map((r) => r.task_id)));
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
 
   // Re-run the KPI RPC whenever the Company filter changes, so the KPI
   // tiles always match what the Company dropdown shows. (The monthly/
@@ -410,15 +376,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         setTimeout(() => {
           document.getElementById(`task-${taskIdFromUrl}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
         }, 100);
-        // Clear ?task= from URL so a page refresh doesn't re-open the
-        // same task modal. Keep other params (filter, scope, etc.) intact.
-        const params = new URLSearchParams(searchParams.toString());
-        params.delete("task");
-        const qs = params.toString();
-        router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
       }
     }
-  }, [taskIdFromUrl, tasks, searchParams, pathname, router]);
+  }, [taskIdFromUrl, tasks]);
 
   if (loading) return <SkeletonRows count={5} height="48px" />;
   if (errorMsg) return <ErrorBanner message={errorMsg} onRetry={loadTasks} />;
@@ -429,7 +389,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // present alongside the AuditTasksPanel above it.
   // Privileged users (canSeeAll = true, e.g. Audit Manager Shahid) still
   // see the full list since they review tasks across the whole team.
-  if (department === "Internal Audit" && !isPrivileged && tasks.length === 0) {
+  if (department === "Audit" && !isPrivileged && tasks.length === 0) {
     return (
       <p style={{ color: COLOURS.SLATE, fontSize: "13px", margin: 0 }}>
         No general tasks assigned to you right now.
@@ -467,8 +427,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     // `|| t.project` fallback leaked meeting titles into the department
     // filter as fake departments (Khuram, 24/07/2026).
     if (departmentFilter !== "all" && (t.assigned_to_department || "Unassigned") !== departmentFilter) return false;
-    if (priorityFilters.size < ALL_PRIORITIES.length && !priorityFilters.has(t.priority ?? "Normal")) return false;
-    if (statusFilters.size < ALL_STATUSES.length && !statusFilters.has(t.status)) return false;
+    if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
+    if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (ownerFilter !== "all" && normName(t.assigned_to) !== ownerFilter) return false;
     if (periodFilter !== "all") {
       if (!t.due_date) return false;
@@ -517,7 +477,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Counts every filter, including Company (left out of the old boolean
   // check by oversight) — drives the badge on the single "Filters" button.
   const activeFilterCount = [
-    companyFilter !== "all", departmentFilter !== "all", priorityFilters.size < ALL_PRIORITIES.length, statusFilters.size < ALL_STATUSES.length,
+    companyFilter !== "all", departmentFilter !== "all", priorityFilter !== "all", statusFilter !== "all",
     ownerFilter !== "all", periodFilter !== "all", dueFilter !== "all",
     sourceFilter !== "all", subtaskFilter !== "all", searchQuery.trim() !== "",
   ].filter(Boolean).length;
@@ -763,15 +723,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     return { label: c?.name || "—", color: found.color, background: found.background };
   }
 
-  // When status is filtered to specific values, that overrides the default
-  // "hide Completed/Cancelled" behaviour. If Completed is explicitly
-  // included in the status pills, honour that choice.
-  const statusExplicitlyFiltered = statusFilters.size < ALL_STATUSES.length;
-  const allOpen = statusExplicitlyFiltered
+  // When a specific status is picked, it overrides the default "hide
+  // Completed/Cancelled" behaviour entirely — scopedTasks is already
+  // narrowed to just that status (see the statusFilter check above), so
+  // there's nothing left to additionally exclude.
+  const allOpen = statusFilter !== "all"
     ? scopedTasks
     : scopedTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const overdueTasks = allOpen.filter(isOverdue);
-  const escalatedTasks = allOpen.filter((t) => escalatedIds.has(t.id));
   const waitingReply = allOpen.filter((t) => t.status === "Waiting Reply");
   const exceptionTasks = allOpen.filter((t) => !!t.explanation_required);
   const completedAll = scopedTasks.filter((t) => t.status === "Completed");
@@ -811,78 +770,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         return false;
       })
     : allOpen;
-
-  // Pill counts: tasks passing all non-pill filters + Mine/Everyone scope.
-  // Using raw `tasks` would show org-wide counts that don't match what's
-  // actually visible in Mine view — so we recompute without priority/status
-  // pill filters and then apply the Mine/Everyone scope.
-  const pillCountBase = (() => {
-    const base = tasks.filter((t) => {
-      if (companyFilter !== "all") {
-        if (companyFilter === "group" ? !!t.company_id : t.company_id !== companyFilter) return false;
-      }
-      if (departmentFilter !== "all" && (t.assigned_to_department || "Unassigned") !== departmentFilter) return false;
-      if (ownerFilter !== "all" && normName(t.assigned_to) !== ownerFilter) return false;
-      if (periodFilter !== "all") {
-        if (!t.due_date) return false;
-        if (periodFilter === "week" && !(t.due_date >= periodWeekStart && t.due_date < periodWeekEnd)) return false;
-        if (periodFilter === "month" && !(t.due_date >= periodMonthStart && t.due_date < periodMonthEnd)) return false;
-        if (periodFilter === "quarter" && !(t.due_date >= periodQuarterStart && t.due_date < periodQuarterEnd)) return false;
-      }
-      if (dueFilter !== "all") {
-        const isOd = t.status !== "Completed" && t.status !== "Cancelled" && !!t.due_date && t.due_date < todayStr;
-        if (dueFilter === "overdue" && !isOd) return false;
-        if (dueFilter === "today" && t.due_date !== todayStr) return false;
-        if (dueFilter === "none" && t.due_date) return false;
-      }
-      if (sourceFilter !== "all") {
-        const isRecurring = t.assigned_by === "Recurring Template";
-        if (sourceFilter === "meeting" && !t.meeting_id) return false;
-        if (sourceFilter === "manual" && (t.meeting_id || isRecurring)) return false;
-        if (sourceFilter === "recurring" && !isRecurring) return false;
-        if (sourceFilter === "whatsapp" && t.source_type !== "whatsapp") return false;
-      }
-      if (subtaskFilter !== "all") {
-        const total = t.task_subtasks?.length ?? 0;
-        const done = t.task_subtasks?.filter((s) => s.is_complete).length ?? 0;
-        if (subtaskFilter === "has" && total === 0) return false;
-        if (subtaskFilter === "complete" && !(total > 0 && done === total)) return false;
-        if (subtaskFilter === "none" && total > 0) return false;
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase();
-        if (!t.description.toLowerCase().includes(q) &&
-            !(t.assigned_to || "").toLowerCase().includes(q) &&
-            !(t.assigned_to_email ? (emailToCode.get(t.assigned_to_email) || "").toLowerCase().includes(q) : false)) return false;
-      }
-      return true;
-    });
-    if (myTasksScope !== "mine") return base;
-    return base.filter((t) => {
-      const byMe = !!(t.assigned_by_email && myIdentities.includes(t.assigned_by_email.toLowerCase()));
-      const toMe = !!(t.assigned_to_email && myIdentities.includes(t.assigned_to_email.toLowerCase()));
-      // Tasks I need to act on (myTasksSource)
-      if (toMe) return true;
-      if (myCoAssignedTaskIds.has(t.id)) return true;
-      if (byMe && t.status === "Submitted" && !myIdentities.includes((t.submitted_by_email || "").toLowerCase())) return true;
-      if (byMe && t.status === "Waiting Reply" && t.reply_required) return true;
-      if (byMe && t.status === "Stuck" && !toMe) return true;
-      // Tasks I delegated to others (delegatedByMe section) — pill counts must
-      // include these so selecting a Priority or Status pill doesn't show 0 when
-      // the matching tasks only appear in the delegated section.
-      if (byMe && !toMe && !myCoAssignedTaskIds.has(t.id)) return true;
-      // Tasks assigned to my direct reports (teamTasksSection)
-      if (t.assigned_to_email && myReportEmailsState.includes(t.assigned_to_email.toLowerCase())) return true;
-      return false;
-    });
-  })();
-  // Open-only version of pillCountBase — mirrors allOpen (excludes Completed/Cancelled unless
-  // the user has explicitly enabled them via the status pills). Used for Priority and Company
-  // counts so the number on the pill exactly matches what clicking it will show.
-  const pillCountBaseOpen = statusExplicitlyFiltered
-    ? pillCountBase
-    : pillCountBase.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
-
   function myTaskGroup(task: Task): string {
     if (isOverdue(task)) return "Overdue";
     if (task.due_date === todayStr) return "Due Today";
@@ -977,7 +864,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // same per-department filter (all/overdue/waiting pill) the JSX below
   // applies per node — so "Select all" ticks exactly what's on screen.
   const treeVisibleIds = deptNodes.flatMap((d) => {
-    const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : filter === "escalated" ? d.tasks.filter((t) => escalatedIds.has(t.id)) : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+    const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
     return deptFiltered.map((t) => t.id);
   });
 
@@ -1002,7 +889,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   else if (filter === "waiting") filteredTasks = waitingReply;
   else if (filter === "exception") filteredTasks = exceptionTasks;
   else if (filter === "submitted") filteredTasks = allOpen.filter((t) => t.status === "Submitted");
-  else if (filter === "escalated") filteredTasks = escalatedTasks;
 
   // ── List view (default landing view) flat filter ──
   // List view normally groups myTasksSource into due-date buckets
@@ -1022,7 +908,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     : filter === "overdue" ? myTasksSource.filter(isOverdue)
     : filter === "waiting" ? myTasksSource.filter((t) => t.status === "Waiting Reply")
     : filter === "exception" ? myTasksSource.filter((t) => !!t.explanation_required)
-    : filter === "escalated" ? scopedTasks.filter((t) => escalatedIds.has(t.id))
     : myTasksSource.filter((t) => t.status === "Submitted");
 
   // Pill counts shown next to "Overdue"/"Waiting"/"Needs explanation" must
@@ -1159,260 +1044,122 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     );
   }
 
-  // ── Searchable dropdown filter ──────────────────────────────────────
-  // Replaces the plain <select> elements with a panel that has a search
-  // input so long lists (owners, depts) are fast to navigate.
-  function SearchableDropdown({
-    value, onChange, label, options, searchable = false, dotMap,
-  }: {
-    value: string;
-    onChange: (v: string) => void;
-    label: string; // placeholder when nothing selected
-    options: { value: string; label: string }[];
-    searchable?: boolean;
-    dotMap?: Record<string, string>; // value → hex colour dot
-  }) {
-    const [open, setOpen] = React.useState(false);
-    const [query, setQuery] = React.useState("");
-    const ref = React.useRef<HTMLDivElement>(null);
-    const isActive = value !== "all" && value !== "";
-    const displayLabel = isActive ? (options.find((o) => o.value === value)?.label ?? label) : label;
-    const filtered = searchable && query
-      ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
-      : options;
-
-    React.useEffect(() => {
-      function onOutside(e: MouseEvent) {
-        if (ref.current && !ref.current.contains(e.target as Node)) {
-          setOpen(false); setQuery("");
-        }
-      }
-      if (open) document.addEventListener("mousedown", onOutside);
-      return () => document.removeEventListener("mousedown", onOutside);
-    }, [open]);
-
-    return (
-      <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
-        <button
-          onClick={() => { setOpen((p) => !p); setQuery(""); }}
-          style={{
-            display: "flex", alignItems: "center", gap: "6px",
-            border: `1px solid ${isActive ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
-            borderRadius: RADII.PILL, padding: "6px 12px",
-            fontSize: "12.5px", fontWeight: isActive ? 700 : 500,
-            cursor: "pointer", background: isActive ? "#EFF6FF" : COLOURS.CARD,
-            color: isActive ? COLOURS.BLUE : COLOURS.SLATE,
-            whiteSpace: "nowrap",
-          }}
-        >
-          <span>{displayLabel}</span>
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" style={{ flexShrink: 0, opacity: .6 }}>
-            <path d="M5 7L1 3h8z"/>
-          </svg>
-        </button>
-        {open && (
-          <div style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: "200px", zIndex: 200,
-            background: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px",
-            boxShadow: "0 4px 16px rgba(15,23,32,.12)", overflow: "hidden",
-          }}>
-            {searchable && (
-              <div style={{ display: "flex", alignItems: "center", gap: "7px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, padding: "8px 12px" }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={COLOURS.SLATE} strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={`Search…`}
-                  style={{ border: "none", outline: "none", fontSize: "12.5px", width: "100%", color: COLOURS.NAVY, background: "transparent", fontFamily: "inherit" }}
-                />
-              </div>
-            )}
-            <div style={{ maxHeight: "220px", overflowY: "auto", padding: "4px 0" }}>
-              {filtered.map((o) => (
-                <div
-                  key={o.value}
-                  onClick={() => { onChange(o.value); setOpen(false); setQuery(""); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "8px",
-                    padding: "7px 12px", fontSize: "12.5px", cursor: "pointer",
-                    color: o.value === value ? COLOURS.BLUE : COLOURS.NAVY,
-                    fontWeight: o.value === value ? 700 : 500,
-                    background: "transparent",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = COLOURS.CARD_ALT)}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                >
-                  {dotMap && dotMap[o.value] && (
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: dotMap[o.value], flexShrink: 0, display: "inline-block" }} />
-                  )}
-                  <span style={{ flex: 1 }}>{o.label}</span>
-                  {o.value === value && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={COLOURS.BLUE} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                  )}
-                </div>
-              ))}
-              {filtered.length === 0 && (
-                <div style={{ padding: "12px", fontSize: "12px", color: COLOURS.SLATE, textAlign: "center" }}>No results</div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── Avatar helpers ──────────────────────────────────────────────────
-  // Deterministic colour from name so the same person always gets the same
-  // circle colour regardless of session. Uses the project's colour palette.
-  function avatarBg(name: string): string {
-    const PALETTE = [COLOURS.GREEN, "#2563EB", COLOURS.AMBER, "#6E45B8", COLOURS.RED, "#0369A1", "#7C2D12"];
-    let h = 0;
-    for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
-    return PALETTE[h % PALETTE.length];
-  }
-  function getInitials(name: string): string {
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-
-  // ── Column header row (desktop only) ────────────────────────────────
-  // Renders the TASK NAME / DUE DATE / ASSIGNED TO / STATUS / COMPANY
-  // header above a task card. Mirrors the grid defined in TaskRow.
-  function ListColumnHeader() {
-    if (isMobile) return null;
-    const hdr: React.CSSProperties = {
-      fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase",
-      letterSpacing: "0.07em", color: COLOURS.SLATE,
-    };
-    return (
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "32px 1fr 160px 180px 130px 140px",
-        gap: "0 12px",
-        padding: "7px 16px 7px 19px", // 19px = 16px padding + 3px for the border-left space
-        borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
-        backgroundColor: COLOURS.CARD,
-      }}>
-        <div /> {/* checkbox column — no label */}
-        <span style={hdr}>Task name</span>
-        <span style={hdr}>Due date</span>
-        <span style={hdr}>Assigned to</span>
-        <span style={hdr}>Status</span>
-        <span style={hdr}>Company</span>
-      </div>
-    );
-  }
-
   function TaskRow({ task, selectable }: { task: Task; selectable?: boolean }) {
     const isOpen = expandedTaskId === task.id;
     const od = daysOverdue(task);
     const overdue = isOverdue(task);
     const otherAssignees = (assigneesByTask.get(task.id) || []).filter((n) => n !== task.assigned_to);
     // Khuram: "once the task is completed then it should be greyed out."
+    // Visual-only here — the actual lock (can't edit unless admin) lives
+    // in TaskStatus.tsx/TaskDetailPanel.tsx; this just signals at a
+    // glance, in every list, that the cycle is closed.
     const done = task.status === "Completed";
-    const assigneeName = task.assigned_to || "Unassigned";
-    const badge = companyBadge(task.company_id);
-
-    // "By:" — who routed this task here (submitted_by takes precedence over assigned_by)
-    const SYSTEM_LABELS = ["system", "recurring template", "recurring task"];
-    const byName = task.submitted_by_name
-      || (task.assigned_by && !SYSTEM_LABELS.includes(task.assigned_by.toLowerCase()) ? task.assigned_by : null);
-    const showBy = byName && byName !== task.assigned_to;
-
-    const priorityColor = overdue ? COLOURS.RED
-      : task.priority === "Critical" || task.priority === "Urgent" ? COLOURS.RED
-      : task.priority === "Medium" ? COLOURS.AMBER
-      : task.priority === "Low" ? COLOURS.INK_300
-      : "transparent";
-
-    // Desktop: 6-column grid matching the ListColumnHeader above.
-    // Mobile: 3-column grid — checkbox | name+meta | status.
-    const gridCols = isMobile
-      ? "24px 1fr auto"
-      : "32px 1fr 160px 180px 130px 140px";
 
     return (
       <div id={`task-${task.id}`} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
         <div
-          onClick={() => {
-            const opening = !isOpen;
-            setExpandedTaskId(opening ? task.id : null);
-            // Mark comments as read when the task detail panel opens
-            if (opening && unreadCommentTaskIds.has(task.id)) {
-              authFetch(`/api/tasks/${task.id}/mark-comments-read`, { method: "POST" }).catch(() => {});
-              setUnreadCommentTaskIds(prev => { const s = new Set(prev); s.delete(task.id); return s; });
-            }
-          }}
+          onClick={() => setExpandedTaskId(isOpen ? null : task.id)}
           style={{
-            display: "grid",
-            gridTemplateColumns: gridCols,
-            alignItems: "center",
-            gap: "0 12px",
-            padding: "10px 16px",
-            cursor: "pointer",
+            padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between",
+            alignItems: "center", gap: "8px",
+            // A full red-tinted row for every overdue task got cramped and
+            // noisy once there were more than a few of them — a left accent
+            // bar plus the existing red "Xd late" text carries the same
+            // signal without painting the whole row.
             backgroundColor: isOpen ? COLOURS.CARD_ALT : done ? COLOURS.CARD_ALT : COLOURS.CARD,
-            // Priority stripe — overdue beats priority level
-            borderLeft: `3px solid ${priorityColor}`,
+            borderLeft: `3px solid ${overdue ? COLOURS.RED : "transparent"}`,
             opacity: done ? 0.6 : 1,
           }}
         >
-          {/* Col 1: circular checkbox (Asana-style) */}
-          {selectable ? (
-            <div
-              role="checkbox"
-              aria-checked={selectedIds.has(task.id)}
-              onClick={(e) => { e.stopPropagation(); toggleSelect(task.id); }}
-              style={{
-                width: "16px", height: "16px", borderRadius: "50%", cursor: "pointer", flexShrink: 0,
-                border: selectedIds.has(task.id) ? `2px solid ${COLOURS.GREEN}` : `2px solid ${COLOURS.INK_300}`,
-                backgroundColor: selectedIds.has(task.id) ? COLOURS.GREEN : "transparent",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "border-color 100ms, background-color 100ms",
-              }}
-            >
-              {selectedIds.has(task.id) && (
-                <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                  <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </div>
-          ) : <div />}
-
-          {/* Col 2: task name + meta line */}
-          <div style={{ minWidth: 0 }}>
-            <div style={{
-              fontSize: "15px", fontWeight: 600,
-              color: done ? COLOURS.SLATE : COLOURS.NAVY,
-              textDecoration: done ? "line-through" : "none",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {task.description}
-            </div>
-            {/* Meta line — dot-separated. "To:" moved to its own column; meta now shows
-                By / sign-off badge / dept / stage / subtask progress / comments / meeting. */}
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={selectedIds.has(task.id)}
+              onClick={(e) => e.stopPropagation()}
+              onChange={() => toggleSelect(task.id)}
+              style={{ width: "16px", height: "16px", flexShrink: 0, cursor: "pointer" }}
+            />
+          )}
+          {/* Priority badge — left column */}
+          {task.priority && (
+            <div title={task.priority} style={{
+              width: "3px", alignSelf: "stretch",
+              borderRadius: "2px", flexShrink: 0,
+              backgroundColor: task.priority === "Urgent" || task.priority === "High"
+                ? COLOURS.RED
+                : task.priority === "Medium"
+                  ? COLOURS.AMBER
+                  : COLOURS.SLATE,
+            }} />
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: done ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
+            {/* One muted meta line, dot-separated, instead of a row of
+                boxed badges — same information, far less visual noise. */}
             <div style={{ fontSize: "12px", color: COLOURS.INK_400, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-              {showBy && (
-                <span>
-                  <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>By:</span>{" "}
-                  {byName}
-                </span>
-              )}
-              {/* Bug #5 fix: "📋 for sign-off" badge */}
+              <span title={otherAssignees.length > 0 ? `Also: ${otherAssignees.join(", ")}` : undefined}>
+                <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>To:</span>{" "}
+                <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>{task.assigned_to || "Unassigned"}</span>
+                {task.assigned_to_email && emailToCode.get(task.assigned_to_email) && (
+                  <span style={{ fontSize: "10px", color: COLOURS.SLATE }}> [{emailToCode.get(task.assigned_to_email)}]</span>
+                )}
+                {otherAssignees.length > 0 && <span style={{ color: COLOURS.SLATE }}> +{otherAssignees.length}</span>}
+              </span>
+              {(() => {
+                // "By:" shows who sent this task to the current owner:
+                // — submitted_by_name if it was routed here via Submitted/
+                //   Waiting Reply (person who submitted it, not the original
+                //   creator which may be "System" or a recurring label)
+                // — otherwise assigned_by, but only if it's a real person
+                //   name (filter out System, Recurring Template, etc.)
+                const SYSTEM_LABELS = ["system", "recurring template", "recurring task"];
+                const byName = task.submitted_by_name
+                  || (task.assigned_by && !SYSTEM_LABELS.includes(task.assigned_by.toLowerCase()) ? task.assigned_by : null);
+                if (!byName || byName === task.assigned_to) return null;
+                return (
+                  <>
+                    <span>·</span>
+                    <span>
+                      <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>By:</span>{" "}
+                      {byName}
+                    </span>
+                  </>
+                );
+              })()}
+              {/* Bug #5 fix: "📋 for sign-off" badge — makes it clear to the recipient (e.g. Khuram)
+                  WHY a Submitted task is in their Mine. Previously the task appeared without context,
+                  looking like a random task assigned to them. The badge signals it was submitted by
+                  a team member and is awaiting their review/approval. */}
               {task.status === "Submitted" &&
                task.submitted_by_email &&
                myIdentities.includes((task.assigned_to_email || "").toLowerCase()) && (
                 <>
-                  {showBy && <span>·</span>}
-                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 6px", borderRadius: "10px", color: "#6941C6", backgroundColor: "#F4EBFF", whiteSpace: "nowrap" }}>
+                  <span>·</span>
+                  <span style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    color: "#6941C6",
+                    backgroundColor: "#F4EBFF",
+                    whiteSpace: "nowrap",
+                  }}>
                     📋 for sign-off
                   </span>
                 </>
               )}
+              <span>·</span>
+              {(() => {
+                const badge = companyBadge(task.company_id);
+                return (
+                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 8px", borderRadius: RADII.PILL, color: badge.color, backgroundColor: badge.background }}>
+                    {badge.label}
+                  </span>
+                );
+              })()}
               {task.assigned_to_department && (
                 <>
-                  {(showBy || (task.status === "Submitted" && task.submitted_by_email && myIdentities.includes((task.assigned_to_email || "").toLowerCase()))) && <span>·</span>}
+                  <span>·</span>
                   <span>{task.assigned_to_department}</span>
                 </>
               )}
@@ -1430,7 +1177,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   <>
                     <span>·</span>
                     <span title={`${done2}/${total} subtasks complete`} style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 500, whiteSpace: "nowrap" }}>{done2}/{total}</span>
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 500, whiteSpace: "nowrap" }}>
+                        {done2}/{total}
+                      </span>
                       <span style={{ display: "inline-block", width: "48px", height: "4px", borderRadius: "2px", backgroundColor: COLOURS.HAIRLINE, overflow: "hidden" }}>
                         <span style={{ display: "block", height: "100%", width: `${pct}%`, borderRadius: "2px", backgroundColor: pct === 100 ? COLOURS.GREEN : COLOURS.BLUE, transition: "width 200ms" }} />
                       </span>
@@ -1441,77 +1190,51 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {task.task_comments && task.task_comments.length > 0 && (
                 <>
                   <span>·</span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                    {unreadCommentTaskIds.has(task.id) && (
-                      <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#B3261E", flexShrink: 0, verticalAlign: "middle" }} title="Unread comments" />
-                    )}
-                    {task.task_comments.length} comment{task.task_comments.length > 1 ? "s" : ""}
-                  </span>
+                  <span>{task.task_comments.length} comment{task.task_comments.length > 1 ? "s" : ""}</span>
                 </>
               )}
               {task.meeting_id && (
                 <>
                   <span>·</span>
-                  <a href={`/my-minutes?meeting=${task.meeting_id}`} onClick={(e) => e.stopPropagation()} style={{ fontWeight: 600, color: COLOURS.BLUE, whiteSpace: "nowrap", textDecoration: "none" }}>
+                  <a
+                    href={`/my-minutes?meeting=${task.meeting_id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ fontWeight: 600, color: COLOURS.BLUE, whiteSpace: "nowrap", textDecoration: "none" }}
+                  >
                     {meetingTitles[task.meeting_id] || "Meeting"} →
                   </a>
                 </>
               )}
             </div>
           </div>
-
-          {/* Col 3: due date — desktop only */}
-          {!isMobile && (
-            <div style={{ textAlign: "right" }}>
-              {task.due_date ? (
-                <span
-                  title={task.assigned_date ? `Issued ${formatDateUK(task.assigned_date)}` : undefined}
-                  style={{ fontSize: "13px", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 500, whiteSpace: "nowrap", lineHeight: 1.4 }}
-                >
-                  {formatDateUK(task.due_date)}{od > 0 && <><br /><span style={{ fontSize: "11px", color: COLOURS.RED }}>{od}d late</span></>}
-                </span>
-              ) : (
-                <span style={{ color: COLOURS.INK_300, fontSize: "13px" }}>—</span>
-              )}
-            </div>
-          )}
-
-          {/* Col 4: assignee avatar + name — desktop only */}
-          {!isMobile && (
-            <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0, overflow: "hidden" }}>
-              {assigneeName !== "Unassigned" && (
-                <div style={{
-                  width: "26px", height: "26px", borderRadius: "50%", flexShrink: 0,
-                  backgroundColor: avatarBg(assigneeName),
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "10px", fontWeight: 700, color: "white", letterSpacing: "0.02em",
-                }}>
-                  {getInitials(assigneeName)}
-                </div>
-              )}
-              <span style={{ fontSize: "12.5px", fontWeight: 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                title={otherAssignees.length > 0 ? `Also: ${otherAssignees.join(", ")}` : undefined}>
-                {assigneeName}
-                {task.assigned_to_email && emailToCode.get(task.assigned_to_email) && (
-                  <span style={{ fontSize: "10px", color: COLOURS.SLATE }}> [{emailToCode.get(task.assigned_to_email)}]</span>
-                )}
-                {otherAssignees.length > 0 && <span style={{ color: COLOURS.SLATE }}> +{otherAssignees.length}</span>}
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
+            {/* Created date */}
+            {!isMobile && task.created_at && (
+              <span style={{
+                fontSize: "11.5px", color: COLOURS.SLATE, fontFamily: "var(--font-mono,'JetBrains Mono',monospace)",
+                whiteSpace: "nowrap", opacity: 0.8,
+              }}>
+                {formatDateUK(task.created_at)}
               </span>
-            </div>
-          )}
-
-          {/* Col 5: status badge — always visible */}
-          <StatusBadge status={task.status} />
-
-          {/* Col 6: company coloured dot + name — desktop only */}
-          {!isMobile && (
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, overflow: "hidden" }}>
-              <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: badge.color, flexShrink: 0 }} />
-              <span style={{ fontSize: "12.5px", fontWeight: 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {badge.label}
+            )}
+            {/* Status */}
+            <StatusBadge status={task.status} />
+            {/* Due date + days overdue */}
+            {task.due_date ? (
+              <span
+                title={task.assigned_date ? `Issued ${formatDateUK(task.assigned_date)}` : undefined}
+                style={{
+                  fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", fontSize: "12px",
+                  color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 500,
+                  minWidth: isMobile ? "62px" : "76px", textAlign: "right", whiteSpace: "nowrap",
+                }}
+              >
+                {formatDateUK(task.due_date)}{od > 0 && ` · ${od}d`}
               </span>
-            </div>
-          )}
+            ) : (
+              <span style={{ minWidth: isMobile ? "62px" : "76px" }} />
+            )}
+          </div>
         </div>
 
         <MiniSubtaskToggle task={task} onChanged={refreshAll} myEmail={myEmail} currentRole={currentRole} />
@@ -1535,7 +1258,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         myEmail={myEmail}
         memberPhones={memberPhones}
         onChanged={refreshAll}
-        hasUnreadComments={expandedTaskId ? unreadCommentTaskIds.has(expandedTaskId) : false}
       />
 
       {/* ═══ STAT STRIP — one compact row, sourced from get_tasks_kpi_summary()
@@ -1554,13 +1276,12 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             { label: "Waiting Reply", value: kpi?.waiting_reply_count ?? waitingReply.length, accent: COLOURS.NAVY, soft: COLOURS.CARD, border: COLOURS.HAIRLINE },
             { label: "Stuck",         value: kpi?.stuck_count ?? 0,                        accent: COLOURS.NAVY, soft: COLOURS.CARD, border: COLOURS.HAIRLINE },
             { label: "Completed",     value: kpi?.completed_count ?? completedAll.length,  accent: COLOURS.GREEN, soft: COLOURS.CARD, border: COLOURS.HAIRLINE },
-            { label: "Escalated",     value: escalatedCount,                                accent: "#ea580c", soft: "#fff7ed", border: "#ea580c" },
           ].map(({ label, value, accent, soft, border, sub }) => (
             <div
               key={label}
-              onClick={() => { if (label === "Escalated") { setFilter(filter === "escalated" ? "all" : "escalated"); setKpiDrawer(null); } else { setKpiDrawer(kpiDrawer === label ? null : label); } }}
+              onClick={() => setKpiDrawer(kpiDrawer === label ? null : label)}
               style={{
-                backgroundColor: soft, border: `1px solid ${(kpiDrawer === label || (label === "Escalated" && filter === "escalated")) ? border : COLOURS.HAIRLINE}`,
+                backgroundColor: soft, border: `1px solid ${kpiDrawer === label ? border : COLOURS.HAIRLINE}`,
                 borderRadius: RADII.SM, padding: "8px 12px", cursor: "pointer",
               }}
             >
@@ -1908,82 +1629,25 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           aren't task lists. ═══ */}
       {timeView !== "team" && timeView !== "recurring" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: filtersOpen ? "8px" : "12px" }}>
-          {/* Row 1: search + Filters toggle */}
+          {/* Row 1: search + reset */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", maxWidth: "300px", flex: "0 1 300px" }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={COLOURS.SLATE} strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: 1 }}>
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search tasks…"
-                style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%", fontFamily: "inherit" }}
+                style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%" }}
               />
             </div>
-            {/* Filters toggle button with active-count badge */}
-            <button
-              onClick={() => setFiltersOpen((p) => !p)}
-              style={{
-                display: "flex", alignItems: "center", gap: "6px",
-                border: `1px solid ${filtersActive ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
-                borderRadius: RADII.PILL, padding: "7px 14px",
-                fontSize: "13px", fontWeight: 600, cursor: "pointer",
-                background: filtersActive ? "#EFF6FF" : COLOURS.CARD,
-                color: filtersActive ? COLOURS.BLUE : COLOURS.NAVY,
-                whiteSpace: "nowrap",
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-              Filters
-              {activeFilterCount > 0 && (
-                <span style={{ background: COLOURS.BLUE, color: "#fff", borderRadius: "99px", fontSize: "10px", fontWeight: 700, padding: "1px 6px", minWidth: "18px", textAlign: "center" }}>
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
             {filtersActive && (
               <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}>
-                Clear all
+                Reset
               </button>
             )}
           </div>
-          {/* Active filter chips */}
-          {filtersActive && (() => {
-            const companyName = companyFilter !== "all" ? (companies.find((c) => c.id === companyFilter)?.name ?? (companyFilter === "group" ? "Group" : companyFilter)) : null;
-            const chips: { label: string; clear: () => void }[] = [
-              ...(companyName ? [{ label: companyName, clear: () => setCompanyFilter("all") }] : []),
-              ...(departmentFilter !== "all" ? [{ label: departmentFilter, clear: () => setDepartmentFilter("all") }] : []),
-              ...(priorityFilters.size < ALL_PRIORITIES.length ? [{ label: `Priority: ${[...priorityFilters].join(", ")}`, clear: () => setPriorityFilters(new Set(ALL_PRIORITIES)) }] : []),
-              ...(statusFilters.size < ALL_STATUSES.length ? [{ label: `Status: ${[...statusFilters].join(", ")}`, clear: () => setStatusFilters(new Set(ALL_STATUSES)) }] : []),
-              ...(ownerFilter !== "all" ? [{ label: ownerFilter, clear: () => setOwnerFilter("all") }] : []),
-              ...(periodFilter !== "all" ? [{ label: periodFilter === "week" ? "This week" : periodFilter === "month" ? "This month" : "This quarter", clear: () => setPeriodFilter("all") }] : []),
-              ...(dueFilter !== "all" ? [{ label: dueFilter === "overdue" ? "Overdue" : dueFilter === "today" ? "Due today" : "No due date", clear: () => setDueFilter("all") }] : []),
-              ...(sourceFilter !== "all" ? [{ label: sourceFilter === "meeting" ? "From meeting" : sourceFilter, clear: () => setSourceFilter("all") }] : []),
-              ...(subtaskFilter !== "all" ? [{ label: subtaskFilter === "has" ? "Has subtasks" : subtaskFilter === "complete" ? "All complete" : "No subtasks", clear: () => setSubtaskFilter("all") }] : []),
-              ...(searchQuery.trim() ? [{ label: `"${searchQuery.trim()}"`, clear: () => setSearchQuery("") }] : []),
-            ];
-            return (
-              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-                {chips.map((chip) => (
-                  <span key={chip.label} style={{ display: "flex", alignItems: "center", gap: "5px", background: "#EFF6FF", border: `1px solid #BFDBFE`, borderRadius: RADII.PILL, padding: "4px 10px", fontSize: "12px", fontWeight: 600, color: COLOURS.BLUE }}>
-                    {chip.label}
-                    <span onClick={chip.clear} style={{ cursor: "pointer", opacity: .7, fontSize: "13px", lineHeight: 1 }}>×</span>
-                  </span>
-                ))}
-              </div>
-            );
-          })()}
 
           {/* Row 2: filter pills + scope toggle (wraps on mobile) */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-            {filter === "escalated" && (
-              <button onClick={() => setFilter("all")} style={{
-                backgroundColor: COLOURS.RED, color: "white",
-                border: `1px solid ${COLOURS.RED}`,
-                borderRadius: RADII.PILL, padding: isMobile ? "7px 10px" : "6px 12px", fontSize: isMobile ? "12px" : "13px", fontWeight: 600, cursor: "pointer",
-              }}>
-                ⚠ Escalated ({escalatedIds.size}) ×
-              </button>
-            )}
             {(["all", "overdue", "waiting", "exception"] as const).map((f) => (
               <button key={f} onClick={() => { setFilter(f); setPaFilter(false); }} style={{
                 backgroundColor: filter === f ? COLOURS.NAVY : COLOURS.CARD,
@@ -2040,234 +1704,70 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       )}
 
       {timeView !== "team" && timeView !== "recurring" && filtersOpen && (
-        <div style={{ marginBottom: "12px", width: "100%" }}>
-
-          {/* ── Company pills (single-select) ── */}
-          {!(department === "Internal Audit" && !isPrivileged) && (
-            <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap", marginBottom: "8px" }}>
-              <span style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, letterSpacing: "0.07em", textTransform: "uppercase", marginRight: "2px", whiteSpace: "nowrap" }}>Company:</span>
-              {/* "All" pill */}
-              {(() => {
-                const isAll = companyFilter === "all";
-                return (
-                  <button
-                    onClick={() => setCompanyFilter("all")}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: "5px",
-                      padding: "4px 10px", borderRadius: "999px", cursor: "pointer",
-                      fontSize: "11.5px", fontWeight: 600, border: "1.5px solid",
-                      background: isAll ? COLOURS.NAVY : COLOURS.HAIRLINE,
-                      color: isAll ? "#fff" : COLOURS.SLATE,
-                      borderColor: isAll ? COLOURS.NAVY : "#d1d5db",
-                      opacity: isAll ? 1 : 0.5,
-                      transition: "opacity 0.15s",
-                    }}
-                  >All</button>
-                );
-              })()}
-              {companies.map((c) => {
-                const badge = COMPANY_BADGE_COLOURS[c.short_code ?? ""] ?? { color: COLOURS.SLATE, background: COLOURS.HAIRLINE };
-                const isActive = companyFilter === c.id;
-                const count = pillCountBaseOpen.filter((t) => t.company_id === c.id).length;
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => setCompanyFilter(isActive ? "all" : c.id)}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: "5px",
-                      padding: "4px 10px 4px 8px", borderRadius: "999px", cursor: "pointer",
-                      fontSize: "11.5px", fontWeight: 600, border: "1.5px solid",
-                      background: isActive ? badge.background : COLOURS.HAIRLINE,
-                      color: isActive ? badge.color : COLOURS.SLATE,
-                      borderColor: isActive ? badge.color : "#d1d5db",
-                      opacity: isActive ? 1 : 0.45,
-                      transition: "opacity 0.15s",
-                    }}
-                  >
-                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: isActive ? badge.color : COLOURS.SLATE, flexShrink: 0 }} />
-                    {c.name} <span style={{ fontFamily: FONT_MONO, fontSize: "10.5px" }}>{count}</span>
-                    {isActive && <span style={{ fontSize: "11px", opacity: 0.6, marginLeft: "2px" }}>×</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ── Priority pills (multi-select) ── */}
-          {(() => {
-            const PRIORITY_STYLES: Record<string, { bg: string; color: string; dot: string; border: string }> = {
-              "Critical": { bg: "#fee2e2", color: "#991b1b", dot: "#dc2626", border: "#fca5a5" },
-              "Urgent":   { bg: "#fef3c7", color: "#92400e", dot: "#f59e0b", border: "#fcd34d" },
-              "Normal":   { bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6", border: "#93c5fd" },
-              "Low":      { bg: "#f1f5f9", color: "#475569", dot: "#94a3b8", border: "#cbd5e1" },
-            };
-            return (
-              <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap", marginBottom: "8px" }}>
-                <span style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, letterSpacing: "0.07em", textTransform: "uppercase", marginRight: "2px", whiteSpace: "nowrap" }}>Priority:</span>
-                {ALL_PRIORITIES.map((p) => {
-                  const s = PRIORITY_STYLES[p] ?? PRIORITY_STYLES["Normal"];
-                  const isActive = priorityFilters.has(p);
-                  const count = pillCountBaseOpen.filter((t) => (t.priority ?? "Normal") === p).length;
-                  return (
-                    <button
-                      key={p}
-                      onClick={() => {
-                        if (priorityFilters.size === ALL_PRIORITIES.length) {
-                          // All active → isolate to this one only
-                          setPriorityFilters(new Set([p]));
-                        } else if (priorityFilters.size === 1 && isActive) {
-                          // Only this one → clicking it resets to all
-                          setPriorityFilters(new Set(ALL_PRIORITIES));
-                        } else {
-                          // Partial selection → toggle membership
-                          const next = new Set(priorityFilters);
-                          if (isActive) next.delete(p); else next.add(p);
-                          if (next.size > 0) setPriorityFilters(next);
-                        }
-                      }}
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: "5px",
-                        padding: "4px 10px 4px 8px", borderRadius: "999px", cursor: "pointer",
-                        fontSize: "11.5px", fontWeight: 600, border: "1.5px solid",
-                        background: isActive ? s.bg : COLOURS.HAIRLINE,
-                        color: isActive ? s.color : COLOURS.SLATE,
-                        borderColor: isActive ? s.border : "#d1d5db",
-                        opacity: isActive ? 1 : 0.45,
-                        transition: "opacity 0.15s",
-                      }}
-                    >
-                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: isActive ? s.dot : COLOURS.SLATE, flexShrink: 0 }} />
-                      {p} <span style={{ fontFamily: FONT_MONO, fontSize: "10.5px" }}>{count}</span>
-                      {isActive && priorityFilters.size < ALL_PRIORITIES.length && <span style={{ fontSize: "11px", opacity: 0.6, marginLeft: "2px" }}>×</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })()}
-
-          {/* ── Status pills (multi-select) ── */}
-          {(() => {
-            const STATUS_STYLES: Record<string, { bg: string; color: string; dot: string; border: string }> = {
-              "Not Started":   { bg: "#f1f5f9", color: "#475569", dot: "#94a3b8", border: "#cbd5e1" },
-              "In Progress":   { bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6", border: "#93c5fd" },
-              "Waiting Reply": { bg: "#fef9c3", color: "#92400e", dot: "#eab308", border: "#fde68a" },
-              "Stuck":         { bg: "#fee2e2", color: "#991b1b", dot: "#ef4444", border: "#fca5a5" },
-              "Submitted":     { bg: "#ede9fe", color: "#5b21b6", dot: "#8b5cf6", border: "#c4b5fd" },
-              "Completed":     { bg: "#dcfce7", color: "#15803d", dot: "#22c55e", border: "#86efac" },
-            };
-            return (
-              <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap", marginBottom: "8px" }}>
-                <span style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, letterSpacing: "0.07em", textTransform: "uppercase", marginRight: "2px", whiteSpace: "nowrap" }}>Status:</span>
-                {ALL_STATUSES.map((st) => {
-                  const s = STATUS_STYLES[st] ?? STATUS_STYLES["Not Started"];
-                  const isActive = statusFilters.has(st);
-                  const count = pillCountBase.filter((t) => t.status === st).length;
-                  return (
-                    <button
-                      key={st}
-                      onClick={() => {
-                        if (statusFilters.size === ALL_STATUSES.length) {
-                          // All active → isolate to this one only
-                          setStatusFilters(new Set([st]));
-                        } else if (statusFilters.size === 1 && isActive) {
-                          // Only this one → clicking it resets to all
-                          setStatusFilters(new Set(ALL_STATUSES));
-                        } else {
-                          // Partial selection → toggle membership
-                          const next = new Set(statusFilters);
-                          if (isActive) next.delete(st); else next.add(st);
-                          if (next.size > 0) setStatusFilters(next);
-                        }
-                      }}
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: "5px",
-                        padding: "4px 10px 4px 8px", borderRadius: "999px", cursor: "pointer",
-                        fontSize: "11.5px", fontWeight: 600, border: "1.5px solid",
-                        background: isActive ? s.bg : COLOURS.HAIRLINE,
-                        color: isActive ? s.color : COLOURS.SLATE,
-                        borderColor: isActive ? s.border : "#d1d5db",
-                        opacity: isActive ? 1 : 0.45,
-                        transition: "opacity 0.15s",
-                      }}
-                    >
-                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: isActive ? s.dot : COLOURS.SLATE, flexShrink: 0 }} />
-                      {st} <span style={{ fontFamily: FONT_MONO, fontSize: "10.5px" }}>{count}</span>
-                      {isActive && statusFilters.size < ALL_STATUSES.length && <span style={{ fontSize: "11px", opacity: 0.6, marginLeft: "2px" }}>×</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })()}
-
-          {/* ── Secondary dropdowns row (Department, Owner, Period, Due, Source, Subtasks) ── */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-            <SearchableDropdown
-              value={departmentFilter}
-              onChange={setDepartmentFilter}
-              label="Department"
-              searchable
-              options={[
-                { value: "all", label: "All depts" },
-                ...departmentOptions.map((d) => ({ value: d, label: d })),
-              ]}
-            />
-            <SearchableDropdown
-              value={ownerFilter}
-              onChange={setOwnerFilter}
-              label="Owner"
-              searchable
-              options={[
-                { value: "all", label: "All owners" },
-                ...ownerOptions.map((o) => ({ value: o, label: o })),
-              ]}
-            />
-            <SearchableDropdown
-              value={periodFilter}
-              onChange={(v) => setPeriodFilter(v as typeof periodFilter)}
-              label="Period"
-              options={[
-                { value: "all", label: "Any period" },
-                { value: "week", label: "This week" },
-                { value: "month", label: "This month" },
-                { value: "quarter", label: "This quarter" },
-              ]}
-            />
-            <SearchableDropdown
-              value={dueFilter}
-              onChange={setDueFilter}
-              label="Due date"
-              options={[
-                { value: "all", label: "Any due date" },
-                { value: "overdue", label: "Overdue" },
-                { value: "today", label: "Due today" },
-                { value: "none", label: "No due date" },
-              ]}
-            />
-            <SearchableDropdown
-              value={sourceFilter}
-              onChange={setSourceFilter}
-              label="Source"
-              options={[
-                { value: "all", label: "All sources" },
-                { value: "meeting", label: "From meeting" },
-                { value: "manual", label: "Manual" },
-                { value: "recurring", label: "Recurring" },
-                { value: "whatsapp", label: "WhatsApp" },
-              ]}
-            />
-            <SearchableDropdown
-              value={subtaskFilter}
-              onChange={setSubtaskFilter}
-              label="Subtasks"
-              options={[
-                { value: "all", label: "Any subtasks" },
-                { value: "has", label: "Has subtasks" },
-                { value: "complete", label: "All complete" },
-                { value: "none", label: "No subtasks" },
-              ]}
-            />
+        <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "12px", width: "100%" }}>
+          {/* Row 1 — entity filters: company · dept · priority · status · owner */}
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "nowrap", width: "100%" }}>
+            {!(department === "Audit" && !isPrivileged) && (
+              <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
+                <option value="all">All companies</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="group">Group / needs review</option>
+              </select>
+            )}
+            <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
+              <option value="all">All depts</option>
+              {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
+              <option value="all">All priorities</option>
+              <option>Critical</option><option>Urgent</option><option>Normal</option><option>Low</option>
+            </select>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
+              <option value="all">All statuses</option>
+              <option>Not Started</option>
+              <option>In Progress</option>
+              <option>Waiting Reply</option>
+              <option>Stuck</option>
+              <option>Submitted</option>
+              <option>Completed</option>
+            </select>
+            <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
+              <option value="all">All owners</option>
+              {ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          {/* Row 2 — time/date filters: period · due date · source · subtasks + reset */}
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "nowrap", width: "100%" }}>
+            <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
+              <option value="all">Any period</option>
+              <option value="week">This week</option>
+              <option value="month">This month</option>
+              <option value="quarter">This quarter</option>
+            </select>
+            <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
+              <option value="all">Any due date</option>
+              <option value="overdue">Overdue</option>
+              <option value="today">Due today</option>
+              <option value="none">No due date</option>
+            </select>
+            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
+              <option value="all">All sources</option>
+              <option value="meeting">From meeting</option>
+              <option value="manual">Manual</option>
+              <option value="recurring">Recurring</option>
+              <option value="whatsapp">WhatsApp</option>
+            </select>
+            <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 0", minWidth: 0, fontSize: "11.5px", padding: "5px 6px" }}>
+              <option value="all">Any subtasks</option>
+              <option value="has">Has subtasks</option>
+              <option value="complete">All complete</option>
+              <option value="none">No subtasks</option>
+            </select>
+            {filtersActive && (
+              <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12px", fontWeight: 600, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap", flexShrink: 0 }}>
+                Reset
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2287,7 +1787,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— flagged for your awareness as HOD</span>
               </div>
               <div style={{ ...cardStyle, overflow: "hidden", borderLeft: `3px solid ${COLOURS.AMBER}` }}>
-                <ListColumnHeader />
                 {stuckNeedsAttention.map((t) => <TaskRow key={t.id} task={t} selectable />)}
               </div>
             </div>
@@ -2299,7 +1798,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             // due-date grouping, so "Overdue" etc. actually means "only
             // these tasks", not "the whole list with a pill highlighted".
             <div style={{ ...cardStyle, overflow: "hidden" }}>
-              <ListColumnHeader />
               {listFilteredTasks.length === 0 ? (
                 <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
               ) : (
@@ -2310,33 +1808,20 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           ) : (
             myTasksGroupOrder.filter((g) => myTasksGroups.has(g)).map((group) => {
               const groupTasks = myTasksGroups.get(group)!;
-              const isCollapsed = collapsedGroups.has(group);
               return (
-                <div key={group} style={{ marginBottom: "20px" }}>
-                  {/* Asana-style collapsible section header */}
-                  <div
-                    onClick={() => setCollapsedGroups(prev => { const s = new Set(prev); s.has(group) ? s.delete(group) : s.add(group); return s; })}
-                    style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", padding: "5px 2px", cursor: "pointer", userSelect: "none" }}
-                  >
-                    <span style={{
-                      display: "inline-block", fontSize: "10px", color: COLOURS.SLATE, lineHeight: 1, flexShrink: 0,
-                      transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
-                      transition: "transform 150ms ease",
-                    }}>▼</span>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: myTasksGroupColor(group), display: "inline-block", flexShrink: 0 }} />
-                    <span style={{ fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.NAVY }}>{group}</span>
+                <div key={group} style={{ marginBottom: "16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: myTasksGroupColor(group), display: "inline-block" }} />
+                    <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>{group}</span>
                     <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{groupTasks.length}</span>
                   </div>
-                  {!isCollapsed && (
-                    <div style={{ ...cardStyle, overflow: "hidden" }}>
-                      <ListColumnHeader />
-                      {groupTasks.length === 0 ? (
-                        <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
-                      ) : (
-                        sortListTasks(groupTasks).map((t) => <TaskRow key={t.id} task={t} selectable />)
-                      )}
-                    </div>
-                  )}
+                  <div style={{ ...cardStyle, overflow: "hidden" }}>
+                    {groupTasks.length === 0 ? (
+                      <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
+                    ) : (
+                      sortListTasks(groupTasks).map((t) => <TaskRow key={t.id} task={t} selectable />)
+                    )}
+                  </div>
                 </div>
               );
             })
@@ -2350,57 +1835,36 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           {/* ═══ DELEGATED BY ME — tasks I allocated (meetings or direct)
               that others are still working on. Not action items, so they
               sit below my own groups — but always visible. ═══ */}
-          {!listFilteredTasks && delegatedByMe.length > 0 && (() => {
-            const grpKey = "__delegated__";
-            const isCollapsed = collapsedGroups.has(grpKey);
-            return (
-              <div style={{ marginBottom: "20px" }}>
-                <div
-                  onClick={() => setCollapsedGroups(prev => { const s = new Set(prev); s.has(grpKey) ? s.delete(grpKey) : s.add(grpKey); return s; })}
-                  style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", padding: "5px 2px", cursor: "pointer", userSelect: "none" }}
-                >
-                  <span style={{ display: "inline-block", fontSize: "10px", color: COLOURS.SLATE, lineHeight: 1, flexShrink: 0, transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 150ms ease" }}>▼</span>
-                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.SLATE, display: "inline-block", flexShrink: 0 }} />
-                  <span style={{ fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.NAVY }}>Delegated by me</span>
-                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{delegatedByMe.length}</span>
-                  <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— with your team, watching only</span>
-                </div>
-                {!isCollapsed && (
-                  <div style={{ ...cardStyle, overflow: "hidden" }}>
-                    <ListColumnHeader />
-                    {sortListTasks(delegatedByMe).map((t) => <TaskRow key={t.id} task={t} selectable />)}
-                  </div>
-                )}
+          {!listFilteredTasks && delegatedByMe.length > 0 && (
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.SLATE, display: "inline-block" }} />
+                <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>Delegated by me</span>
+                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{delegatedByMe.length}</span>
+                <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— with your team, watching only</span>
               </div>
-            );
-          })()}
+              <div style={{ ...cardStyle, overflow: "hidden" }}>
+                {sortListTasks(delegatedByMe)
+                  .map((t) => <TaskRow key={t.id} task={t} selectable />)}
+              </div>
+            </div>
+          )}
 
           {/* ═══ MY TEAM'S TASKS — tasks assigned TO direct reports by others.
               Visible on home via RLS; was invisible in Mine view before this. ═══ */}
-          {!listFilteredTasks && teamTasksSection.length > 0 && (() => {
-            const grpKey = "__myteam__";
-            const isCollapsed = collapsedGroups.has(grpKey);
-            return (
-              <div style={{ marginBottom: "20px" }}>
-                <div
-                  onClick={() => setCollapsedGroups(prev => { const s = new Set(prev); s.has(grpKey) ? s.delete(grpKey) : s.add(grpKey); return s; })}
-                  style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", padding: "5px 2px", cursor: "pointer", userSelect: "none" }}
-                >
-                  <span style={{ display: "inline-block", fontSize: "10px", color: COLOURS.SLATE, lineHeight: 1, flexShrink: 0, transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 150ms ease" }}>▼</span>
-                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.BLUE, display: "inline-block", flexShrink: 0 }} />
-                  <span style={{ fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.NAVY }}>My Team&apos;s Tasks</span>
-                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{teamTasksSection.length}</span>
-                  <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— assigned to your team by others</span>
-                </div>
-                {!isCollapsed && (
-                  <div style={{ ...cardStyle, overflow: "hidden" }}>
-                    <ListColumnHeader />
-                    {sortListTasks(teamTasksSection).map((t) => <TaskRow key={t.id} task={t} selectable />)}
-                  </div>
-                )}
+          {!listFilteredTasks && teamTasksSection.length > 0 && (
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.BLUE, display: "inline-block" }} />
+                <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>My Team&apos;s Tasks</span>
+                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, fontFamily: FONT_MONO }}>{teamTasksSection.length}</span>
+                <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— assigned to your team by others</span>
               </div>
-            );
-          })()}
+              <div style={{ ...cardStyle, overflow: "hidden" }}>
+                {sortListTasks(teamTasksSection).map((t) => <TaskRow key={t.id} task={t} selectable />)}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2422,7 +1886,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks to show.</div>
           ) : deptNodes.map((d) => {
             const isDeptCollapsed = !expandedDepts.has(d.dept);
-            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : filter === "escalated" ? d.tasks.filter((t) => escalatedIds.has(t.id)) : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
             if (deptFiltered.length === 0 && filter !== "all") return null;
 
             const personGroups = new Map<string, Task[]>();
@@ -2581,9 +2045,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             setCompanyFilter("all");
             setDepartmentFilter(d.department ?? "all");
             setOwnerFilter(d.owner ?? "all");
-            setStatusFilters(d.status && VALID_STATUSES.includes(d.status) ? new Set([d.status]) : new Set(ALL_STATUSES));
+            setStatusFilter(d.status ?? "all");
             setDueFilter(d.due ?? "all");
-            setPriorityFilters(new Set(ALL_PRIORITIES));
+            setPriorityFilter("all");
             setPeriodFilter("all");
             setSourceFilter("all");
             setSubtaskFilter("all");
